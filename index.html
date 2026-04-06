@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>OROK Studios</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <h1>OROK Studios</h1>
+  <h2>Create Post</h2>
+
+  <label for="category">Category:</label>
+  <select id="category">
+    <option>Motivation Monday</option>
+    <option>Masters of Today</option>
+    <option>Wisdom Wednesday</option>
+    <option>Masters of Yesterday</option>
+    <option>Friday Recap</option>
+    <option>Friday Freestyle</option>
+  </select>
+
+  <label for="idea">Idea:</label>
+  <input id="idea" type="text" placeholder="e.g. creativity, Gout Gout, stillness, Malcolm X">
+
+  <div id="weeklyPostsWrap" style="display:none; margin-top:10px;">
+    <label for="weeklyPosts">Weekly Posts / Notes:</label><br>
+    <textarea id="weeklyPosts" rows="10" cols="120" placeholder="Paste Monday, Tuesday, Wednesday and Thursday posts here..."></textarea>
+  </div>
+
+  <br><br>
+  <button onclick="generatePosts()">Generate Posts</button>
+
+  <div id="posts" style="margin-top:20px;"></div>
+  <div id="imagePrompt" style="margin-top:20px;"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
