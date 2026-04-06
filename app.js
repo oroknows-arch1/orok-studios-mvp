@@ -1,4 +1,5 @@
 const categorySelect = document.getElementById("category");
+const API_BASE_URL = "https://orok-studios-api.onrender.com";
 const weeklyPostsWrap = document.getElementById("weeklyPostsWrap");
 
 function toggleWeeklyPosts() {
