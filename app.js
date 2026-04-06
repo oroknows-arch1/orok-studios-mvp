@@ -1,5 +1,4 @@
 const categorySelect = document.getElementById("category");
-const API_BASE_URL = "https://orok-studios-api.onrender.com";
 const weeklyPostsWrap = document.getElementById("weeklyPostsWrap");
 
 function toggleWeeklyPosts() {
@@ -22,9 +21,7 @@ async function generatePosts() {
   postsDiv.innerHTML = "Loading...";
 
   try {
-  const API_BASE_URL = "https://YOUR-RENDER-BACKEND-URL.onrender.com";
-
-  const res = await fetch(`${API_BASE_URL}/generate`, {  
+    const res = await fetch("/generate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
