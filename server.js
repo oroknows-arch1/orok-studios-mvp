@@ -1,6 +1,5 @@
 require("dotenv").config();
 
-
 const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
@@ -94,6 +93,116 @@ function cleanPost(post) {
   }
 
   return `${greeting}\n${text}\n${signoff}`;
+}
+
+/**
+ * --------------------------------------------------
+ * GEOGRAPHIC PRECISION HELPERS
+ * --------------------------------------------------
+ */
+
+function getAccurateLocation(subject = "") {
+  const s = String(subject).toLowerCase().trim();
+
+  if (s.includes("aguaruna") || s.includes("awajun")) {
+    return {
+      short: "northern Peru",
+      precise:
+        "Northern Peru, especially Amazonas and San Martín regions, with focus on the Marañón and Cenepa river areas",
+      panelRule:
+        "Panel 3 must show northern Peru only, not a broad Amazon basin view dominated by Brazil",
+    };
+  }
+
+  if (s.includes("achuar")) {
+    return {
+      short: "Loreto Region, Peru",
+      precise:
+        "Loreto Region in northeastern Peru, especially the Pastaza, Huasaga, Morona, and Corrientes river areas near the Ecuador border",
+      panelRule:
+        "Panel 3 must focus on northeastern Peru near the Ecuador border, not the whole Amazon",
+    };
+  }
+
+  if (s.includes("maya") || s.includes("mayan")) {
+    return {
+      short: "Maya region of Mesoamerica",
+      precise:
+        "Mesoamerica, especially southern Mexico, Guatemala, Belize, western Honduras, and El Salvador, with focus on the Yucatán Peninsula and core Maya region",
+      panelRule:
+        "Panel 3 should show the real Maya region clearly, without fake labels or fantasy cartography",
+    };
+  }
+
+  if (s.includes("te arawa") || s.includes("arawa")) {
+    return {
+      short: "Bay of Plenty, New Zealand",
+      precise:
+        "Bay of Plenty, North Island, New Zealand, especially Maketū and surrounding coastline",
+      panelRule:
+        "Panel 3 must focus on the Bay of Plenty / Maketū area, not a vague New Zealand-wide map unless clearly tied to the landing context",
+    };
+  }
+
+  if (s.includes("mayans")) {
+    return {
+      short: "Maya region of Mesoamerica",
+      precise:
+        "Mesoamerica, especially southern Mexico, Guatemala, Belize, western Honduras, and El Salvador, with focus on the Yucatán Peninsula and core Maya region",
+      panelRule:
+        "Panel 3 should show the real Maya region clearly, without fake labels or fantasy cartography",
+    };
+  }
+
+  return {
+    short: "subject-specific location",
+    precise:
+      "a geographically precise real-world location tied directly to the subject",
+    panelRule:
+      "Panel 3 must be regionally specific, not broad, vague, or dominated by unrelated surrounding geography",
+  };
+}
+
+function buildGeographicImagePrompt({ subject = "", tributeText = "" }) {
+  const location = getAccurateLocation(subject);
+
+  return `
+Create a realistic 4-panel documentary collage with warm natural lighting and no text.
+
+The tribute is:
+"${tributeText}"
+
+Subject:
+${subject}
+
+STRICT 4-PANEL RULES:
+- Panel 1: culturally or historically grounded visual linked directly to the subject
+- Panel 2: another historically or culturally relevant real-world visual linked to the subject
+- Panel 3: a dedicated geographic context panel showing the real-world location, region, route, landing area, country, island group, or historical place tied to the subject
+- Panel 4: a final panel showing living legacy, continuity, descendants, cultural continuation, gathering, tools, environment, or community relevance
+
+MAP / LOCATION PANEL RULES:
+- Panel 3 must be geographically tied to: ${location.precise}
+- ${location.panelRule}
+- show a clean, realistic geographic or satellite-style view of the region
+- the region must be tightly framed and centered on the correct location
+- do not show a broad continent or surrounding countries unless directly relevant
+- avoid dominant visuals of neighbouring regions that are not the subject
+- no fake labels
+- no gibberish text
+- no invented cartography
+- if labels are unclear, remove them entirely instead of guessing
+- no text overlays of any kind
+- do not stylise or turn the map into artwork
+
+GLOBAL RULES:
+- factual, respectful, grounded
+- no fantasy
+- no cinematic exaggeration
+- no costumes unrelated to the actual culture or time
+- no text overlays anywhere
+- image should feel like a real-world historical/cultural tribute, not a movie poster
+`.trim();
 }
 
 app.get("/", (req, res) => {
@@ -292,30 +401,6 @@ RECAP PRIORITY:
 ${extraCategoryRule}
 `;
 
-  app.post("/generate-image", async (req, res) => {
-  const { imagePrompt } = req.body;
-
-  try {
-    const response = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt: imagePrompt,
-      size: "1024x1024",
-    });
-
-    const base64Image = response.data?.[0]?.b64_json;
-
-    if (!base64Image) {
-      return res.status(500).json({ error: "No image returned" });
-    }
-
-    const imageUrl = `data:image/png;base64,${base64Image}`;
-
-    res.json({ imageUrl });
-  } catch (err) {
-    console.error("IMAGE GENERATION ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-}); 
     const response = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [{ role: "user", content: prompt }],
@@ -353,6 +438,57 @@ ${extraCategoryRule}
     res.json({ text: finalPosts.join("\n\n\n") });
   } catch (err) {
     console.error("SERVER ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/generate-image", async (req, res) => {
+  const {
+    imagePrompt,
+    subject,
+    tributeText,
+    useGeographicPanel,
+  } = req.body;
+
+  try {
+    let finalImagePrompt = imagePrompt;
+
+    // If caller wants the automatic accurate geography version,
+    // build the prompt here instead of relying on a broad manual prompt.
+    if (useGeographicPanel && subject && tributeText) {
+      finalImagePrompt = buildGeographicImagePrompt({
+        subject,
+        tributeText,
+      });
+    }
+
+    if (!finalImagePrompt) {
+      return res.status(400).json({
+        error:
+          "No image prompt provided. Send imagePrompt, or send subject + tributeText + useGeographicPanel:true",
+      });
+    }
+
+    const response = await openai.images.generate({
+      model: "gpt-image-1",
+      prompt: finalImagePrompt,
+      size: "1024x1024",
+    });
+
+    const base64Image = response.data?.[0]?.b64_json;
+
+    if (!base64Image) {
+      return res.status(500).json({ error: "No image returned" });
+    }
+
+    const imageUrl = `data:image/png;base64,${base64Image}`;
+
+    res.json({
+      imageUrl,
+      usedPrompt: finalImagePrompt,
+    });
+  } catch (err) {
+    console.error("IMAGE GENERATION ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
