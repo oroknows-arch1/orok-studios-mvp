@@ -1,5 +1,15 @@
 const categorySelect = document.getElementById("category");
 const weeklyPostsWrap = document.getElementById("weeklyPostsWrap");
+const generateImageBtn = document.getElementById("generateImageBtn");
+const imageStatus = document.getElementById("imageStatus");
+const generatedImage = document.getElementById("generatedImage");
+const selectedPostBox = document.getElementById("selectedPost");
+
+let selectedPost = "";
+let selectedCategory = "";
+let selectedIdea = "";
+let selectedWeeklyPosts = "";
+let selectedImagePrompt = "";
 
 function toggleWeeklyPosts() {
   if (categorySelect.value === "Friday Recap") {
@@ -19,6 +29,14 @@ async function generatePosts() {
 
   const postsDiv = document.getElementById("posts");
   postsDiv.innerHTML = "Loading...";
+
+  selectedPost = "";
+  selectedPostBox.innerText = "";
+  generateImageBtn.style.display = "none";
+  imageStatus.innerText = "";
+  generatedImage.style.display = "none";
+  generatedImage.src = "";
+  document.getElementById("imagePrompt").innerText = "";
 
   try {
     const res = await fetch("/generate", {
@@ -66,7 +84,20 @@ async function generatePosts() {
         });
 
         div.style.background = "#e8f0fe";
-        generateImagePrompt(post, category, idea, weeklyPosts);
+
+        selectedPost = post;
+        selectedCategory = category;
+        selectedIdea = idea;
+        selectedWeeklyPosts = weeklyPosts;
+        selectedImagePrompt = buildImagePrompt(post, category, idea, weeklyPosts);
+
+        selectedPostBox.innerText = post;
+        document.getElementById("imagePrompt").innerText = selectedImagePrompt;
+
+        generateImageBtn.style.display = "block";
+        imageStatus.innerText = "";
+        generatedImage.style.display = "none";
+        generatedImage.src = "";
       };
 
       postsDiv.appendChild(div);
@@ -84,7 +115,7 @@ function stripGreetingAndSignoff(post) {
     .trim();
 }
 
-function generateImagePrompt(post, category, idea, weeklyPosts) {
+function buildImagePrompt(post, category, idea, weeklyPosts) {
   const bodyOnly = stripGreetingAndSignoff(post);
   let prompt = "";
 
@@ -231,6 +262,44 @@ RULES:
 "${bodyOnly}"`;
   }
 
-  document.getElementById("imagePrompt").innerText =
-    "Image Prompt:\n" + prompt;
+  return prompt;
 }
+
+generateImageBtn.addEventListener("click", async () => {
+  if (!selectedPost) return;
+
+  imageStatus.innerText = "Generating image...";
+  generatedImage.style.display = "none";
+  generatedImage.src = "";
+
+  try {
+    const res = await fetch("/generate-image", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        post: selectedPost,
+        category: selectedCategory,
+        idea: selectedIdea,
+        weeklyPosts: selectedWeeklyPosts,
+        imagePrompt: selectedImagePrompt,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!data.imageUrl) {
+      imageStatus.innerText = "Image generation failed.";
+      console.log("Image route returned:", data);
+      return;
+    }
+
+    generatedImage.src = data.imageUrl;
+    generatedImage.style.display = "block";
+    imageStatus.innerText = "Image ready.";
+  } catch (error) {
+    console.error(error);
+    imageStatus.innerText = "Error generating image: " + error.message;
+  }
+});

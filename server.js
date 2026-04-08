@@ -292,6 +292,30 @@ RECAP PRIORITY:
 ${extraCategoryRule}
 `;
 
+  app.post("/generate-image", async (req, res) => {
+  const { imagePrompt } = req.body;
+
+  try {
+    const response = await openai.images.generate({
+      model: "gpt-image-1",
+      prompt: imagePrompt,
+      size: "1024x1024",
+    });
+
+    const base64Image = response.data?.[0]?.b64_json;
+
+    if (!base64Image) {
+      return res.status(500).json({ error: "No image returned" });
+    }
+
+    const imageUrl = `data:image/png;base64,${base64Image}`;
+
+    res.json({ imageUrl });
+  } catch (err) {
+    console.error("IMAGE GENERATION ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
+}); 
     const response = await openai.chat.completions.create({
       model: "gpt-4.1-mini",
       messages: [{ role: "user", content: prompt }],
