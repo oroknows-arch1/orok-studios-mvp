@@ -123,11 +123,19 @@ function buildImagePrompt(post, category, idea, weeklyPosts) {
     prompt = `Create a realistic 4-panel family collage with warm natural lighting and no text.
 
 STRUCTURE:
-- Use a 5-member family system:
+- Use a 5-member Polynesian / Pasifika family system:
   - two parents
   - 22-year-old
   - 18-year-old
   - 12–13-year-old daughter (dance-focused)
+
+IDENTITY RULES:
+- the family must look Polynesian / Pasifika
+- realistic brown skin tones
+- Polynesian facial features
+- dark hair
+- clear family resemblance across all panels
+- do not default to white European-looking subjects
 
 PANEL RULES (age-relevant activity required):
 - Panel 1: 22-year-old doing work, training, responsibility or focused effort
@@ -171,11 +179,19 @@ RULES:
     prompt = `Create a realistic 4-panel family collage with warm natural lighting and no text.
 
 STRUCTURE:
-- Use a 5-member family system:
+- Use a 5-member Polynesian / Pasifika family system:
   - two parents
   - 22-year-old
   - 18-year-old
   - 12–13-year-old daughter
+
+IDENTITY RULES:
+- the family must look Polynesian / Pasifika
+- realistic brown skin tones
+- Polynesian facial features
+- dark hair
+- clear family resemblance across all panels
+- do not default to white European-looking subjects
 
 PANEL RULES (age-relevant stillness/reflection):
 - Panel 1: 22-year-old in quiet reflection such as sitting, journaling, observing, or thoughtful pause
