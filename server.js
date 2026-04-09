@@ -560,8 +560,7 @@ app.post("/generate-image", async (req, res) => {
 res.status(500).json({
   error: err?.response?.data?.error?.message || err.message || "Unknown image generation error",
 });
-  }
-});
+  
 
 const PORT = process.env.PORT || 3000;
 
