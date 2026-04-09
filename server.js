@@ -108,7 +108,11 @@ function toHashtag(text) {
       .join("")
   );
 }
-
+function pickRandom(arr, count = 1) {
+  const unique = [...new Set(arr)];
+  const shuffled = [...unique].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
 function getHashtags(category, idea) {
   const lowerIdea = (idea || "").toLowerCase();
 
