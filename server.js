@@ -372,7 +372,13 @@ REQUIREMENTS:
 - do NOT include any sign-off
 - write ONLY the body text
 - start immediately with the message
-- include 3 relevant hashtags at the end of the body
+- HASHTAG RULES (MANDATORY):
+- Add EXACTLY 3 hashtags
+- Hashtag 1 should match the category
+- Hashtag 2 should match the topic/idea
+- Hashtag 3 should be a broader discovery-style keyword people might search for
+- Put all 3 hashtags on the final line only
+- Separate each hashtag with a space
 - MUST end with a complete sentence
 - separate each post with --- only
 
@@ -433,7 +439,101 @@ ${extraCategoryRule}
       posts = filteredGeneric;
     }
 
-    const finalPosts = posts.map(cleanPost);
+    function toHashtag(text) {
+  return "#" + text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 3)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join("");
+}
+
+function getHashtags(category, idea) {
+  const lowerIdea = (idea || "").toLowerCase();
+
+  let tag1 = "#OROK";
+  let tag2 = "#Mindset";
+  let tag3 = "#Growth";
+
+  if (category === "Motivation Monday") {
+    tag1 = "#Discipline";
+  } else if (category === "Wisdom Wednesday") {
+    tag1 = "#Awareness";
+  } else if (category === "Masters of Today") {
+    tag1 = "#Respect";
+  } else if (category === "Masters of Yesterday") {
+    tag1 = "#History";
+  } else if (category === "Friday Recap") {
+    tag1 = "#Reflection";
+  } else if (category === "Friday Freestyle") {
+    tag1 = "#FridayVibes";
+  }
+
+  if (lowerIdea.includes("safety")) {
+    tag2 = "#WorkplaceSafety";
+    tag3 = "#SafetyCulture";
+  } else if (lowerIdea.includes("discipline")) {
+    tag2 = "#Consistency";
+    tag3 = "#SelfDiscipline";
+  } else if (lowerIdea.includes("growth")) {
+    tag2 = "#Growth";
+    tag3 = "#PersonalGrowth";
+  } else if (lowerIdea.includes("stillness")) {
+    tag2 = "#Stillness";
+    tag3 = "#MentalClarity";
+  } else if (lowerIdea.includes("reflection")) {
+    tag2 = "#Reflection";
+    tag3 = "#SelfAwareness";
+  } else if (lowerIdea.includes("creativity")) {
+    tag2 = "#Creativity";
+    tag3 = "#CreativeProcess";
+  } else if (lowerIdea.includes("embarrass")) {
+    tag2 = "#Courage";
+    tag3 = "#PersonalGrowth";
+  } else if (lowerIdea.includes("gout gout")) {
+    tag2 = "#Sprint";
+    tag3 = "#TrackAndField";
+  } else if (lowerIdea.includes("anglo saxon")) {
+    tag2 = "#AngloSaxons";
+    tag3 = "#EnglishOrigins";
+  } else if (lowerIdea.includes("malcolm x")) {
+    tag2 = "#MalcolmX";
+    tag3 = "#CivilRights";
+  } else if (lowerIdea.includes("mayan")) {
+    tag2 = "#Maya";
+    tag3 = "#AncientCivilizations";
+  } else if (idea && idea.trim().length > 0) {
+    tag2 = toHashtag(idea);
+    tag3 = category === "Masters of Yesterday" || category === "Masters of Today"
+      ? "#Legacy"
+      : "#Growth";
+  }
+
+  const uniqueTags = [...new Set([tag1, tag2, tag3])];
+
+  while (uniqueTags.length < 3) {
+    if (!uniqueTags.includes("#Growth")) uniqueTags.push("#Growth");
+    else if (!uniqueTags.includes("#Mindset")) uniqueTags.push("#Mindset");
+    else uniqueTags.push("#OROK");
+  }
+
+  return uniqueTags.slice(0, 3).join(" ");
+}
+
+const finalPosts = posts.map((post) => {
+  let cleaned = cleanPost(post);
+
+  const hashtagMatch = cleaned.match(/#\w+/g);
+
+  if (!hashtagMatch || hashtagMatch.length < 3) {
+    const generatedTags = getHashtags(category, idea);
+    cleaned = `${cleaned}\n${generatedTags}`;
+  }
+
+  return cleaned;
+});
 
     res.json({ text: finalPosts.join("\n\n\n") });
   } catch (err) {
