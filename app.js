@@ -157,33 +157,39 @@ GLOBAL RULES:
 - emotion: calm, focused, steady effort
 - avoid generic stock-photo feel`;
   } else if (category === "Masters of Today") {
-    // SAFETY: avoid depicting real living public figure likeness
     prompt = `Create a realistic 4-panel editorial-style collage with warm natural lighting and no text.
 
-The tribute is:
-"${bodyOnly}"
-
-Subject:
-${idea}
+SUBJECT TYPE:
+- a modern professional in entertainment or performance
+- NOT any real person
+- NOT a celebrity likeness
+- NOT a recognizable public figure
 
 SAFETY / LIKENESS RULES (MANDATORY):
-- Do NOT generate a direct likeness, portrait, or recognizable face of a real living person or public figure.
-- Do NOT recreate celebrity photos.
-- Instead, create a non-likeness visual tribute based on the subject’s profession, body of work, setting, tools, environments, and career context.
+- Do NOT depict any real living person or public figure
+- Do NOT generate a direct likeness, portrait, or recognizable face
+- Do NOT include any celebrity name in the image concept
+- Do NOT recreate paparazzi, press, or red carpet photos of a real person
+- If people appear, they must be generic, non-identifiable, and shown from a distance, from behind, in silhouette, or partially obscured
 
-PANEL IDEAS (choose 4 that fit the subject):
-- work-related environments (e.g., set/studio, stage, training track, workplace)
-- objects/tools of the craft (e.g., scripts, camera gear, microphones, medals, notebooks)
-- documentary-style moments that show the field (not the person’s face)
-- press/event context without recognizable faces
-- grounded symbolic context (awards/trophies shown generically, not branded)
+WHAT TO SHOW INSTEAD:
+- editorial-style career context only
+- film set atmosphere
+- studio lighting rigs
+- script pages on a table
+- wardrobe and makeup station
+- director chair and camera gear
+- rehearsal spaces
+- generic award/event atmosphere without faces
+- behind-the-scenes entertainment industry environments
 
-GLOBAL RULES:
-- factual, grounded, editorial (not fan art)
-- no fake biography text in image
-- no invented awards, signs, or labels
-- no fantasy or cinematic exaggeration
-- no text overlays`;
+VISUAL GOAL:
+- celebrate the field, craft, pressure, growth, and career environment
+- no fan art
+- no portrait
+- no text overlays
+- no fake labels
+- grounded documentary/editorial realism only`;
   } else if (category === "Wisdom Wednesday") {
     prompt = `Create a realistic 4-panel family collage with warm natural lighting and no text.
 
