@@ -41,9 +41,7 @@ async function generatePosts() {
   try {
     const res = await fetch("/generate", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idea, category, weeklyPosts }),
     });
 
@@ -75,7 +73,6 @@ async function generatePosts() {
       counter.style.color = "#666";
       counter.style.marginTop = "8px";
       counter.innerText = `Characters: ${post.length}`;
-
       div.appendChild(counter);
 
       div.onclick = () => {
@@ -89,6 +86,7 @@ async function generatePosts() {
         selectedCategory = category;
         selectedIdea = idea;
         selectedWeeklyPosts = weeklyPosts;
+
         selectedImagePrompt = buildImagePrompt(post, category, idea, weeklyPosts);
 
         selectedPostBox.innerText = post;
@@ -138,10 +136,13 @@ IDENTITY RULES:
 - do not default to white European-looking subjects
 
 PANEL RULES (age-relevant activity required):
-- Panel 1: 22-year-old doing work, training, responsibility or focused effort
-- Panel 2: 18-year-old in sport, study, or skill development
-- Panel 3: 12–13-year-old daughter practicing dance or learning discipline
-- Panel 4: parents guiding, supporting, or modelling structure (not passive)
+- Panel 1: 22-year-old doing structured effort (work, training, focused responsibility)
+- Panel 2: 18-year-old doing a DIFFERENT skill activity (sport/study/practice)
+- Panel 3: 12–13-year-old daughter doing a DIFFERENT focused activity (dance practice / repetition)
+- Panel 4: parents actively guiding/teaching (not passive)
+
+VISUAL VARIETY RULE:
+- Each panel must show a different activity AND a different setting. No duplication.
 
 MEANING:
 The scenes must reflect this post:
@@ -152,12 +153,12 @@ GLOBAL RULES:
 - no text overlays
 - no fantasy or cinematic exaggeration
 - no uniforms or harsh institutional settings
-- natural environments such as home, park, beach, backyard, study space or everyday life
-- emotion is calm, focused, steady effort
-- each panel must clearly connect to the meaning of the post
+- natural environments: home, park, beach, backyard, study space, everyday life
+- emotion: calm, focused, steady effort
 - avoid generic stock-photo feel`;
   } else if (category === "Masters of Today") {
-    prompt = `Create a realistic 4-panel documentary-style collage with warm natural lighting and no text.
+    // SAFETY: avoid depicting real living public figure likeness
+    prompt = `Create a realistic 4-panel editorial-style collage with warm natural lighting and no text.
 
 The tribute is:
 "${bodyOnly}"
@@ -165,16 +166,24 @@ The tribute is:
 Subject:
 ${idea}
 
-RULES:
-- factual, profession-linked imagery
+SAFETY / LIKENESS RULES (MANDATORY):
+- Do NOT generate a direct likeness, portrait, or recognizable face of a real living person or public figure.
+- Do NOT recreate celebrity photos.
+- Instead, create a non-likeness visual tribute based on the subject’s profession, body of work, setting, tools, environments, and career context.
+
+PANEL IDEAS (choose 4 that fit the subject):
+- work-related environments (e.g., set/studio, stage, training track, workplace)
+- objects/tools of the craft (e.g., scripts, camera gear, microphones, medals, notebooks)
+- documentary-style moments that show the field (not the person’s face)
+- press/event context without recognizable faces
+- grounded symbolic context (awards/trophies shown generically, not branded)
+
+GLOBAL RULES:
+- factual, grounded, editorial (not fan art)
 - no fake biography text in image
 - no invented awards, signs, or labels
-- show the subject's field, craft, setting, or achievement in a grounded way
-- if the person is an athlete, show realistic sporting environments
-- if the person is an actor, musician, public figure, or creator, show realistic work-related contexts
-- 4 distinct panels
-- no fantasy, no symbolic nonsense
-- image should feel like informed visual tribute, not fan art`;
+- no fantasy or cinematic exaggeration
+- no text overlays`;
   } else if (category === "Wisdom Wednesday") {
     prompt = `Create a realistic 4-panel family collage with warm natural lighting and no text.
 
@@ -194,10 +203,13 @@ IDENTITY RULES:
 - do not default to white European-looking subjects
 
 PANEL RULES (age-relevant stillness/reflection):
-- Panel 1: 22-year-old in quiet reflection such as sitting, journaling, observing, or thoughtful pause
-- Panel 2: 18-year-old paused in thought such as looking out, sitting alone, or thinking quietly
-- Panel 3: 12–13-year-old engaged in calm focused activity such as dance practice, reading, drawing, or still concentration
-- Panel 4: parents in calm awareness such as listening, observing, sitting together, or being present
+- Panel 1: 22-year-old in quiet reflection (journaling, thinking, observing)
+- Panel 2: 18-year-old paused in thought (sitting alone, looking out, quiet reset)
+- Panel 3: 12–13-year-old in calm focus (dance practice, reading, drawing, concentration)
+- Panel 4: parents in calm awareness (listening, present, quietly guiding)
+
+VISUAL VARIETY RULE:
+- Each panel must show a different activity AND a different setting. No duplication.
 
 MEANING:
 The visuals must reflect this Wisdom post:
@@ -207,11 +219,9 @@ GLOBAL RULES:
 - documentary realism only
 - no text overlays
 - no fantasy or surreal effects
-- calm environments such as home, nature, beach, yard, quiet room, or everyday reflective spaces
-- natural lighting
-- emotion is reflective, not dramatic
-- each panel must show a different angle of awareness, stillness, or pause
-- avoid staged or stock-photo feel`;
+- calm environments: home, nature, beach, yard, quiet room
+- emotion: reflective, not dramatic
+- avoid staged/stock-photo feel`;
   } else if (category === "Masters of Yesterday") {
     prompt = `Create a realistic 4-panel documentary collage with warm natural lighting and no text.
 
@@ -224,25 +234,21 @@ ${idea}
 STRICT 4-PANEL RULES:
 - Panel 1: culturally or historically grounded visual linked directly to the subject
 - Panel 2: another historically or culturally relevant real-world visual linked to the subject
-- Panel 3: a dedicated geographic context panel showing the real-world location, region, route, landing area, country, island group, or historical place tied to the subject
-- Panel 4: a final panel showing living legacy, continuity, descendants, cultural continuation, gathering, tools, environment, or community relevance
+- Panel 3: a dedicated geographic context panel showing the real-world location tied to the subject
+- Panel 4: a final panel showing living legacy, continuity, descendants, cultural continuation, tools, environment, or community relevance
 
 MAP / LOCATION PANEL RULES:
-- the map/location panel must be visually tied to the real subject location
-- no fake labels
-- no gibberish text
-- no invented cartography
-- if exact text labels are unreliable, use clean geographic visual context instead of fake writing
-- do not place nonsense words on the map
-- do not turn the map into fantasy art
+- the map/location panel must be tied to the real subject location
+- no fake labels, no gibberish, no invented cartography
+- if labels are unreliable, remove them entirely rather than guessing
+- no text overlays
 
 GLOBAL RULES:
 - factual, respectful, grounded
 - no fantasy
 - no cinematic exaggeration
 - no costumes unrelated to the actual culture or time
-- no text overlays anywhere
-- image should feel like a real-world historical/cultural tribute, not a movie poster`;
+- image should feel like real-world historical/cultural tribute`;
   } else if (category === "Friday Recap") {
     prompt = `Create a realistic 4-panel family collage with warm natural lighting and no text.
 
@@ -253,13 +259,12 @@ Weekly source material:
 "${weeklyPosts}"
 
 RULES:
-- show reflection, completion, weekly learning, connection, and continuity
-- different panels should hint at different parts of the week without literally writing them
-- grounded documentary realism
+- show reflection, completion, weekly learning, connection, continuity
+- different panels should hint at different parts of the week without literal text
+- documentary realism
 - no fantasy
 - no text overlays
-- family-safe and emotionally believable
-- image should feel like a quiet end-of-week summary`;
+- family-safe and emotionally believable`;
   } else if (category === "Friday Freestyle") {
     prompt = `Create a realistic 4-panel collage with warm natural lighting and no text.
 
@@ -268,11 +273,11 @@ The post is:
 
 RULES:
 - lighter, relaxed, human feeling
-- still grounded and believable
+- grounded and believable
 - documentary realism
 - no fantasy
 - no text overlays
-- show natural everyday life, humour, ease, or release at the end of the week`;
+- everyday life, humour, ease, end-of-week release`;
   } else {
     prompt = `Create a realistic 4-panel collage with warm natural lighting and no text, aligned with this post:
 "${bodyOnly}"`;
@@ -291,9 +296,7 @@ generateImageBtn.addEventListener("click", async () => {
   try {
     const res = await fetch("/generate-image", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         post: selectedPost,
         category: selectedCategory,
