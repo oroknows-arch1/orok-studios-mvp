@@ -95,114 +95,185 @@ function cleanPost(post) {
   return `${greeting}\n${text}\n${signoff}`;
 }
 
-/**
- * --------------------------------------------------
- * GEOGRAPHIC PRECISION HELPERS
- * --------------------------------------------------
- */
-
-function getAccurateLocation(subject = "") {
-  const s = String(subject).toLowerCase().trim();
-
-  if (s.includes("aguaruna") || s.includes("awajun")) {
-    return {
-      short: "northern Peru",
-      precise:
-        "Northern Peru, especially Amazonas and San Martín regions, with focus on the Marañón and Cenepa river areas",
-      panelRule:
-        "Panel 3 must show northern Peru only, not a broad Amazon basin view dominated by Brazil",
-    };
-  }
-
-  if (s.includes("achuar")) {
-    return {
-      short: "Loreto Region, Peru",
-      precise:
-        "Loreto Region in northeastern Peru, especially the Pastaza, Huasaga, Morona, and Corrientes river areas near the Ecuador border",
-      panelRule:
-        "Panel 3 must focus on northeastern Peru near the Ecuador border, not the whole Amazon",
-    };
-  }
-
-  if (s.includes("maya") || s.includes("mayan")) {
-    return {
-      short: "Maya region of Mesoamerica",
-      precise:
-        "Mesoamerica, especially southern Mexico, Guatemala, Belize, western Honduras, and El Salvador, with focus on the Yucatán Peninsula and core Maya region",
-      panelRule:
-        "Panel 3 should show the real Maya region clearly, without fake labels or fantasy cartography",
-    };
-  }
-
-  if (s.includes("te arawa") || s.includes("arawa")) {
-    return {
-      short: "Bay of Plenty, New Zealand",
-      precise:
-        "Bay of Plenty, North Island, New Zealand, especially Maketū and surrounding coastline",
-      panelRule:
-        "Panel 3 must focus on the Bay of Plenty / Maketū area, not a vague New Zealand-wide map unless clearly tied to the landing context",
-    };
-  }
-
-  if (s.includes("mayans")) {
-    return {
-      short: "Maya region of Mesoamerica",
-      precise:
-        "Mesoamerica, especially southern Mexico, Guatemala, Belize, western Honduras, and El Salvador, with focus on the Yucatán Peninsula and core Maya region",
-      panelRule:
-        "Panel 3 should show the real Maya region clearly, without fake labels or fantasy cartography",
-    };
-  }
-
-  return {
-    short: "subject-specific location",
-    precise:
-      "a geographically precise real-world location tied directly to the subject",
-    panelRule:
-      "Panel 3 must be regionally specific, not broad, vague, or dominated by unrelated surrounding geography",
-  };
+function toHashtag(text) {
+  return (
+    "#" +
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 3)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join("")
+  );
 }
 
-function buildGeographicImagePrompt({ subject = "", tributeText = "" }) {
-  const location = getAccurateLocation(subject);
+function getHashtags(category, idea) {
+  const lowerIdea = (idea || "").toLowerCase();
 
-  return `
-Create a realistic 4-panel documentary collage with warm natural lighting and no text.
+  // Always include one rotating OROK brand tag
+  const brandTags = [
+    "#OurRootsOurKnowledge",
+    "#OnlyRealOnesKnow",
+  ];
 
-The tribute is:
-"${tributeText}"
+  const categoryPools = {
+    "Motivation Monday": [
+      "#Mindset",
+      "#Consistency",
+      "#Focus",
+      "#WorkEthic",
+      "#Courage",
+      "#Persistence",
+      "#Drive",
+      "#Resilience",
+      "#Progress",
+      "#SelfBelief",
+      "#Momentum",
+      "#Purpose",
+    ],
+    "Wisdom Wednesday": [
+      "#Awareness",
+      "#Reflection",
+      "#Perspective",
+      "#Stillness",
+      "#Clarity",
+      "#Insight",
+      "#Presence",
+      "#Understanding",
+      "#InnerWork",
+      "#RealThought",
+      "#Discernment",
+      "#Wisdom",
+    ],
+    "Masters of Today": [
+      "#Respect",
+      "#Excellence",
+      "#Representation",
+      "#Achievement",
+      "#Influence",
+      "#Dedication",
+      "#Impact",
+      "#Recognition",
+      "#Craft",
+      "#Greatness",
+      "#Leadership",
+      "#Inspiration",
+    ],
+    "Masters of Yesterday": [
+      "#History",
+      "#Culture",
+      "#Legacy",
+      "#Origins",
+      "#Heritage",
+      "#Identity",
+      "#Tradition",
+      "#Ancestry",
+      "#HistoricalKnowledge",
+      "#AncientWorld",
+      "#Roots",
+      "#Civilization",
+    ],
+    "Friday Recap": [
+      "#Reflection",
+      "#WeeklyReset",
+      "#Perspective",
+      "#Lessons",
+      "#WeeklyThoughts",
+      "#LookingBack",
+      "#MovingForward",
+      "#Recap",
+      "#WeekInReview",
+      "#ProgressCheck",
+      "#WeeklyGrowth",
+      "#Reset",
+    ],
+    "Friday Freestyle": [
+      "#FridayVibes",
+      "#WeekendMood",
+      "#RealTalk",
+      "#GoodEnergy",
+      "#Expression",
+      "#LightWork",
+      "#Unwind",
+      "#Flow",
+      "#WeekendThoughts",
+      "#Vibes",
+      "#Ease",
+      "#Release",
+    ],
+  };
 
-Subject:
-${subject}
+  let topicPool = [];
 
-STRICT 4-PANEL RULES:
-- Panel 1: culturally or historically grounded visual linked directly to the subject
-- Panel 2: another historically or culturally relevant real-world visual linked to the subject
-- Panel 3: a dedicated geographic context panel showing the real-world location, region, route, landing area, country, island group, or historical place tied to the subject
-- Panel 4: a final panel showing living legacy, continuity, descendants, cultural continuation, gathering, tools, environment, or community relevance
+  if (lowerIdea.includes("safety")) {
+    topicPool = ["#SafetyCulture", "#WorkplaceSafety", "#RiskAwareness", "#SafeHabits"];
+  } else if (lowerIdea.includes("discipline")) {
+    topicPool = ["#SelfDiscipline", "#Routine", "#Habits", "#DailyWork"];
+  } else if (lowerIdea.includes("growth")) {
+    topicPool = ["#PersonalGrowth", "#GrowthMindset", "#Becoming", "#LevelUp"];
+  } else if (lowerIdea.includes("stillness")) {
+    topicPool = ["#MentalClarity", "#QuietMind", "#Stillness", "#InnerPeace"];
+  } else if (lowerIdea.includes("reflection")) {
+    topicPool = ["#SelfAwareness", "#InnerWork", "#PerspectiveShift", "#DeepThought"];
+  } else if (lowerIdea.includes("creativity")) {
+    topicPool = ["#Creativity", "#CreativeProcess", "#OriginalThought", "#MakeSomething"];
+  } else if (lowerIdea.includes("embarrass")) {
+    topicPool = ["#Courage", "#Confidence", "#PushThrough", "#GrowthEdge"];
+  } else if (lowerIdea.includes("mischief") || lowerIdea.includes("mischievous")) {
+    topicPool = ["#Mischief", "#SharpThinking", "#SmartMoves", "#PlayfulMind"];
+  } else if (lowerIdea.includes("cathy freeman")) {
+    topicPool = ["#CathyFreeman", "#AustralianAthletics", "#TrackLegend", "#SportHistory"];
+  } else if (lowerIdea.includes("gout gout")) {
+    topicPool = ["#GoutGout", "#TrackAndField", "#Sprint", "#AustralianSprint"];
+  } else if (lowerIdea.includes("anglo saxon")) {
+    topicPool = ["#AngloSaxons", "#EnglishOrigins", "#EarlyEngland", "#HistoricalRoots"];
+  } else if (lowerIdea.includes("malcolm x")) {
+    topicPool = ["#MalcolmX", "#CivilRights", "#BlackHistory", "#PoliticalThought"];
+  } else if (lowerIdea.includes("mayan") || lowerIdea.includes("maya")) {
+    topicPool = ["#Maya", "#AncientCivilizations", "#Mesoamerica", "#CulturalLegacy"];
+  } else if (lowerIdea.includes("aguaruna") || lowerIdea.includes("awajun")) {
+    topicPool = ["#Aguaruna", "#Awajun", "#IndigenousKnowledge", "#AmazonPeoples"];
+  } else if (lowerIdea.includes("arawa") || lowerIdea.includes("te arawa")) {
+    topicPool = ["#TeArawa", "#MaoriHistory", "#Aotearoa", "#WakaTraditions"];
+  } else if (idea && idea.trim().length > 0) {
+    topicPool = [toHashtag(idea)];
+  }
 
-MAP / LOCATION PANEL RULES:
-- Panel 3 must be geographically tied to: ${location.precise}
-- ${location.panelRule}
-- show a clean, realistic geographic or satellite-style view of the region
-- the region must be tightly framed and centered on the correct location
-- do not show a broad continent or surrounding countries unless directly relevant
-- avoid dominant visuals of neighbouring regions that are not the subject
-- no fake labels
-- no gibberish text
-- no invented cartography
-- if labels are unclear, remove them entirely instead of guessing
-- no text overlays of any kind
-- do not stylise or turn the map into artwork
+  const brandTag = pickRandom(brandTags, 1)[0];
+  const categoryTag = pickRandom(categoryPools[category] || ["#Expression"], 1)[0];
 
-GLOBAL RULES:
-- factual, respectful, grounded
-- no fantasy
-- no cinematic exaggeration
-- no costumes unrelated to the actual culture or time
-- no text overlays anywhere
-- image should feel like a real-world historical/cultural tribute, not a movie poster
-`.trim();
+  let topicTag = "";
+  if (topicPool.length > 0) {
+    topicTag = pickRandom(topicPool, 1)[0];
+  } else {
+    topicTag =
+      category === "Masters of Today" || category === "Masters of Yesterday"
+        ? "#Legacy"
+        : "#RealTalk";
+  }
+
+  let tags = [brandTag, categoryTag, topicTag];
+  tags = [...new Set(tags)];
+
+  const fallbackPool = [
+    ...(categoryPools[category] || []),
+    "#Signal",
+    "#Identity",
+    "#Expression",
+    "#BrandVoice",
+    "#Perspective",
+    "#Purpose",
+  ];
+
+  while (tags.length < 3) {
+    const next = pickRandom(fallbackPool, 1)[0] || "#Expression";
+    if (!tags.includes(next)) tags.push(next);
+    else break;
+  }
+
+  return tags.slice(0, 3).join(" ");
 }
 
 app.get("/", (req, res) => {
@@ -372,15 +443,17 @@ REQUIREMENTS:
 - do NOT include any sign-off
 - write ONLY the body text
 - start immediately with the message
-- HASHTAG RULES (MANDATORY):
-- Add EXACTLY 3 hashtags
-- Hashtag 1 should match the category
-- Hashtag 2 should match the topic/idea
-- Hashtag 3 should be a broader discovery-style keyword people might search for
-- Put all 3 hashtags on the final line only
-- Separate each hashtag with a space
 - MUST end with a complete sentence
 - separate each post with --- only
+
+HASHTAG RULES (MANDATORY):
+- Add EXACTLY 3 hashtags
+- Include one rotating OROK brand hashtag: either #OurRootsOurKnowledge or #OnlyRealOnesKnow
+- Include two other hashtags that are relevant to the topic and category
+- Avoid repeating the same hashtags every time
+- Do not default to generic pairs like #Discipline and #Growth unless they are truly necessary
+- Put all 3 hashtags on the final line only
+- Separate each hashtag with a space
 
 BIOGRAPHICAL RULE:
 - Include real-world identifying details where possible (age or life stage, origin, field, role, body of work, contribution, achievement)
@@ -439,101 +512,18 @@ ${extraCategoryRule}
       posts = filteredGeneric;
     }
 
-    function toHashtag(text) {
-  return "#" + text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .trim()
-    .split(/\s+/)
-    .slice(0, 3)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join("");
-}
+    const finalPosts = posts.map((post) => {
+      let cleaned = cleanPost(post);
 
-function getHashtags(category, idea) {
-  const lowerIdea = (idea || "").toLowerCase();
+      // Remove any hashtags the model may have placed badly
+      cleaned = cleaned.replace(/\n?#\w+(?:\s+#\w+)*/g, "").trim();
 
-  let tag1 = "#OROK";
-  let tag2 = "#Mindset";
-  let tag3 = "#Growth";
+      // Always add exactly 3 hashtags at the end
+      const generatedTags = getHashtags(category, idea);
+      cleaned = `${cleaned}\n${generatedTags}`;
 
-  if (category === "Motivation Monday") {
-    tag1 = "#Discipline";
-  } else if (category === "Wisdom Wednesday") {
-    tag1 = "#Awareness";
-  } else if (category === "Masters of Today") {
-    tag1 = "#Respect";
-  } else if (category === "Masters of Yesterday") {
-    tag1 = "#History";
-  } else if (category === "Friday Recap") {
-    tag1 = "#Reflection";
-  } else if (category === "Friday Freestyle") {
-    tag1 = "#FridayVibes";
-  }
-
-  if (lowerIdea.includes("safety")) {
-    tag2 = "#WorkplaceSafety";
-    tag3 = "#SafetyCulture";
-  } else if (lowerIdea.includes("discipline")) {
-    tag2 = "#Consistency";
-    tag3 = "#SelfDiscipline";
-  } else if (lowerIdea.includes("growth")) {
-    tag2 = "#Growth";
-    tag3 = "#PersonalGrowth";
-  } else if (lowerIdea.includes("stillness")) {
-    tag2 = "#Stillness";
-    tag3 = "#MentalClarity";
-  } else if (lowerIdea.includes("reflection")) {
-    tag2 = "#Reflection";
-    tag3 = "#SelfAwareness";
-  } else if (lowerIdea.includes("creativity")) {
-    tag2 = "#Creativity";
-    tag3 = "#CreativeProcess";
-  } else if (lowerIdea.includes("embarrass")) {
-    tag2 = "#Courage";
-    tag3 = "#PersonalGrowth";
-  } else if (lowerIdea.includes("gout gout")) {
-    tag2 = "#Sprint";
-    tag3 = "#TrackAndField";
-  } else if (lowerIdea.includes("anglo saxon")) {
-    tag2 = "#AngloSaxons";
-    tag3 = "#EnglishOrigins";
-  } else if (lowerIdea.includes("malcolm x")) {
-    tag2 = "#MalcolmX";
-    tag3 = "#CivilRights";
-  } else if (lowerIdea.includes("mayan")) {
-    tag2 = "#Maya";
-    tag3 = "#AncientCivilizations";
-  } else if (idea && idea.trim().length > 0) {
-    tag2 = toHashtag(idea);
-    tag3 = category === "Masters of Yesterday" || category === "Masters of Today"
-      ? "#Legacy"
-      : "#Growth";
-  }
-
-  const uniqueTags = [...new Set([tag1, tag2, tag3])];
-
-  while (uniqueTags.length < 3) {
-    if (!uniqueTags.includes("#Growth")) uniqueTags.push("#Growth");
-    else if (!uniqueTags.includes("#Mindset")) uniqueTags.push("#Mindset");
-    else uniqueTags.push("#OROK");
-  }
-
-  return uniqueTags.slice(0, 3).join(" ");
-}
-
-const finalPosts = posts.map((post) => {
-  let cleaned = cleanPost(post);
-
-  const hashtagMatch = cleaned.match(/#\w+/g);
-
-  if (!hashtagMatch || hashtagMatch.length < 3) {
-    const generatedTags = getHashtags(category, idea);
-    cleaned = `${cleaned}\n${generatedTags}`;
-  }
-
-  return cleaned;
-});
+      return cleaned;
+    });
 
     res.json({ text: finalPosts.join("\n\n\n") });
   } catch (err) {
@@ -543,35 +533,12 @@ const finalPosts = posts.map((post) => {
 });
 
 app.post("/generate-image", async (req, res) => {
-  const {
-    imagePrompt,
-    subject,
-    tributeText,
-    useGeographicPanel,
-  } = req.body;
+  const { imagePrompt } = req.body;
 
   try {
-    let finalImagePrompt = imagePrompt;
-
-    // If caller wants the automatic accurate geography version,
-    // build the prompt here instead of relying on a broad manual prompt.
-    if (useGeographicPanel && subject && tributeText) {
-      finalImagePrompt = buildGeographicImagePrompt({
-        subject,
-        tributeText,
-      });
-    }
-
-    if (!finalImagePrompt) {
-      return res.status(400).json({
-        error:
-          "No image prompt provided. Send imagePrompt, or send subject + tributeText + useGeographicPanel:true",
-      });
-    }
-
     const response = await openai.images.generate({
       model: "gpt-image-1",
-      prompt: finalImagePrompt,
+      prompt: imagePrompt,
       size: "1024x1024",
     });
 
@@ -583,10 +550,7 @@ app.post("/generate-image", async (req, res) => {
 
     const imageUrl = `data:image/png;base64,${base64Image}`;
 
-    res.json({
-      imageUrl,
-      usedPrompt: finalImagePrompt,
-    });
+    res.json({ imageUrl });
   } catch (err) {
     console.error("IMAGE GENERATION ERROR:", err);
     res.status(500).json({ error: err.message });
