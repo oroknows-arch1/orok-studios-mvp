@@ -556,8 +556,10 @@ app.post("/generate-image", async (req, res) => {
 
     res.json({ imageUrl });
   } catch (err) {
-    console.error("IMAGE GENERATION ERROR:", err);
-    res.status(500).json({ error: err.message });
+   console.error("IMAGE GENERATION ERROR:", err?.response?.data || err);
+res.status(500).json({
+  error: err?.response?.data?.error?.message || err.message || "Unknown image generation error",
+});
   }
 });
 
