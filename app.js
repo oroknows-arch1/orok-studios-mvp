@@ -306,10 +306,10 @@ generateImageBtn.addEventListener("click", async () => {
     const data = await res.json();
 
     if (!data.imageUrl) {
-  imageStatus.innerText = "Image generation failed: " + (data.error || "No image returned.");
-  console.log("Image route returned:", data);
-  return;
-}
+      imageStatus.innerText =
+        "Image generation failed: " + (data.error || "No image returned.");
+      console.log("Image route returned:", data);
+      return;
     }
 
     generatedImage.src = data.imageUrl;
