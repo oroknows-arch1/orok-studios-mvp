@@ -291,6 +291,39 @@ RULES:
 
   return prompt;
 }
+async function analyzeVoice() {
+  const voiceInput = document.getElementById("voiceInput").value;
+  const voiceResult = document.getElementById("voiceResult");
+
+  if (!voiceInput.trim()) {
+    voiceResult.innerText = "Please paste some business text first.";
+    return;
+  }
+
+  voiceResult.innerText = "Analyzing voice...";
+
+  try {
+    const res = await fetch("/analyze-voice", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ input: voiceInput }),
+    });
+
+    const data = await res.json();
+
+    if (!data.result) {
+      voiceResult.innerText =
+        "Voice analysis failed: " + (data.error || "No result returned.");
+      console.log("Voice route returned:", data);
+      return;
+    }
+
+    voiceResult.innerText = data.result;
+  } catch (error) {
+    console.error(error);
+    voiceResult.innerText = "Error analyzing voice: " + error.message;
+  }
+}
 
 generateImageBtn.addEventListener("click", async () => {
   if (!selectedPost) return;
