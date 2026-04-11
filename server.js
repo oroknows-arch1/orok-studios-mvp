@@ -18,6 +18,34 @@ const greeting = "Morning everyone 👋";
 const signoff = "Enjoy the day love you all c u this arvo😘";
 const maxChars = 500;
 
+const voiceAgentPrompt = (input) => `
+You are a Brand Voice Agent.
+
+Your job is to analyse real business or personal writing and extract:
+
+1. Tone (3–5 traits)
+2. Writing style (sentence length, structure)
+3. Vocabulary patterns
+4. Brand positioning
+5. Content structure (how information is presented)
+
+Then:
+
+6. Summarise the voice clearly
+7. Create "Do" and "Don't" rules
+8. Rewrite 2 examples in the SAME voice but clearer and sharper
+
+IMPORTANT:
+- Do not sound like AI
+- Do not add hype
+- Stay true to the original tone
+- Keep it simple, clean, and human
+
+INPUT:
+"""
+${input}
+"""
+`;
 function soundsLikeHistoryLesson(text) {
   const badPatterns = [
     "is considered",
@@ -282,6 +310,26 @@ function getHashtags(category, idea) {
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
+});
+
+app.post("/analyze-voice", async (req, res) => {
+  const { input } = req.body;
+
+  try {
+    const prompt = voiceAgentPrompt(input);
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const result = response.choices?.[0]?.message?.content || "";
+
+    res.json({ result });
+  } catch (err) {
+    console.error("VOICE AGENT ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/generate", async (req, res) => {
