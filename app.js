@@ -335,3 +335,53 @@ async function analyzeVoice() {
     voiceResult.innerText = "Error analyzing voice: " + error.message;
   }
 }
+generateImageBtn.addEventListener("click", async () => {
+  if (!selectedPost) {
+    imageStatus.innerText = "Please select a post first.";
+    return;
+  }
+
+  imageStatus.innerText = "Generating image...";
+  generatedImage.style.display = "none";
+  generatedImage.src = "";
+
+  try {
+    const res = await fetch("/generate-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        post: selectedPost,
+        category: selectedCategory,
+        idea: selectedIdea,
+        weeklyPosts: selectedWeeklyPosts,
+        imagePrompt: selectedImagePrompt,
+      }),
+    });
+
+    const contentType = res.headers.get("content-type") || "";
+
+    if (!contentType.includes("application/json")) {
+      const text = await res.text();
+      console.error("Non-JSON response from /generate-image:", text);
+      imageStatus.innerText =
+        "Image generation failed: server returned HTML instead of JSON.";
+      return;
+    }
+
+    const data = await res.json();
+
+    if (!data.imageUrl) {
+      imageStatus.innerText =
+        "Image generation failed: " + (data.error || "No image returned.");
+      console.log("Image route returned:", data);
+      return;
+    }
+
+    generatedImage.src = data.imageUrl;
+    generatedImage.style.display = "block";
+    imageStatus.innerText = "Image ready.";
+  } catch (error) {
+    console.error(error);
+    imageStatus.innerText = "Error generating image: " + error.message;
+  }
+});
