@@ -110,7 +110,8 @@ async function generatePosts() {
 function stripGreetingAndSignoff(post) {
   return post
     .replace(/^Morning everyone.*\n?/i, "")
-    .replace(/Enjoy the day.*$/i, "")
+    .replace(/\n?Enjoy the day love you all c u this arvo😘/i, "")
+    .replace(/\n?#\w+(?:\s+#\w+)*/g, "")
     .trim();
 }
 

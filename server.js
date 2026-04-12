@@ -623,6 +623,9 @@ app.post("/generate-image", async (req, res) => {
   const { imagePrompt } = req.body;
 
   try {
+    console.log("GENERATE IMAGE HIT");
+    console.log("IMAGE PROMPT PREVIEW:", (imagePrompt || "").slice(0, 300));
+
     const response = await openai.images.generate({
       model: "gpt-image-1",
       prompt: imagePrompt,
@@ -632,21 +635,25 @@ app.post("/generate-image", async (req, res) => {
     const base64Image = response.data?.[0]?.b64_json;
 
     if (!base64Image) {
-      return res.status(500).json({ error: "No image returned" });
+      console.log("NO IMAGE RETURNED FROM OPENAI");
+      return res.status(500).json({
+        error: "No image returned from OpenAI",
+      });
     }
 
-    const imageUrl = `data:image/png;base64,${base64Image}`;
+    console.log("IMAGE GENERATED SUCCESSFULLY");
 
+    const imageUrl = `data:image/png;base64,${base64Image}`;
     res.json({ imageUrl });
   } catch (err) {
-  console.error("IMAGE GENERATION ERROR:", err?.response?.data || err);
-  res.status(500).json({
-    error:
-      err?.response?.data?.error?.message ||
-      err.message ||
-      "Unknown image generation error",
-  });
-}
+    console.error("IMAGE GENERATION ERROR FULL:", err);
+    res.status(500).json({
+      error:
+        err?.response?.data?.error?.message ||
+        err?.message ||
+        "Unknown image generation error",
+    });
+  }
 });
 
 const PORT = process.env.PORT || 3000;
