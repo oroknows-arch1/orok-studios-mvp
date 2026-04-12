@@ -21,25 +21,26 @@ const maxChars = 500;
 const voiceAgentPrompt = (input) => `
 You are a Brand Voice Agent.
 
-Your job is to analyse real business or personal writing and extract:
+Analyse the writing sample and return ONLY valid JSON.
 
-1. Tone (3–5 traits)
-2. Writing style (sentence length, structure)
-3. Vocabulary patterns
-4. Brand positioning
-5. Content structure (how information is presented)
+Use this exact structure:
+{
+  "tone": ["trait 1", "trait 2", "trait 3"],
+  "style": ["pattern 1", "pattern 2", "pattern 3"],
+  "vocabulary": ["pattern 1", "pattern 2", "pattern 3"],
+  "positioning": "short brand positioning summary",
+  "structure": "short explanation of how the content is structured",
+  "voiceSummary": "short paragraph summary",
+  "doRules": ["rule 1", "rule 2", "rule 3"],
+  "dontRules": ["rule 1", "rule 2", "rule 3"]
+}
 
-Then:
-
-6. Summarise the voice clearly
-7. Create "Do" and "Don't" rules
-8. Rewrite 2 examples in the SAME voice but clearer and sharper
-
-IMPORTANT:
-- Do not sound like AI
-- Do not add hype
-- Stay true to the original tone
-- Keep it simple, clean, and human
+Rules:
+- Return JSON only
+- No markdown
+- No code fences
+- Keep it human and grounded
+- Do not exaggerate
 
 INPUT:
 """
@@ -149,7 +150,48 @@ function getHashtags(category, idea) {
     "#OurRootsOurKnowledge",
     "#OnlyRealOnesKnow",
   ];
+function buildVoiceInstructions(profile) {
+  if (!profile) {
+    return `
+TONE:
+- grounded
+- blue collar
+- calm
+- direct
 
+STYLE:
+- simple wording
+- real, not polished
+- observational more than inspirational
+`;
+  }
+
+  return `
+TONE:
+${(profile.tone || []).map((t) => `- ${t}`).join("\n")}
+
+STYLE:
+${(profile.style || []).map((s) => `- ${s}`).join("\n")}
+
+VOCABULARY:
+${(profile.vocabulary || []).map((v) => `- ${v}`).join("\n")}
+
+POSITIONING:
+${profile.positioning || ""}
+
+STRUCTURE:
+${profile.structure || ""}
+
+VOICE SUMMARY:
+${profile.voiceSummary || ""}
+
+DO RULES:
+${(profile.doRules || []).map((r) => `- ${r}`).join("\n")}
+
+DON'T RULES:
+${(profile.dontRules || []).map((r) => `- ${r}`).join("\n")}
+`;
+}
   const categoryPools = {
     "Motivation Monday": [
       "#Mindset",
@@ -315,25 +357,51 @@ app.get("/", (req, res) => {
 app.post("/analyze-voice", async (req, res) => {
   const { input } = req.body;
 
-  try {
-    const prompt = voiceAgentPrompt(input);
+  console.log("ANALYZE VOICE HIT");
+  console.log("INPUT PREVIEW:", (input || "").slice(0, 80));
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const result = response.choices?.[0]?.message?.content || "";
-
-    res.json({ result });
-  } catch (err) {
-    console.error("VOICE AGENT ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
+  return res.json({
+    profile: {
+      tone: ["warm", "personal", "genuine"],
+      style: ["storytelling", "conversational", "simple wording"],
+      vocabulary: ["sensory detail", "cultural references", "everyday language"],
+      positioning: "authentic, premium, rooted in real experience",
+      structure: "personal story first, then discovery, then product truth",
+      voiceSummary: "Warm and approachable, built on real experience and cultural respect.",
+      doRules: [
+        "Use personal anecdotes",
+        "Keep language simple",
+        "Use sensory details"
+      ],
+      dontRules: [
+        "Do not sound salesy",
+        "Do not use hype",
+        "Do not use jargon"
+      ]
+    },
+    result: JSON.stringify({
+      tone: ["warm", "personal", "genuine"],
+      style: ["storytelling", "conversational", "simple wording"],
+      vocabulary: ["sensory detail", "cultural references", "everyday language"],
+      positioning: "authentic, premium, rooted in real experience",
+      structure: "personal story first, then discovery, then product truth",
+      voiceSummary: "Warm and approachable, built on real experience and cultural respect.",
+      doRules: [
+        "Use personal anecdotes",
+        "Keep language simple",
+        "Use sensory details"
+      ],
+      dontRules: [
+        "Do not sound salesy",
+        "Do not use hype",
+        "Do not use jargon"
+      ]
+    }, null, 2),
+  });
 });
 
 app.post("/generate", async (req, res) => {
-  const { idea, category, weeklyPosts } = req.body;
+  const { idea, category, weeklyPosts, voiceProfile } = req.body;
 
   let extraCategoryRule = "";
 
@@ -451,6 +519,7 @@ WEEKLY SOURCE MATERIAL:
 ${weeklyPosts || "No weekly posts provided."}
 
 VOICE:
+${voiceProfile || `
 - grounded
 - blue collar
 - calm
@@ -458,13 +527,7 @@ VOICE:
 - simple wording
 - real, not polished
 - observational more than inspirational
-- sounds like someone noticing how life really works
-- not corporate
-- not poetic
-- not trying to sound smart
-- not cheesy
-- not like a motivational speaker
-
+`}
 STYLE:
 - write like a real person talking plainly
 - use short to medium sentences

@@ -10,6 +10,7 @@ let selectedCategory = "";
 let selectedIdea = "";
 let selectedWeeklyPosts = "";
 let selectedImagePrompt = "";
+let voiceProfile = null;
 
 function toggleWeeklyPosts() {
   if (categorySelect.value === "Friday Recap") {
@@ -42,7 +43,7 @@ async function generatePosts() {
     const res = await fetch("/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ idea, category, weeklyPosts }),
+      body: JSON.stringify({ idea, category, weeklyPosts, voiceProfile }),
     });
 
     const data = await res.json();
@@ -318,47 +319,10 @@ async function analyzeVoice() {
       return;
     }
 
+    voiceProfile = data.profile;
     voiceResult.innerText = data.result;
   } catch (error) {
     console.error(error);
     voiceResult.innerText = "Error analyzing voice: " + error.message;
   }
 }
-
-generateImageBtn.addEventListener("click", async () => {
-  if (!selectedPost) return;
-
-  imageStatus.innerText = "Generating image...";
-  generatedImage.style.display = "none";
-  generatedImage.src = "";
-
-  try {
-    const res = await fetch("/generate-image", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        post: selectedPost,
-        category: selectedCategory,
-        idea: selectedIdea,
-        weeklyPosts: selectedWeeklyPosts,
-        imagePrompt: selectedImagePrompt,
-      }),
-    });
-
-    const data = await res.json();
-
-    if (!data.imageUrl) {
-      imageStatus.innerText =
-        "Image generation failed: " + (data.error || "No image returned.");
-      console.log("Image route returned:", data);
-      return;
-    }
-
-    generatedImage.src = data.imageUrl;
-    generatedImage.style.display = "block";
-    imageStatus.innerText = "Image ready.";
-  } catch (error) {
-    console.error(error);
-    imageStatus.innerText = "Error generating image: " + error.message;
-  }
-});
