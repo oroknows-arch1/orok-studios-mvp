@@ -310,6 +310,15 @@ async function analyzeVoice() {
       body: JSON.stringify({ input: voiceInput }),
     });
 
+    const contentType = res.headers.get("content-type") || "";
+
+    if (!contentType.includes("application/json")) {
+      const text = await res.text();
+      console.error("Non-JSON response from /analyze-voice:", text);
+      voiceResult.innerText = "Voice analysis failed: server returned HTML instead of JSON.";
+      return;
+    }
+
     const data = await res.json();
 
     if (!data.result) {

@@ -142,14 +142,6 @@ function pickRandom(arr, count = 1) {
   const shuffled = [...unique].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
 }
-function getHashtags(category, idea) {
-  const lowerIdea = (idea || "").toLowerCase();
-
-  // Always include one rotating OROK brand tag
-  const brandTags = [
-    "#OurRootsOurKnowledge",
-    "#OnlyRealOnesKnow",
-  ];
 function buildVoiceInstructions(profile) {
   if (!profile) {
     return `
@@ -192,6 +184,15 @@ DON'T RULES:
 ${(profile.dontRules || []).map((r) => `- ${r}`).join("\n")}
 `;
 }
+
+function getHashtags(category, idea) {
+  const lowerIdea = (idea || "").toLowerCase();
+
+  const brandTags = [
+    "#OurRootsOurKnowledge",
+    "#OnlyRealOnesKnow",
+  ];
+
   const categoryPools = {
     "Motivation Monday": [
       "#Mindset",
@@ -357,49 +358,27 @@ app.get("/", (req, res) => {
 app.post("/analyze-voice", async (req, res) => {
   const { input } = req.body;
 
-  console.log("ANALYZE VOICE HIT");
-  console.log("INPUT PREVIEW:", (input || "").slice(0, 80));
+  try {
+    const prompt = voiceAgentPrompt(input);
 
-  return res.json({
-    profile: {
-      tone: ["warm", "personal", "genuine"],
-      style: ["storytelling", "conversational", "simple wording"],
-      vocabulary: ["sensory detail", "cultural references", "everyday language"],
-      positioning: "authentic, premium, rooted in real experience",
-      structure: "personal story first, then discovery, then product truth",
-      voiceSummary: "Warm and approachable, built on real experience and cultural respect.",
-      doRules: [
-        "Use personal anecdotes",
-        "Keep language simple",
-        "Use sensory details"
-      ],
-      dontRules: [
-        "Do not sound salesy",
-        "Do not use hype",
-        "Do not use jargon"
-      ]
-    },
-    result: JSON.stringify({
-      tone: ["warm", "personal", "genuine"],
-      style: ["storytelling", "conversational", "simple wording"],
-      vocabulary: ["sensory detail", "cultural references", "everyday language"],
-      positioning: "authentic, premium, rooted in real experience",
-      structure: "personal story first, then discovery, then product truth",
-      voiceSummary: "Warm and approachable, built on real experience and cultural respect.",
-      doRules: [
-        "Use personal anecdotes",
-        "Keep language simple",
-        "Use sensory details"
-      ],
-      dontRules: [
-        "Do not sound salesy",
-        "Do not use hype",
-        "Do not use jargon"
-      ]
-    }, null, 2),
-  });
+    const response = await openai.chat.completions.create({
+      model: "gpt-4.1-mini",
+      response_format: { type: "json_object" },
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const raw = response.choices?.[0]?.message?.content || "{}";
+    const profile = JSON.parse(raw);
+
+    res.json({
+      profile,
+      result: JSON.stringify(profile, null, 2),
+    });
+  } catch (err) {
+    console.error("VOICE AGENT ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
-
 app.post("/generate", async (req, res) => {
   const { idea, category, weeklyPosts, voiceProfile } = req.body;
 
@@ -519,15 +498,8 @@ WEEKLY SOURCE MATERIAL:
 ${weeklyPosts || "No weekly posts provided."}
 
 VOICE:
-${voiceProfile || `
-- grounded
-- blue collar
-- calm
-- direct
-- simple wording
-- real, not polished
-- observational more than inspirational
-`}
+${buildVoiceInstructions(voiceProfile)}
+
 STYLE:
 - write like a real person talking plainly
 - use short to medium sentences
