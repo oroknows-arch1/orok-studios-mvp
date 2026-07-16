@@ -125,11 +125,11 @@
 </main>
 
 <!-- New Draft modal -->
-<div class="overlay" id="draftOverlay">
+<div class="overlay" id="draftOverlay" role="dialog" aria-modal="true" aria-labelledby="draftHeading">
   <div class="modal">
     <div style="display:flex;align-items:center;">
-      <h3>New Draft</h3>
-      <button class="close" data-close="draftOverlay">&times;</button>
+      <h3 id="draftHeading">New Draft</h3>
+      <button class="close" data-close="draftOverlay" aria-label="Close new draft dialog">&times;</button>
     </div>
     <form id="draftForm">
       <div class="row">
@@ -164,7 +164,7 @@
       <div class="field">
         <label>Post text</label>
         <textarea name="text" id="draftText" rows="6" placeholder="Write the post body..."></textarea>
-        <div class="charcount" id="draftCharCount">0 characters</div>
+        <div class="charcount" id="draftCharCount" aria-live="polite">0 characters</div>
       </div>
       <div class="field">
         <label><input type="checkbox" id="draftImageRequired" style="width:auto;margin-right:6px;" /> Image required</label>
@@ -183,17 +183,17 @@
 </div>
 
 <!-- Review modal -->
-<div class="overlay" id="reviewOverlay">
+<div class="overlay" id="reviewOverlay" role="dialog" aria-modal="true" aria-labelledby="reviewTitle">
   <div class="modal">
     <div style="display:flex;align-items:center;">
       <h3 id="reviewTitle">Review</h3>
-      <button class="close" data-close="reviewOverlay">&times;</button>
+      <button class="close" data-close="reviewOverlay" aria-label="Close review dialog">&times;</button>
     </div>
     <div class="kv" id="reviewMeta"></div>
     <div class="field">
       <label>Post text (editable)</label>
       <textarea id="reviewText" rows="7"></textarea>
-      <div class="charcount" id="reviewCharCount">0 characters</div>
+      <div class="charcount" id="reviewCharCount" aria-live="polite">0 characters</div>
     </div>
     <div class="field">
       <label>Image brief</label>
@@ -211,7 +211,7 @@
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
 const STREAM_LABELS = {
