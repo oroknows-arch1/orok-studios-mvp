@@ -1,0 +1,58 @@
+# Render Blueprint for OROK Studios (documentation of the intended production
+# topology). It contains NO secrets. Applying this blueprint provisions paid
+# resources and MUST be reviewed and approved by a human operator first — see
+# docs/DEPLOYMENT.md. Nothing here is deployed automatically.
+#
+# Topology:
+#   * one Render web service (the existing Express app: generator + publishing)
+#   * one managed PostgreSQL database (durable publishing storage)
+#
+# Migrations run via `preDeployCommand`, which Render executes ONCE per deploy
+# before the new version receives traffic. This avoids multiple web instances
+# running migrations concurrently. If your Render plan/blueprint does not
+# support preDeployCommand, remove that line and instead run the one-off command
+# manually before deploying (see docs/DEPLOYMENT.md):
+#     npm run db:migrate
+
+services:
+  - type: web
+    name: orok-studios-mvp
+    runtime: node
+    # `plan` selects a paid/free tier — choose deliberately; requires approval.
+    plan: starter
+    # region should match the database region for low-latency/private networking.
+    region: oregon
+    branch: main
+    numInstances: 1
+    buildCommand: npm install
+    preDeployCommand: npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /health
+    # Controlled deployments: keep automatic deploys OFF so a human triggers each
+    # release after reviewing CI and running migrations. Set to true only if you
+    # explicitly want push-to-main to deploy automatically.
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PUBLISHING_STORAGE
+        value: postgres
+      # DATABASE_URL is wired from the managed database below — never committed.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: orok-publishing-db
+          property: connectionString
+      # OPENAI_API_KEY is a secret: set it in the Render dashboard. `sync: false`
+      # means Render will not read a value from this file and will prompt for it.
+      - key: OPENAI_API_KEY
+        sync: false
+      # Optional: safe defaults. Leave PUBLISHING_ALLOW_EPHEMERAL_STORAGE unset
+      # (disabled). Only set it to "true" in a genuine emergency (see docs).
+
+databases:
+  - name: orok-publishing-db
+    # Choose an appropriate plan for production durability; provisioning a paid
+    # database requires human approval.
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "16"
