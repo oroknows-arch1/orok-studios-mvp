@@ -8,7 +8,9 @@
     "start": "node server.js",
     "db:migrate": "node src/publishing/db/cli.js migrate",
     "db:status": "node src/publishing/db/cli.js status",
-    "publishing:import-file": "node src/publishing/db/import-file.js"
+    "publishing:import-file": "node src/publishing/db/import-file.js",
+    "publishing:verify": "node src/publishing/verify.js",
+    "smoke:test": "node src/publishing/smoke.js"
   },
   "keywords": [],
   "author": "",
