@@ -53,37 +53,42 @@ app can be imported by tests.
 
 ## 3. Storage choice
 
-Storage lives behind a **repository interface** (`PublishingRepository`) with two
-adapters:
+Storage lives behind a **repository interface** (`PublishingRepository`) with
+three adapters (as of Persistence v0.2):
 
 | Adapter | Use | Persistence |
 | --- | --- | --- |
-| `InMemoryPublishingRepository` | tests, ephemeral dev | lost on restart |
-| `FilePublishingRepository` | local development | JSON file (atomic writes) |
+| `InMemoryPublishingRepository` | isolated tests, ephemeral dev | lost on restart |
+| `FilePublishingRepository` | local development / migration testing | JSON file (atomic writes) |
+| `PostgresPublishingRepository` | **deployed production** | managed PostgreSQL |
 
 Selected via environment:
 
-- `PUBLISHING_STORAGE` = `file` (default) or `memory`
-- `PUBLISHING_DATA_FILE` = path to the JSON file (default `./data/publishing.json`)
+- `PUBLISHING_STORAGE` = `postgres` \| `file` (default) \| `memory`
+- `DATABASE_URL` = postgres connection string (**required** for `postgres`)
+- `PUBLISHING_DATA_FILE` = path to the JSON file (file mode; default `./data/publishing.json`)
 
-The default JSON file is the simplest option that fits the current stack (plain
-Node/Express, no database) and survives local restarts. It is **development-only
-persistence**.
+Rules:
+
+- `postgres` **requires** `DATABASE_URL`; missing/invalid → the app **fails
+  clearly at startup**.
+- There is **no silent fallback** from `postgres` to `file`/`memory`.
+- Credentials / connection strings are never logged.
+
+The file adapter remains for local development and migration testing; the
+in-memory adapter remains for isolated tests. Full database details, migrations,
+import, deployment order, and rollback are in [`DATABASE.md`](./DATABASE.md).
 
 ### Render implications (IMPORTANT)
 
-Render's default filesystem is **ephemeral** — it is wiped on every deploy and on
-service restarts. The JSON file adapter will therefore **lose all publishing data
-on Render** unless one of the following is added:
+Render's default filesystem is **ephemeral** — wiped on every deploy/restart — so
+the JSON file adapter is **development-only** and must not be used as production
+persistence on Render. Production uses the **PostgreSQL adapter** with a managed
+database (`PUBLISHING_STORAGE=postgres` + `DATABASE_URL`). Do not provision paid
+infrastructure without human approval.
 
-1. A **Render Persistent Disk** mounted at a stable path, with
-   `PUBLISHING_DATA_FILE` pointed at it (a paid add-on — do not enable without
-   approval), **or**
-2. A **managed database** (e.g. Postgres) with a new repository adapter
-   implementing the same `PublishingRepository` interface.
-
-Because storage is behind the interface, migrating to a database later requires
-only a new adapter — no changes to the service, routes, or UI.
+Because storage is behind the interface, the service, routes, and UI did not
+change when PostgreSQL was added — only a new adapter was introduced.
 
 ---
 
@@ -111,11 +116,20 @@ Environment variables:
 | --- | --- | --- |
 | `OPENAI_API_KEY` | for the generator only | existing post/image generation |
 | `PORT` | no (default 3000) | server port |
-| `PUBLISHING_STORAGE` | no (default `file`) | `file` or `memory` |
-| `PUBLISHING_DATA_FILE` | no | path to the JSON data file |
+| `PUBLISHING_STORAGE` | no (default `file`) | `postgres` \| `file` \| `memory` |
+| `DATABASE_URL` | yes when `postgres` | postgres connection string |
+| `PUBLISHING_DATA_FILE` | no | path to the JSON data file (file mode) |
 
 The publishing system itself needs **no API key** — manual draft creation and the
 whole review workflow work offline.
+
+Database commands (postgres mode — see [`DATABASE.md`](./DATABASE.md)):
+
+```bash
+npm run db:migrate                                             # apply migrations
+npm run db:status                                              # migration status
+npm run publishing:import-file -- --file ./data/publishing.json --dry-run
+```
 
 ---
 
@@ -231,6 +245,18 @@ Base path: `/api/publishing`
 | GET | `/dashboard` | dashboard summary |
 | GET | `/next-number?stream=` | suggested next series number |
 | POST | `/check-duplicates` | advisory duplicate check for a candidate |
+| GET | `/health` | storage readiness (safe fields only; 200 ok / 503 not) |
+
+`GET /api/publishing/health` returns only safe information and never exposes
+credentials, hostnames, SQL, stack traces, or file paths:
+
+```json
+{ "ok": true, "storage": "postgres", "databaseReachable": true, "migrationsCurrent": true }
+```
+
+The main app still serves the existing generator even when publishing storage is
+unhealthy, unless the selected repository cannot be safely initialised at startup
+(e.g. `postgres` selected without a valid `DATABASE_URL`).
 
 All request bodies are validated; validation failures return `400` with an
 `errors` array, illegal transitions return `409`.
