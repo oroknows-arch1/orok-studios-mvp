@@ -59,13 +59,19 @@ async function getApplied(client) {
  * Run all pending migrations in order. Each migration executes inside its own
  * transaction and is recorded on success, so the process is safe to re-run and
  * a failure leaves the schema at the last successful migration.
+ * A migration that fails (for example, if the connected role cannot create the
+ * pg_trgm extension in migration 003) aborts its own transaction, is NOT
+ * recorded, and causes this function to reject — so the failure is explicit and
+ * `migrationStatus` will continue to report the migration as pending rather
+ * than ambiguously "current".
+ *
  * @param {import("pg").Pool} pool
- * @param {{logger?: (msg: string) => void}} [opts]
+ * @param {{logger?: (msg: string) => void, migrations?: Array<{name:string,sql:string}>}} [opts]
  * @returns {Promise<{applied: string[], alreadyApplied: string[]}>}
  */
 async function runMigrations(pool, opts = {}) {
   const log = opts.logger || (() => {});
-  const all = loadMigrations();
+  const all = opts.migrations || loadMigrations();
   const client = await pool.connect();
   const appliedNow = [];
   let alreadyApplied = [];

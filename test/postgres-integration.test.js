@@ -164,6 +164,30 @@ test("running migrations again applies nothing new", { skip }, async () => {
   assert.equal(applied.length, 0);
 });
 
+/* 1 (v0.3). deterministic pg_trgm migration: extension + trigram indexes exist */
+test("pg_trgm migration created the extension and trigram indexes", { skip }, async () => {
+  const ext = await pool.query("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'");
+  assert.equal(ext.rowCount, 1, "pg_trgm extension should exist after migration 003");
+  const idx = await pool.query(
+    "SELECT indexname FROM pg_indexes WHERE indexname = 'idx_publishing_topic_trgm'"
+  );
+  assert.equal(idx.rowCount, 1, "trigram index on topic should exist");
+});
+
+/* deterministic failure: a failing migration is NOT recorded and rejects clearly */
+test("a failing migration is not recorded (no ambiguous skip)", { skip }, async () => {
+  const badName = "999_intentionally_failing.sql";
+  await assert.rejects(
+    () =>
+      runMigrations(pool, {
+        migrations: [{ name: badName, sql: "SELECT * FROM a_table_that_does_not_exist_xyz;" }],
+      }),
+    /failed/i
+  );
+  const rec = await pool.query("SELECT 1 FROM publishing_migrations WHERE name = $1", [badName]);
+  assert.equal(rec.rowCount, 0, "failed migration must not be recorded as applied");
+});
+
 /* filtering via SQL */
 test("SQL filtering by stream/status/date/topic", { skip }, async () => {
   const svc = await freshPgService();
