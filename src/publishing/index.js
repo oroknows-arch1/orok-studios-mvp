@@ -11,14 +11,15 @@ const { createPublishingRouter } = require("./routes");
  * and a ready() promise that resolves once storage is initialised and seeded.
  *
  * @param {object} [opts]
- * @returns {{ router: import("express").Router, service: PublishingService, ready: Promise<void> }}
+ * @returns {{ router: import("express").Router, service: PublishingService, ready: Promise<void>, close: () => Promise<void> }}
  */
 function createPublishing(opts = {}) {
   const repository = opts.repository || createRepositoryFromEnv(opts);
   const service = new PublishingService(repository);
   const router = createPublishingRouter(service);
   const ready = service.init();
-  return { router, service, ready };
+  const close = () => repository.close();
+  return { router, service, ready, close };
 }
 
 /** Absolute path to the bundled publishing UI (single-page HTML). */
