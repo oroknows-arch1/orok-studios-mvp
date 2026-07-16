@@ -52,12 +52,27 @@ The service and routes never see SQL or PostgreSQL types.
 
 | Variable | Modes | Meaning |
 | --- | --- | --- |
+| `NODE_ENV` | all | `production` enforces the storage policy below |
 | `PUBLISHING_STORAGE` | all | `memory` \| `file` \| `postgres` (default `file`) |
 | `DATABASE_URL` | `postgres` (**required**) | `postgres://user:pass@host:5432/db` |
 | `PUBLISHING_DATA_FILE` | `file` (optional) | path to the JSON store |
+| `PUBLISHING_ALLOW_EPHEMERAL_STORAGE` | emergency only | set `true` to permit memory/file when `NODE_ENV=production` (default disabled) |
 | `DATABASE_SSL` | `postgres` (optional) | `true`/`false` to force TLS on/off |
 | `PGPOOL_MAX` | `postgres` (optional) | max pool connections (default 10) |
 | `TEST_DATABASE_URL` | tests only | enables PostgreSQL integration tests |
+
+**Production storage guard:** when `NODE_ENV=production`, selecting
+`PUBLISHING_STORAGE=file` or `memory` makes the app refuse to start (clear,
+credential-free error). This prevents accidentally running on Render's ephemeral
+filesystem. In a genuine emergency you may set
+`PUBLISHING_ALLOW_EPHEMERAL_STORAGE=true`, which permits it but logs a prominent
+warning that data will not survive a restart. Leave it unset normally.
+
+**Operational commands:** `npm run publishing:verify` runs a read-only integrity
+check (repository reachable, migrations current, seed present/published/#1, no
+duplicate published numbers, all records valid, dashboard executes) and exits
+non-zero on failure. `npm run smoke:test -- --base-url <url>` runs a
+non-destructive post-deploy check (see docs/DEPLOYMENT.md).
 
 Behaviour:
 
@@ -122,11 +137,33 @@ Application startup **never** runs or rewrites migrations — it only seeds data
 | --- | --- |
 | `001_create_publishing_items.sql` | table + `version >= 1` and positive-series-number checks |
 | `002_publishing_items_indexes.sql` | partial unique index on published CBB numbers + status/stream/date indexes |
-| `003_publishing_topic_search.sql` | `pg_trgm` + trigram indexes for topic/category search (optional; skippable) |
+| `003_publishing_topic_search.sql` | `pg_trgm` extension + trigram indexes for topic/category search |
 
-If the deploy role cannot create the `pg_trgm` extension, migration `003` fails
-with a non-zero exit; the system still works (topic search falls back to an
-ILIKE scan). Operators may leave `003` unapplied.
+### pg_trgm policy (deterministic)
+
+Migration `003` runs `CREATE EXTENSION IF NOT EXISTS pg_trgm;` and then creates
+trigram GIN indexes. This is **deterministic**, not "best effort":
+
+- If the connected role can create/use `pg_trgm`, `003` applies and is recorded.
+- If the role **cannot**, `003` fails inside its own transaction, is **not
+  recorded**, `npm run db:migrate` exits non-zero, and `npm run db:status`
+  continues to report it as **pending** (never an ambiguous "skipped while
+  current"). On Render, the `preDeployCommand` then fails and the deploy halts.
+
+Managed PostgreSQL on Render permits `pg_trgm` for the default role, so `003`
+normally applies cleanly. If you deploy to a provider that forbids it, do **one**
+of the following before deploying — never leave `003` half-applied:
+
+1. Grant the role permission (or have an admin `CREATE EXTENSION pg_trgm` once),
+   then re-run `npm run db:migrate`; or
+2. Adopt the no-extension fallback: replace `003` with a migration that creates
+   plain btree indexes on `lower(topic)`/`lower(category)`. Topic search still
+   works via `ILIKE`; the trade-off is that leading-wildcard substring searches
+   (`%term%`) do a sequential scan instead of a fast trigram index lookup. At the
+   current data volumes this is negligible.
+
+Because migrations are immutable-by-name and recorded on success, any local
+development database where `003` already applied keeps working unchanged.
 
 ### Schema (publishing_items)
 

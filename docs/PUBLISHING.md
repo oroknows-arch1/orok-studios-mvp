@@ -123,13 +123,22 @@ Environment variables:
 The publishing system itself needs **no API key** — manual draft creation and the
 whole review workflow work offline.
 
-Database commands (postgres mode — see [`DATABASE.md`](./DATABASE.md)):
+Database & operations commands (postgres mode — see [`DATABASE.md`](./DATABASE.md)
+and [`DEPLOYMENT.md`](./DEPLOYMENT.md)):
 
 ```bash
 npm run db:migrate                                             # apply migrations
 npm run db:status                                              # migration status
 npm run publishing:import-file -- --file ./data/publishing.json --dry-run
+npm run publishing:verify                                      # read-only integrity check
+npm run smoke:test -- --base-url https://your-service.onrender.com
 ```
+
+Health endpoints:
+- `GET /health` — general application readiness for the platform (Render). 200
+  only when the generator is configured and publishing storage is ready;
+  otherwise 503. Safe fields only.
+- `GET /api/publishing/health` — detailed publishing storage readiness.
 
 ---
 
