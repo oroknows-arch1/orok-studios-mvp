@@ -8,7 +8,8 @@ const { SEED_CBB_001_ID } = require("./service");
  *
  * It exercises a controlled, non-destructive draft lifecycle and read-only
  * checks. It NEVER approves, publishes, calls X, calls image generation, calls
- * paid OpenAI generation, or alters Coffee Break Build #001. The controlled
+ * paid OpenAI generation (including `/api/publishing/generate`), or alters
+ * Coffee Break Build #001. The controlled
  * draft is created on the `orok-morning` stream so it does not reserve a Coffee
  * Break Build number, and it is archived (not deleted, since deletion is not a
  * public workflow) and clearly labelled as a smoke-test record.

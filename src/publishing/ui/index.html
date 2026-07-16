@@ -102,17 +102,30 @@
   .month-group h4 { margin: 22px 0 8px; font-size: 14px; color: var(--muted); }
   .muted { color: var(--muted); }
   a { color: var(--accent); }
+  .candidate {
+    border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+    margin-bottom: 10px; cursor: pointer; white-space: pre-wrap; background: var(--panel-2);
+  }
+  .candidate.selected { border-color: var(--accent); background: rgba(110,168,254,.08); }
+  .candidate .cand-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .btn.accent { border-color: var(--accent); color: var(--accent); }
+  .gen-cost {
+    border: 1px dashed var(--border); border-radius: 8px;
+    padding: 10px 12px; margin: 10px 0 14px; font-size: 12px; color: var(--muted);
+  }
+  .gen-cost strong { color: var(--text); }
 </style>
 </head>
 <body>
 <header>
   <h1>OROK Studios</h1>
-  <span class="tag">Publishing v0.1 · local · manual approval</span>
+  <span class="tag">Publishing v0.4 · OROK editorial · manual approval</span>
   <nav>
     <button data-view="dashboard" class="active">Dashboard</button>
     <button data-view="queue">Today's Queue</button>
     <button data-view="ledger">Ledger</button>
     <button data-view="archive">Archive</button>
+    <button class="btn accent" id="generateDraftBtn">Generate Draft</button>
     <button class="primary" id="newDraftBtn">+ New Draft</button>
   </nav>
 </header>
@@ -123,6 +136,88 @@
   <section id="view-ledger" hidden></section>
   <section id="view-archive" hidden></section>
 </main>
+
+<!-- Generate Draft modal (v0.4) -->
+<div class="overlay" id="generateOverlay" role="dialog" aria-modal="true" aria-labelledby="generateHeading">
+  <div class="modal">
+    <div style="display:flex;align-items:center;">
+      <h3 id="generateHeading">Generate Draft</h3>
+      <button class="close" data-close="generateOverlay" aria-label="Close generate draft dialog">&times;</button>
+    </div>
+    <p class="sub" style="margin-top:0;">Uses the canonical OROK editorial system. Creates a draft and places it into the review queue — never auto-approves or publishes. Generation refuses to run without a resolved editorial profile.</p>
+    <form id="generateForm">
+      <div class="row">
+        <div class="field">
+          <label>Stream</label>
+          <select name="stream" id="genStream">
+            <option value="orok-morning">OROK Morning</option>
+            <option value="coffee-break-build">Coffee Break Build</option>
+            <option value="saturday-mixed">Saturday Mixed Pack</option>
+            <option value="sunday-long-game">Sunday Long Game</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Scheduled / planned date</label>
+          <input type="date" name="plannedDate" id="genDate" required />
+        </div>
+        <div class="field" id="genSeriesField" style="display:none;">
+          <label>Series number (suggested)</label>
+          <input type="number" name="seriesNumber" id="genSeries" min="1" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Post type (editorial category)</label>
+          <select id="genCategory">
+            <option value="">(resolve from schedule)</option>
+            <option>Motivation Monday</option>
+            <option>Masters of Today</option>
+            <option>Wisdom Wednesday</option>
+            <option>Masters of Yesterday</option>
+            <option>Cultural Series</option>
+            <option>Friday Recap</option>
+            <option>Friday Freestyle</option>
+            <option>Coffee Break Build</option>
+            <option>Long Game</option>
+            <option>Saturday Mixed Pack</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Output surface</label>
+          <select id="genSurface">
+            <option value="family-message">Family message</option>
+            <option value="x-post">X post</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Topic / subject</label>
+        <input type="text" id="genIdea" required placeholder="e.g. Boonwurrung people, consistency under pressure" />
+      </div>
+      <div id="genResolveMeta" class="gen-cost" style="margin-top:0;" aria-live="polite">Resolving editorial profile…</div>
+      <div class="field" id="genWeeklyWrap" style="display:none;">
+        <label>Weekly posts / notes (Friday Recap)</label>
+        <textarea id="genWeeklyPosts" rows="5" placeholder="Paste Monday–Thursday posts here..."></textarea>
+      </div>
+      <div class="field" id="genGroundingWrap" style="display:none;">
+        <label>Factual grounding (JSON — required for Cultural Series, Masters, Coffee Break Build)</label>
+        <textarea id="genGrounding" rows="6" placeholder='{"nation":"...","region":"...","practices":["..."],"continuity":"..."}'></textarea>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="genImageRequired" style="width:auto;margin-right:6px;" /> Image required</label>
+      </div>
+      <div id="generateStatus" class="muted" style="margin-bottom:10px;" aria-live="polite"></div>
+      <div id="generateEditorialAfter" class="gen-cost" hidden></div>
+      <div id="generateCandidates"></div>
+      <div id="generateAdvisory"></div>
+      <div class="modal-actions">
+        <button type="submit" class="primary" id="genPreviewBtn">Generate options</button>
+        <button type="button" class="btn green" id="genQueueBtn" disabled>Add selected to review queue</button>
+        <button type="button" class="btn" data-close="generateOverlay">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- New Draft modal -->
 <div class="overlay" id="draftOverlay" role="dialog" aria-modal="true" aria-labelledby="draftHeading">
@@ -398,6 +493,193 @@ async function renderArchive() {
     el.innerHTML = body;
   } catch (e) { el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
+
+/* ---------- Generate Draft (v0.4 OROK editorial) ---------- */
+const generateOverlay = document.getElementById("generateOverlay");
+let genCandidates = [];
+let genSelectedIndex = 0;
+let genResolved = null;
+document.getElementById("generateDraftBtn").addEventListener("click", openGenerate);
+async function openGenerate() {
+  document.getElementById("generateForm").reset();
+  document.getElementById("genDate").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("generateCandidates").innerHTML = "";
+  document.getElementById("generateAdvisory").innerHTML = "";
+  document.getElementById("generateStatus").textContent = "";
+  document.getElementById("generateEditorialAfter").hidden = true;
+  document.getElementById("genQueueBtn").disabled = true;
+  genCandidates = [];
+  genSelectedIndex = 0;
+  genResolved = null;
+  toggleGenWeekly();
+  updateGenSeriesField();
+  generateOverlay.classList.add("open");
+  refreshGenResolve();
+}
+document.getElementById("genStream").addEventListener("change", () => { updateGenSeriesField(); refreshGenResolve(); });
+document.getElementById("genCategory").addEventListener("change", () => { toggleGenWeekly(); refreshGenResolve(); });
+document.getElementById("genSurface").addEventListener("change", refreshGenResolve);
+document.getElementById("genDate").addEventListener("change", refreshGenResolve);
+document.getElementById("genIdea").addEventListener("change", refreshGenResolve);
+function toggleGenWeekly() {
+  const cat = document.getElementById("genCategory").value;
+  document.getElementById("genWeeklyWrap").style.display =
+    cat === "Friday Recap" ? "block" : "none";
+  const needsGrounding = [
+    "Cultural Series", "Masters of Today", "Masters of Yesterday", "Coffee Break Build"
+  ].includes(cat) || document.getElementById("genStream").value === "coffee-break-build" && !cat;
+  document.getElementById("genGroundingWrap").style.display = needsGrounding ? "block" : "none";
+}
+async function updateGenSeriesField() {
+  const stream = document.getElementById("genStream").value;
+  const field = document.getElementById("genSeriesField");
+  if (stream === "coffee-break-build") {
+    field.style.display = "block";
+    try {
+      const { nextNumber } = await api("/next-number?stream=coffee-break-build");
+      document.getElementById("genSeries").value = nextNumber;
+    } catch (_) {}
+  } else {
+    field.style.display = "none";
+    document.getElementById("genSeries").value = "";
+  }
+  toggleGenWeekly();
+}
+async function refreshGenResolve() {
+  const meta = document.getElementById("genResolveMeta");
+  const topic = document.getElementById("genIdea").value.trim() || "(topic required)";
+  const body = {
+    stream: document.getElementById("genStream").value,
+    plannedDate: document.getElementById("genDate").value,
+    scheduledFor: document.getElementById("genDate").value,
+    category: document.getElementById("genCategory").value || undefined,
+    surface: document.getElementById("genSurface").value,
+    topic,
+    idea: topic,
+  };
+  try {
+    genResolved = await api("/generate/resolve", { method: "POST", body: JSON.stringify(body) });
+    meta.innerHTML =
+      "<strong>Before generation</strong><br/>" +
+      "Stream: " + esc(STREAM_LABELS[genResolved.stream] || genResolved.stream || "—") +
+      " · Post type: " + esc(genResolved.editorialProfileLabel || genResolved.editorialProfile) +
+      " · Surface: " + esc(genResolved.surface) +
+      " · Scheduled: " + esc(genResolved.scheduledFor || "—") +
+      " · Topic: " + esc(genResolved.topic) +
+      "<br/><span class='muted'>" + esc(genResolved.scheduleNote || "") +
+      (genResolved.requiresGrounding ? " · Factual grounding required" : "") + "</span>";
+  } catch (err) {
+    genResolved = null;
+    meta.innerHTML = "<strong>Editorial profile not resolved</strong> — " + esc(err.message) +
+      "<br/><span class='muted'>Generation will refuse generic content until this is fixed.</span>";
+  }
+}
+function parseGrounding() {
+  const raw = document.getElementById("genGrounding").value.trim();
+  if (!raw) return undefined;
+  try { return JSON.parse(raw); }
+  catch (_e) { throw new Error("Grounding must be valid JSON"); }
+}
+function renderCandidates(list) {
+  const el = document.getElementById("generateCandidates");
+  if (!list.length) { el.innerHTML = ""; return; }
+  el.innerHTML = "<label>Select a candidate</label>" + list.map((text, i) =>
+    '<div class="candidate' + (i === genSelectedIndex ? " selected" : "") + '" data-idx="' + i + '" role="button" tabindex="0">' +
+      esc(text) +
+      '<div class="cand-meta">Option ' + (i + 1) + ' · ' + text.length + ' characters</div>' +
+    "</div>"
+  ).join("");
+  el.querySelectorAll(".candidate").forEach((node) => {
+    node.addEventListener("click", () => {
+      genSelectedIndex = Number(node.dataset.idx);
+      el.querySelectorAll(".candidate").forEach((n) => n.classList.toggle("selected", Number(n.dataset.idx) === genSelectedIndex));
+    });
+  });
+}
+document.getElementById("generateForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const status = document.getElementById("generateStatus");
+  const btn = document.getElementById("genPreviewBtn");
+  status.textContent = "Generating OROK options…";
+  btn.disabled = true;
+  document.getElementById("genQueueBtn").disabled = true;
+  document.getElementById("generateAdvisory").innerHTML = "";
+  try {
+    const body = {
+      stream: document.getElementById("genStream").value,
+      plannedDate: document.getElementById("genDate").value,
+      scheduledFor: document.getElementById("genDate").value,
+      idea: document.getElementById("genIdea").value,
+      topic: document.getElementById("genIdea").value,
+      category: document.getElementById("genCategory").value || undefined,
+      surface: document.getElementById("genSurface").value,
+      weeklyPosts: document.getElementById("genWeeklyPosts").value || undefined,
+      grounding: parseGrounding(),
+    };
+    const res = await api("/generate/preview", { method: "POST", body: JSON.stringify(body) });
+    genCandidates = res.candidates || [];
+    genSelectedIndex = 0;
+    renderCandidates(genCandidates);
+    const after = document.getElementById("generateEditorialAfter");
+    after.hidden = false;
+    after.innerHTML =
+      "<strong>After generation</strong><br/>" +
+      "Editorial profile: " + esc(res.editorialProfileLabel || res.editorialProfile) +
+      " · Surface: " + esc(res.surface) +
+      " · Validation: " + esc(res.validationStatus || "passed");
+    document.getElementById("genQueueBtn").disabled = genCandidates.length === 0;
+    status.textContent = genCandidates.length
+      ? "Select a candidate, then add it to the review queue."
+      : "No candidates returned.";
+  } catch (err) {
+    status.textContent = "";
+    toast(err.message, "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+document.getElementById("genQueueBtn").addEventListener("click", async () => {
+  if (!genCandidates.length) return;
+  const status = document.getElementById("generateStatus");
+  const btn = document.getElementById("genQueueBtn");
+  status.textContent = "Creating draft in review queue…";
+  btn.disabled = true;
+  const stream = document.getElementById("genStream").value;
+  let grounding;
+  try { grounding = parseGrounding(); }
+  catch (err) { toast(err.message, "error"); btn.disabled = false; return; }
+  const body = {
+    stream,
+    plannedDate: document.getElementById("genDate").value,
+    scheduledFor: document.getElementById("genDate").value,
+    topic: document.getElementById("genIdea").value,
+    idea: document.getElementById("genIdea").value,
+    category: document.getElementById("genCategory").value || undefined,
+    surface: document.getElementById("genSurface").value,
+    text: genCandidates[genSelectedIndex],
+    grounding,
+    imageRequired: document.getElementById("genImageRequired").checked,
+    placeInReview: true,
+  };
+  const seriesVal = document.getElementById("genSeries").value;
+  if (stream === "coffee-break-build" && seriesVal) body.seriesNumber = Number(seriesVal);
+  try {
+    const res = await api("/generate", { method: "POST", body: JSON.stringify(body) });
+    if (res.duplicateAdvisory && res.duplicateAdvisory.flagged) {
+      const m = res.duplicateAdvisory.matches[0];
+      document.getElementById("generateAdvisory").innerHTML =
+        '<div class="advisory">⚠ Advisory: this draft resembles an existing item ("' + esc(m.topic) + '") on ' + m.matchedDimensions.length + ' dimensions (' + esc(m.matchedDimensions.join(", ")) + '). Draft was still queued for review — approve manually before publishing.</div>';
+    }
+    toast("Draft added to review queue (" + (res.editorialProfileLabel || res.editorialProfile || "OROK") + ")", "ok");
+    generateOverlay.classList.remove("open");
+    show("queue");
+    if (res.item && res.item.id) openReview(res.item.id);
+  } catch (err) {
+    toast(err.message, "error");
+    btn.disabled = false;
+    status.textContent = "";
+  }
+});
 
 /* ---------- New Draft ---------- */
 const draftOverlay = document.getElementById("draftOverlay");
