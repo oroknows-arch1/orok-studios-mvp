@@ -109,12 +109,25 @@
   .candidate.selected { border-color: var(--accent); background: rgba(110,168,254,.08); }
   .candidate .cand-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .btn.accent { border-color: var(--accent); color: var(--accent); }
+  .cost-strip {
+    display: flex; flex-wrap: wrap; gap: 18px 28px;
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px; margin: 0 0 18px; background: var(--panel);
+    font-size: 12px; color: var(--muted);
+  }
+  .cost-strip .cost-item strong { display: block; color: var(--text); font-size: 14px; margin-top: 2px; font-weight: 600; }
+  .cost-note { font-size: 11px; color: var(--muted); margin: 8px 0 0; }
+  .gen-cost {
+    border: 1px dashed var(--border); border-radius: 8px;
+    padding: 10px 12px; margin: 10px 0 14px; font-size: 12px; color: var(--muted);
+  }
+  .gen-cost strong { color: var(--text); }
 </style>
 </head>
 <body>
 <header>
   <h1>OROK Studios</h1>
-  <span class="tag">Publishing v0.4 · draft generation · manual approval</span>
+  <span class="tag">Publishing v0.4 · cost ledger v0.1 · manual approval</span>
   <nav>
     <button data-view="dashboard" class="active">Dashboard</button>
     <button data-view="queue">Today's Queue</button>
@@ -185,6 +198,7 @@
         <label><input type="checkbox" id="genImageRequired" style="width:auto;margin-right:6px;" /> Image required</label>
       </div>
       <div id="generateStatus" class="muted" style="margin-bottom:10px;" aria-live="polite"></div>
+      <div id="generateCost" class="gen-cost" hidden></div>
       <div id="generateCandidates"></div>
       <div id="generateAdvisory"></div>
       <div class="modal-actions">
@@ -341,14 +355,33 @@ async function renderDashboard() {
   el.innerHTML = '<p class="sub">Loading...</p>';
   try {
     const d = await api("/dashboard");
+    const today = d.today || new Date().toISOString().slice(0, 10);
+    const monthStart = today.slice(0, 8) + "01";
+    let costToday = null;
+    let costMonth = null;
+    let recentCosts = [];
+    try {
+      costToday = await api("/costs/summary?from=" + today + "&to=" + today);
+      costMonth = await api("/costs/summary?from=" + monthStart + "&to=" + today);
+      const recent = await api("/costs/recent?limit=1");
+      recentCosts = recent.records || [];
+    } catch (_) { /* cost ledger optional if storage unhealthy */ }
     const post = (p) => p ? (badge(p.status) + " · " + esc(p.topic)) : '<span class="muted">none planned</span>';
     const rhythm = d.plannedRhythm
       ? Object.entries(d.plannedRhythm).map(([k, v]) => k + ": " + (STREAM_LABELS[v] || v)).join(" · ")
       : "—";
+    const lastCost = recentCosts[0];
     el.innerHTML =
       '<h2 class="view-title">Dashboard</h2>' +
       '<p class="sub">Today is ' + esc(d.today) + ' · planned rhythm — ' + esc(rhythm) + '</p>' +
-      '<div class="grid cards">' +
+      '<div class="cost-strip" aria-label="Estimated API cost summary">' +
+        costItem("Today’s estimated text-generation spend", fmtUsd(costToday && costToday.totalEstimatedCostUsd)) +
+        costItem("Current month estimated spend", fmtUsd(costMonth && costMonth.totalEstimatedCostUsd)) +
+        costItem("Generations today", costToday ? String(costToday.totalGenerations) : "—") +
+        costItem("Most recent generation", lastCost ? fmtUsd(lastCost.estimatedCostUsd) : "—") +
+      '</div>' +
+      '<p class="cost-note">Estimated API cost · Text generation only · Provider pricing estimate. Selecting, reviewing, approving, and publishing do not add generation cost. Image generation is not included.</p>' +
+      '<div class="grid cards" style="margin-top:18px;">' +
         card("Morning post", post(d.morningPost), true) +
         card("Evening post", post(d.eveningPost), true) +
         card("Awaiting review", d.awaitingReview) +
@@ -359,6 +392,15 @@ async function renderDashboard() {
       '<h3 style="margin-top:26px;">Recent activity</h3>' +
       (d.recentActivity.length ? recentTable(d.recentActivity) : '<div class="empty">No activity yet.</div>');
   } catch (e) { el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function costItem(label, value) {
+  return '<div class="cost-item">' + esc(label) + '<strong>' + value + '</strong></div>';
+}
+function fmtUsd(n) {
+  if (typeof n !== "number" || !Number.isFinite(n)) return "—";
+  if (n === 0) return "$0.00";
+  if (n < 0.01) return "$" + n.toFixed(6);
+  return "$" + n.toFixed(4);
 }
 function card(label, value, small) {
   return '<div class="card"><div class="label">' + esc(label) + '</div><div class="value ' + (small ? "small" : "") + '">' + value + '</div></div>';
@@ -471,10 +513,11 @@ async function renderArchive() {
   } catch (e) { el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 
-/* ---------- Generate Draft (v0.4) ---------- */
+/* ---------- Generate Draft (v0.4) + cost ledger ---------- */
 const generateOverlay = document.getElementById("generateOverlay");
 let genCandidates = [];
 let genSelectedIndex = 0;
+let genGenerationId = null;
 document.getElementById("generateDraftBtn").addEventListener("click", openGenerate);
 async function openGenerate() {
   document.getElementById("generateForm").reset();
@@ -482,9 +525,13 @@ async function openGenerate() {
   document.getElementById("generateCandidates").innerHTML = "";
   document.getElementById("generateAdvisory").innerHTML = "";
   document.getElementById("generateStatus").textContent = "";
+  const costEl = document.getElementById("generateCost");
+  costEl.hidden = true;
+  costEl.innerHTML = "";
   document.getElementById("genQueueBtn").disabled = true;
   genCandidates = [];
   genSelectedIndex = 0;
+  genGenerationId = null;
   toggleGenWeekly();
   updateGenSeriesField();
   generateOverlay.classList.add("open");
@@ -538,11 +585,15 @@ document.getElementById("generateForm").addEventListener("submit", async (e) => 
       idea: document.getElementById("genIdea").value,
       category: document.getElementById("genCategory").value,
       weeklyPosts: document.getElementById("genWeeklyPosts").value || undefined,
+      stream: document.getElementById("genStream").value,
     };
+    if (genGenerationId) body.discardGenerationId = genGenerationId;
     const res = await api("/generate/preview", { method: "POST", body: JSON.stringify(body) });
     genCandidates = res.candidates || [];
     genSelectedIndex = 0;
+    genGenerationId = res.generationId || null;
     renderCandidates(genCandidates);
+    renderGenerateCost(res.usage, res.costTrackingUnavailable);
     document.getElementById("genQueueBtn").disabled = genCandidates.length === 0;
     status.textContent = genCandidates.length
       ? "Select a candidate, then add it to the review queue."
@@ -554,6 +605,21 @@ document.getElementById("generateForm").addEventListener("submit", async (e) => 
     btn.disabled = false;
   }
 });
+function renderGenerateCost(usage, unavailable) {
+  const el = document.getElementById("generateCost");
+  if (unavailable) {
+    el.hidden = false;
+    el.innerHTML = "<strong>Estimated API cost</strong> unavailable for this request (candidates still generated). Text generation only · Provider pricing estimate.";
+    return;
+  }
+  if (!usage) { el.hidden = true; el.innerHTML = ""; return; }
+  el.hidden = false;
+  el.innerHTML =
+    "<strong>Estimated API cost</strong> for this request: " + fmtUsd(usage.estimatedCostUsd) +
+    " · " + esc(usage.model || "model") +
+    " · " + (usage.totalTokens != null ? usage.totalTokens + " tokens" : "tokens n/a") +
+    "<br/>Text generation only · Provider pricing estimate. Selecting a candidate does not incur additional generation cost.";
+}
 document.getElementById("genQueueBtn").addEventListener("click", async () => {
   if (!genCandidates.length) return;
   const status = document.getElementById("generateStatus");
@@ -568,6 +634,7 @@ document.getElementById("genQueueBtn").addEventListener("click", async () => {
     idea: document.getElementById("genIdea").value,
     category: document.getElementById("genCategory").value,
     text: genCandidates[genSelectedIndex],
+    generationId: genGenerationId || undefined,
     imageRequired: document.getElementById("genImageRequired").checked,
     placeInReview: true,
   };

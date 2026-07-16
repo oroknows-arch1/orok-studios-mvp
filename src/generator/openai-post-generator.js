@@ -6,10 +6,12 @@ const {
   processGeneratedPosts,
 } = require("./post-utils");
 const { GREETING } = require("./constants");
+const { mapProviderChatUsage } = require("./usage-map");
 
 /**
  * OpenAI-backed implementation of the PostGenerator interface.
  * Preserves the prompt construction and post-processing used by `/generate`.
+ * Returns provider usage metadata alongside candidates for the cost ledger.
  */
 class OpenAIPostGenerator {
   /**
@@ -27,7 +29,7 @@ class OpenAIPostGenerator {
   /**
    * Generate post candidates for an idea/category.
    * @param {{ idea: string, category: string, weeklyPosts?: string, voiceProfile?: object }} input
-   * @returns {Promise<{ posts: string[], text: string }>}
+   * @returns {Promise<{ posts: string[], text: string, usage: object }>}
    */
   async generatePosts(input = {}) {
     const idea = input.idea;
@@ -122,30 +124,57 @@ ${extraCategoryRule}
 
     const rawText = response.choices?.[0]?.message?.content || "";
     const posts = processGeneratedPosts(rawText, category, idea);
+    const usage = mapProviderChatUsage(response, {
+      fallbackModel: this.model,
+      provider: "openai",
+    });
+
     return {
       posts,
       text: posts.join("\n\n\n"),
+      usage,
     };
   }
 }
 
 /**
  * Deterministic stub for tests. Never calls OpenAI.
+ * Returns fixed usage metadata suitable for cost-ledger tests.
  */
 class StubPostGenerator {
   /**
-   * @param {{ posts?: string[] } | ((input: object) => { posts: string[] })} [impl]
+   * @param {{
+   *   posts?: string[],
+   *   usage?: object,
+   *   fail?: boolean|Error,
+   * } | ((input: object) => { posts?: string[], usage?: object })} [impl]
    */
   constructor(impl) {
     this.impl = impl;
+    this.calls = 0;
   }
 
   async generatePosts(input = {}) {
+    this.calls += 1;
+
     if (typeof this.impl === "function") {
       const result = await this.impl(input);
+      if (result && result.fail) {
+        throw result.fail instanceof Error
+          ? result.fail
+          : new Error("stub generation failed");
+      }
       const posts = result.posts || [];
-      return { posts, text: posts.join("\n\n\n") };
+      const usage = normalizeStubUsage(result.usage);
+      return { posts, text: posts.join("\n\n\n"), usage };
     }
+
+    if (this.impl && this.impl.fail) {
+      throw this.impl.fail instanceof Error
+        ? this.impl.fail
+        : new Error("stub generation failed");
+    }
+
     const posts =
       (this.impl && this.impl.posts) ||
       [
@@ -153,8 +182,22 @@ class StubPostGenerator {
         `Morning everyone 👋\nStub post B about ${input.idea || "topic"}.\nEnjoy the day love you all c u this arvo😘\n#OurRootsOurKnowledge #Mindset #Progress`,
         `Morning everyone 👋\nStub post C about ${input.idea || "topic"}.\nEnjoy the day love you all c u this arvo😘\n#OnlyRealOnesKnow #Consistency #Purpose`,
       ];
-    return { posts, text: posts.join("\n\n\n") };
+    const usage = normalizeStubUsage(this.impl && this.impl.usage);
+    return { posts, text: posts.join("\n\n\n"), usage };
   }
+}
+
+function normalizeStubUsage(usage) {
+  return {
+    provider: "openai",
+    model: (usage && usage.model) || "gpt-4.1-mini",
+    inputTokens:
+      usage && typeof usage.inputTokens === "number" ? usage.inputTokens : 1200,
+    outputTokens:
+      usage && typeof usage.outputTokens === "number" ? usage.outputTokens : 450,
+    totalTokens:
+      usage && typeof usage.totalTokens === "number" ? usage.totalTokens : 1650,
+  };
 }
 
 module.exports = { OpenAIPostGenerator, StubPostGenerator };

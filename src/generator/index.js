@@ -18,6 +18,7 @@ const {
   OpenAIPostGenerator,
   StubPostGenerator,
 } = require("./openai-post-generator");
+const { mapProviderChatUsage } = require("./usage-map");
 const postUtils = require("./post-utils");
 
 /**
@@ -34,6 +35,7 @@ module.exports = {
   createPostGenerator,
   OpenAIPostGenerator,
   StubPostGenerator,
+  mapProviderChatUsage,
   GENERATOR_CATEGORIES,
   GREETING,
   SIGNOFF,

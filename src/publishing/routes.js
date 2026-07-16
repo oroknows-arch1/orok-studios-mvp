@@ -96,6 +96,7 @@ function createPublishingRouter(service, opts = {}) {
 
   // Generate (or accept selected text) → validated draft → review queue.
   // Never auto-approves. Never marks published. Never calls X.
+  // Selecting a preview candidate with generationId does NOT create a new cost row.
   router.post(
     "/generate",
     wrap(async (req, res) => {
@@ -104,6 +105,72 @@ function createPublishingRouter(service, opts = {}) {
       }
       const result = await generationService.generateDraft(req.body || {});
       res.status(201).json(result);
+    })
+  );
+
+  // Mark a prior generation as discarded (abandoned / replaced). Observational.
+  router.post(
+    "/generate/discard",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      const generationId = (req.body || {}).generationId;
+      const result = await generationService.discardGeneration(generationId);
+      res.json({
+        generationId,
+        status: result.record.status,
+      });
+    })
+  );
+
+  // --- Cost Ledger v0.1 (read-only) ---------------------------------------
+  router.get(
+    "/costs/summary",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      const summary = await generationService.getCostSummary({
+        from: req.query.from,
+        to: req.query.to,
+      });
+      res.json({
+        from: req.query.from || null,
+        to: req.query.to || null,
+        ...summary,
+        note: "Estimated API cost for text generation only. Provider pricing estimate.",
+      });
+    })
+  );
+
+  router.get(
+    "/costs/recent",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      const limit = req.query.limit ? Number(req.query.limit) : 25;
+      const records = await generationService.listRecentCosts({
+        limit: Number.isFinite(limit) ? limit : 25,
+      });
+      res.json({
+        records: records.map((r) => ({
+          generationId: r.generationId,
+          publishingItemId: r.publishingItemId,
+          stream: r.stream,
+          category: r.category,
+          model: r.model,
+          provider: r.provider,
+          inputTokens: r.inputTokens,
+          outputTokens: r.outputTokens,
+          totalTokens: r.totalTokens,
+          estimatedCostUsd: r.estimatedCostUsd,
+          status: r.status,
+          createdAt: r.createdAt,
+        })),
+        count: records.length,
+      });
     })
   );
 

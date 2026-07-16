@@ -56,6 +56,7 @@ The service and routes never see SQL or PostgreSQL types.
 | `PUBLISHING_STORAGE` | all | `memory` \| `file` \| `postgres` (default `file`) |
 | `DATABASE_URL` | `postgres` (**required**) | `postgres://user:pass@host:5432/db` |
 | `PUBLISHING_DATA_FILE` | `file` (optional) | path to the JSON store |
+| `PUBLISHING_COST_DATA_FILE` | `file` (optional) | path to the cost ledger JSON store (default `./data/publishing-costs.json`) |
 | `PUBLISHING_ALLOW_EPHEMERAL_STORAGE` | emergency only | set `true` to permit memory/file when `NODE_ENV=production` (default disabled) |
 | `DATABASE_SSL` | `postgres` (optional) | `true`/`false` to force TLS on/off |
 | `PGPOOL_MAX` | `postgres` (optional) | max pool connections (default 10) |
@@ -138,6 +139,36 @@ Application startup **never** runs or rewrites migrations — it only seeds data
 | `001_create_publishing_items.sql` | table + `version >= 1` and positive-series-number checks |
 | `002_publishing_items_indexes.sql` | partial unique index on published CBB numbers + status/stream/date indexes |
 | `003_publishing_topic_search.sql` | `pg_trgm` extension + trigram indexes for topic/category search |
+| `004_publishing_generation_costs.sql` | Publishing API Cost Ledger table + indexes (observational) |
+
+### Schema (publishing_generation_costs) — Cost Ledger v0.1
+
+Observational table for **text-generation** OpenAI usage estimates. One row per
+OpenAI generation request (not per candidate). Does not gate generation,
+approval, or publication. Image-generation costs are out of scope.
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `id` | text PK | row id |
+| `generation_id` | text unique | correlates preview → accept |
+| `publishing_item_id` | text nullable | set when a candidate is queued |
+| `stream` / `category` | text nullable | publishing context |
+| `provider` / `model` | text | provider + model id |
+| `input_tokens` / `output_tokens` / `total_tokens` | int nullable | from provider usage |
+| `estimated_cost_usd` | numeric nullable | null when model pricing unknown |
+| `status` | text | `generated` \| `accepted` \| `discarded` \| `failed` |
+| `created_at` / `updated_at` | timestamptz | |
+
+Indexes: unique on `generation_id`; also `publishing_item_id`, `created_at`,
+`stream`, `status`.
+
+Pricing lives in `src/publishing/costs/pricing.js` (manual maintenance; estimates
+only). Apply with the normal migration command — **not** at application startup:
+
+```bash
+npm run db:migrate
+npm run db:status
+```
 
 ### pg_trgm policy (deterministic)
 

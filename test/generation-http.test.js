@@ -47,6 +47,9 @@ test("POST /api/publishing/generate/preview returns candidates", async () => {
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.candidates.length, 3);
+    assert.ok(body.generationId, "preview must return generationId for cost ledger");
+    assert.ok(body.usage, "preview must return usage metadata");
+    assert.equal(typeof body.usage.estimatedCostUsd, "number");
   } finally {
     await close();
   }
@@ -88,8 +91,17 @@ test("POST /api/publishing/generate creates review-queue item (never approved/pu
 test("POST /api/publishing/generate with text skips OpenAI and queues review", async () => {
   const { base, close } = await startApp(true);
   try {
-    const text =
-      "Morning everyone 👋\nPreselected body.\nEnjoy the day love you all c u this arvo😘\n#OnlyRealOnesKnow #Focus #RealTalk";
+    const preview = await fetch(base + "/api/publishing/generate/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        idea: "cbb generated",
+        category: "Friday Freestyle",
+        stream: "coffee-break-build",
+      }),
+    });
+    const prev = await preview.json();
+    const text = prev.candidates[0];
     const res = await fetch(base + "/api/publishing/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -99,6 +111,7 @@ test("POST /api/publishing/generate with text skips OpenAI and queues review", a
         topic: "cbb generated",
         category: "Friday Freestyle",
         text,
+        generationId: prev.generationId,
         placeInReview: true,
       }),
     });
@@ -108,6 +121,7 @@ test("POST /api/publishing/generate with text skips OpenAI and queues review", a
     assert.equal(body.item.seriesNumber, 2);
     assert.equal(body.item.text, text);
     assert.equal(body.candidates, null);
+    assert.equal(body.generationRequestPerformed, false);
   } finally {
     await close();
   }

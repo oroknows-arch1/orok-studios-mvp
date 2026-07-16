@@ -37,6 +37,7 @@ src/generator/                PostGenerator interface + OpenAI implementation
   index.js                    createPostGenerator(); shared by /generate + publishing
   openai-post-generator.js    OpenAI-backed generator (+ StubPostGenerator for tests)
   post-utils.js               cleanPost, hashtags, filters (preserved behaviour)
+  usage-map.js                map provider usage → neutral token metadata
 src/publishing/
   constants.js                streams, statuses, transition table, rhythm
   validation.js               item + request-body validation (ValidationError)
@@ -46,24 +47,33 @@ src/publishing/
   model.js                    PublishingItem factory + history snapshots
   repository.js               repository interface + in-memory & file adapters
   service.js                  business rules; seeds Coffee Break Build #001
-  generation-service.js       Draft Generation v0.4 (Publishing → PostGenerator)
+  generation-service.js       Draft Generation v0.4 + cost ledger hooks
+  costs/                      Publishing API Cost Ledger v0.1 (observational)
+    pricing.js                canonical model pricing (manual maintenance)
+    usage.js                  GenerationUsageRecord contract
+    repository.js             memory/file cost adapters + factory
   routes.js                   Express router (mounted at /api/publishing)
-  index.js                    wires repository + service + generation + router
+  index.js                    wires repository + service + generation + costs
   ui/index.html               self-contained single-page UI (served at /publishing)
 test/                         node:test suites (unit, service, HTTP integration)
 ```
 
-### Draft Generation flow (v0.4)
+### Draft Generation flow (v0.4) + Cost Ledger (v0.1)
 
 ```
 Publishing UI
 → Generation API (/api/publishing/generate[/preview])
 → Publishing Generation Service
 → PostGenerator interface (existing OpenAI capability)
+→ OpenAI response with usage metadata
+→ Generation Usage Record → Cost Ledger repository (observational)
 → Validated PublishingItem draft
 → PostgreSQL (or file/memory) repository
 → Today's Queue (status: review)
 ```
+
+The cost ledger is **infrastructure**, not a pipeline stage. It must not decide
+whether content is generated, approved, or published.
 
 Safety rules for generation:
 
@@ -73,9 +83,28 @@ Safety rules for generation:
 - There is **no** X / network publishing from this path.
 - Manual draft creation (`POST /items`) remains fully supported.
 
+### Cost ledger rules (v0.1)
+
+- **What incurs API cost:** a real Publishing text-generation OpenAI request
+  (`/generate/preview`, or `/generate` when it must call OpenAI because no
+  pre-selected `text` was supplied).
+- **One request → many candidates:** one cost record per OpenAI call, not per
+  candidate.
+- **Selecting, reviewing, approving, and publishing do not incur additional
+  generation cost** and do not create extra ledger rows.
+- Cost figures are **estimates** from `src/publishing/costs/pricing.js` and must
+  be updated manually when provider pricing changes. There are no live pricing
+  lookups.
+- **Image-generation costs are not included** in this ledger.
+- Unknown models record token usage with `estimatedCostUsd: null` and must not
+  break generation.
+- If generation succeeds but ledger persistence fails, candidates are still
+  returned (`costTrackingUnavailable: true`); OpenAI is **not** called again.
+
 The legacy Create Post routes (`/generate`, `/generate-image`, `/analyze-voice`)
 keep working. `/generate` now calls the same `PostGenerator` instance that
-Publishing uses.
+Publishing uses. The legacy `/generate` route does **not** write to the
+publishing cost ledger (only the Publishing Generation API does).
 
 ---
 
@@ -95,6 +124,8 @@ Selected via environment:
 - `PUBLISHING_STORAGE` = `postgres` \| `file` (default) \| `memory`
 - `DATABASE_URL` = postgres connection string (**required** for `postgres`)
 - `PUBLISHING_DATA_FILE` = path to the JSON file (file mode; default `./data/publishing.json`)
+- `PUBLISHING_COST_DATA_FILE` = path to the cost ledger JSON file (file mode;
+  default `./data/publishing-costs.json`)
 
 Rules:
 
@@ -147,6 +178,7 @@ Environment variables:
 | `PUBLISHING_STORAGE` | no (default `file`) | `postgres` \| `file` \| `memory` |
 | `DATABASE_URL` | yes when `postgres` | postgres connection string |
 | `PUBLISHING_DATA_FILE` | no | path to the JSON data file (file mode) |
+| `PUBLISHING_COST_DATA_FILE` | no | path to the cost ledger JSON file (file mode) |
 
 The publishing system itself needs **no API key** — manual draft creation and the
 whole review workflow work offline.
@@ -282,8 +314,11 @@ Base path: `/api/publishing`
 | GET | `/dashboard` | dashboard summary |
 | GET | `/next-number?stream=` | suggested next series number |
 | POST | `/check-duplicates` | advisory duplicate check for a candidate |
-| POST | `/generate/preview` | **v0.4** generate candidate posts (no persistence) |
+| POST | `/generate/preview` | **v0.4** generate candidate posts (no publishing item); records cost |
 | POST | `/generate` | **v0.4** create draft from generation/selection → review queue |
+| POST | `/generate/discard` | **v0.1 cost** mark a prior generation as `discarded` |
+| GET | `/costs/summary` | **v0.1 cost** aggregate totals (`from`/`to` optional) |
+| GET | `/costs/recent` | **v0.1 cost** recent generation cost records |
 | GET | `/health` | storage readiness (safe fields only; 200 ok / 503 not) |
 
 ### Generation request bodies (v0.4)
@@ -291,7 +326,30 @@ Base path: `/api/publishing`
 `POST /generate/preview`:
 
 ```json
-{ "idea": "consistency", "category": "Motivation Monday", "weeklyPosts": "optional" }
+{
+  "idea": "consistency",
+  "category": "Motivation Monday",
+  "stream": "orok-morning",
+  "weeklyPosts": "optional",
+  "discardGenerationId": "optional prior generation to mark discarded"
+}
+```
+
+Preview response:
+
+```json
+{
+  "generationId": "...",
+  "usage": {
+    "model": "gpt-4.1-mini",
+    "inputTokens": 0,
+    "outputTokens": 0,
+    "totalTokens": 0,
+    "estimatedCostUsd": 0
+  },
+  "candidates": [],
+  "costTrackingUnavailable": false
+}
 ```
 
 `POST /generate`:
@@ -304,13 +362,21 @@ Base path: `/api/publishing`
   "category": "Motivation Monday",
   "selectedIndex": 0,
   "placeInReview": true,
-  "text": "optional — when set, skips OpenAI and uses this body"
+  "text": "optional — when set, skips OpenAI and uses this body",
+  "generationId": "optional — attach/accept prior preview cost record"
 }
 ```
 
-Response includes `{ item, candidates, selectedIndex, duplicateAdvisory }`.
+Response includes
+`{ item, candidates, selectedIndex, duplicateAdvisory, generationId, usage }`.
 `item.status` is `review` when `placeInReview` is true (default), otherwise `draft`.
 Missing generator configuration returns **503**.
+
+### Cost summary (v0.1)
+
+`GET /costs/summary?from=YYYY-MM-DD&to=YYYY-MM-DD` returns totals including
+`totalGenerations`, `totalAccepted`, `totalDiscarded`, `totalFailed`,
+`totalEstimatedCostUsd`, averages, `byStream`, and `byModel`.
 
 `GET /api/publishing/health` returns only safe information and never exposes
 credentials, hostnames, SQL, stack traces, or file paths:
