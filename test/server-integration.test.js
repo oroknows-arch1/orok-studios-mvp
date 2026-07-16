@@ -60,6 +60,16 @@ test("publishing UI is served at /publishing", async () => {
   assert.ok(html.includes("Publishing"));
 });
 
+test("publishing health endpoint works with the memory adapter", async () => {
+  const res = await fetch(base + "/api/publishing/health");
+  assert.equal(res.status, 200);
+  const h = await res.json();
+  assert.equal(h.ok, true);
+  assert.equal(h.storage, "memory");
+  assert.equal(h.databaseReachable, true);
+  assert.equal(h.migrationsCurrent, true);
+});
+
 test("publishing dashboard endpoint works", async () => {
   const res = await fetch(base + "/api/publishing/dashboard");
   assert.equal(res.status, 200);
