@@ -4,8 +4,13 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "test": "node --test",
+    "start": "node server.js",
+    "db:migrate": "node src/publishing/db/cli.js migrate",
+    "db:status": "node src/publishing/db/cli.js status",
+    "publishing:import-file": "node src/publishing/db/import-file.js",
+    "publishing:verify": "node src/publishing/verify.js",
+    "smoke:test": "node src/publishing/smoke.js"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +20,7 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
-    "openai": "^6.33.0"
+    "openai": "^6.33.0",
+    "pg": "^8.22.0"
   }
 }

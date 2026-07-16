@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OROK Studios — Publishing System</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e7ebf0;
+    --muted: #97a1b0;
+    --accent: #6ea8fe;
+    --green: #3ecf8e;
+    --amber: #f5b74e;
+    --red: #f0685f;
+    --purple: #b18cf0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 22px; border-bottom: 1px solid var(--border);
+    background: var(--panel); position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { font-size: 16px; margin: 0; letter-spacing: .3px; }
+  header .tag { font-size: 11px; color: var(--muted); border: 1px solid var(--border); padding: 2px 8px; border-radius: 999px; }
+  nav { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+  nav button {
+    background: transparent; color: var(--muted); border: 1px solid transparent;
+    padding: 8px 12px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  nav button.active, nav button:hover { color: var(--text); background: var(--panel-2); border-color: var(--border); }
+  .primary {
+    background: var(--accent); color: #0b1220; border: none; font-weight: 600;
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  }
+  .primary:hover { filter: brightness(1.08); }
+  main { padding: 22px; max-width: 1180px; margin: 0 auto; }
+  h2.view-title { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .grid { display: grid; gap: 14px; }
+  .cards { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+  .card .value { font-size: 26px; font-weight: 700; margin-top: 6px; }
+  .card .value.small { font-size: 16px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+  tr:hover td { background: var(--panel-2); }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); }
+  .st-idea { color: var(--muted); }
+  .st-draft { color: var(--accent); }
+  .st-review { color: var(--amber); }
+  .st-approved { color: var(--green); }
+  .st-published { color: var(--purple); }
+  .st-archived { color: var(--muted); opacity: .8; }
+  .st-rejected { color: var(--red); }
+  .queue-item { display: flex; gap: 16px; align-items: center; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .queue-item .col { display: flex; flex-direction: column; gap: 2px; }
+  .queue-item .topic { font-weight: 600; }
+  .queue-item .meta { font-size: 12px; color: var(--muted); }
+  .queue-item .spacer { margin-left: auto; }
+  .empty { border: 1px dashed var(--border); border-radius: 12px; padding: 40px; text-align: center; color: var(--muted); }
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  input, select, textarea {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 9px 10px; font-size: 13px; font-family: inherit;
+  }
+  textarea { width: 100%; resize: vertical; }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 5px; }
+  .field { margin-bottom: 14px; }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .row > .field { flex: 1; min-width: 180px; }
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: flex-start; justify-content: center; overflow-y: auto; z-index: 50; padding: 30px 16px; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; width: 100%; max-width: 760px; padding: 22px; }
+  .modal h3 { margin: 0 0 14px; }
+  .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+  .btn { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .btn:hover { border-color: var(--accent); }
+  .btn.green { border-color: var(--green); color: var(--green); }
+  .btn.red { border-color: var(--red); color: var(--red); }
+  .btn.purple { border-color: var(--purple); color: var(--purple); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+  .charcount { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .advisory { border: 1px solid var(--amber); background: rgba(245,183,78,.08); border-radius: 10px; padding: 12px; margin: 12px 0; font-size: 13px; }
+  .kv { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; font-size: 13px; margin: 12px 0; }
+  .kv .k { color: var(--muted); }
+  .close { margin-left: auto; background: transparent; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--panel-2); border: 1px solid var(--border); padding: 12px 16px; border-radius: 10px; font-size: 13px; z-index: 100; display: none; }
+  .toast.error { border-color: var(--red); color: var(--red); }
+  .toast.ok { border-color: var(--green); }
+  .month-group h4 { margin: 22px 0 8px; font-size: 14px; color: var(--muted); }
+  .muted { color: var(--muted); }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>OROK Studios</h1>
+  <span class="tag">Publishing v0.1 · local · manual approval</span>
+  <nav>
+    <button data-view="dashboard" class="active">Dashboard</button>
+    <button data-view="queue">Today's Queue</button>
+    <button data-view="ledger">Ledger</button>
+    <button data-view="archive">Archive</button>
+    <button class="primary" id="newDraftBtn">+ New Draft</button>
+  </nav>
+</header>
+
+<main>
+  <section id="view-dashboard"></section>
+  <section id="view-queue" hidden></section>
+  <section id="view-ledger" hidden></section>
+  <section id="view-archive" hidden></section>
+</main>
+
+<!-- New Draft modal -->
+<div class="overlay" id="draftOverlay" role="dialog" aria-modal="true" aria-labelledby="draftHeading">
+  <div class="modal">
+    <div style="display:flex;align-items:center;">
+      <h3 id="draftHeading">New Draft</h3>
+      <button class="close" data-close="draftOverlay" aria-label="Close new draft dialog">&times;</button>
+    </div>
+    <form id="draftForm">
+      <div class="row">
+        <div class="field">
+          <label>Stream</label>
+          <select name="stream" id="draftStream">
+            <option value="orok-morning">OROK Morning</option>
+            <option value="coffee-break-build">Coffee Break Build</option>
+            <option value="saturday-mixed">Saturday Mixed Pack</option>
+            <option value="sunday-long-game">Sunday Long Game</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Planned date</label>
+          <input type="date" name="plannedDate" id="draftDate" required />
+        </div>
+        <div class="field" id="seriesField" style="display:none;">
+          <label>Series number (suggested)</label>
+          <input type="number" name="seriesNumber" id="draftSeries" min="1" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Topic</label>
+          <input type="text" name="topic" id="draftTopic" required placeholder="e.g. staying consistent under pressure" />
+        </div>
+        <div class="field">
+          <label>Category</label>
+          <input type="text" name="category" id="draftCategory" placeholder="optional" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Post text</label>
+        <textarea name="text" id="draftText" rows="6" placeholder="Write the post body..."></textarea>
+        <div class="charcount" id="draftCharCount" aria-live="polite">0 characters</div>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" id="draftImageRequired" style="width:auto;margin-right:6px;" /> Image required</label>
+      </div>
+      <div class="field" id="draftImageBriefField" style="display:none;">
+        <label>Image brief</label>
+        <textarea name="imageBrief" id="draftImageBrief" rows="3" placeholder="Describe the intended image..."></textarea>
+      </div>
+      <div id="draftAdvisory"></div>
+      <div class="modal-actions">
+        <button type="submit" class="primary">Create Draft</button>
+        <button type="button" class="btn" data-close="draftOverlay">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Review modal -->
+<div class="overlay" id="reviewOverlay" role="dialog" aria-modal="true" aria-labelledby="reviewTitle">
+  <div class="modal">
+    <div style="display:flex;align-items:center;">
+      <h3 id="reviewTitle">Review</h3>
+      <button class="close" data-close="reviewOverlay" aria-label="Close review dialog">&times;</button>
+    </div>
+    <div class="kv" id="reviewMeta"></div>
+    <div class="field">
+      <label>Post text (editable)</label>
+      <textarea id="reviewText" rows="7"></textarea>
+      <div class="charcount" id="reviewCharCount" aria-live="polite">0 characters</div>
+    </div>
+    <div class="field">
+      <label>Image brief</label>
+      <textarea id="reviewImageBrief" rows="3"></textarea>
+    </div>
+    <div id="reviewSimilarity"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnSaveDraft">Save Draft</button>
+      <button class="btn" id="btnSubmit">Submit for Review</button>
+      <button class="btn green" id="btnApprove">Approve</button>
+      <button class="btn red" id="btnReject">Reject</button>
+      <button class="btn purple" id="btnPublish">Mark Published</button>
+      <button class="btn" id="btnArchive">Archive</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const STREAM_LABELS = {
+  "orok-morning": "OROK Morning",
+  "coffee-break-build": "Coffee Break Build",
+  "saturday-mixed": "Saturday Mixed Pack",
+  "sunday-long-game": "Sunday Long Game",
+};
+const API = "/api/publishing";
+let currentItem = null;
+
+function api(path, opts) {
+  return fetch(API + path, Object.assign({ headers: { "Content-Type": "application/json" } }, opts))
+    .then(async (r) => {
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error((data.errors && data.errors.join("; ")) || data.error || ("HTTP " + r.status));
+      return data;
+    });
+}
+function toast(msg, kind) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "toast " + (kind || "ok");
+  t.style.display = "block";
+  setTimeout(() => (t.style.display = "none"), 3200);
+}
+function badge(status) {
+  return '<span class="badge st-' + status + '">' + status + "</span>";
+}
+function esc(s) { return (s == null ? "" : String(s)).replace(/[&<>"]/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function fmtDate(d) { return d ? String(d).slice(0, 10) : "—"; }
+
+/* ---------- View switching ---------- */
+const views = ["dashboard", "queue", "ledger", "archive"];
+function show(view) {
+  views.forEach((v) => { document.getElementById("view-" + v).hidden = v !== view; });
+  document.querySelectorAll("nav button[data-view]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.view === view);
+  });
+  if (view === "dashboard") renderDashboard();
+  if (view === "queue") renderQueue();
+  if (view === "ledger") renderLedger();
+  if (view === "archive") renderArchive();
+}
+document.querySelectorAll("nav button[data-view]").forEach((b) => {
+  b.addEventListener("click", () => show(b.dataset.view));
+});
+document.querySelectorAll("[data-close]").forEach((b) => {
+  b.addEventListener("click", () => document.getElementById(b.dataset.close).classList.remove("open"));
+});
+
+/* ---------- Dashboard ---------- */
+async function renderDashboard() {
+  const el = document.getElementById("view-dashboard");
+  el.innerHTML = '<p class="sub">Loading...</p>';
+  try {
+    const d = await api("/dashboard");
+    const post = (p) => p ? (badge(p.status) + " · " + esc(p.topic)) : '<span class="muted">none planned</span>';
+    const rhythm = d.plannedRhythm
+      ? Object.entries(d.plannedRhythm).map(([k, v]) => k + ": " + (STREAM_LABELS[v] || v)).join(" · ")
+      : "—";
+    el.innerHTML =
+      '<h2 class="view-title">Dashboard</h2>' +
+      '<p class="sub">Today is ' + esc(d.today) + ' · planned rhythm — ' + esc(rhythm) + '</p>' +
+      '<div class="grid cards">' +
+        card("Morning post", post(d.morningPost), true) +
+        card("Evening post", post(d.eveningPost), true) +
+        card("Awaiting review", d.awaitingReview) +
+        card("Approved", d.approved) +
+        card("Published this week", d.publishedThisWeek) +
+        card("Next Coffee Break #", "#" + String(d.nextCoffeeBreakNumber).padStart(3, "0")) +
+      '</div>' +
+      '<h3 style="margin-top:26px;">Recent activity</h3>' +
+      (d.recentActivity.length ? recentTable(d.recentActivity) : '<div class="empty">No activity yet.</div>');
+  } catch (e) { el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function card(label, value, small) {
+  return '<div class="card"><div class="label">' + esc(label) + '</div><div class="value ' + (small ? "small" : "") + '">' + value + '</div></div>';
+}
+function recentTable(rows) {
+  return '<table><thead><tr><th>Updated</th><th>Stream</th><th>Number</th><th>Topic</th><th>Status</th></tr></thead><tbody>' +
+    rows.map((r) => '<tr onclick="openReview(\'' + r.id + '\')" style="cursor:pointer;"><td>' + fmtDate(r.updatedAt) + '</td><td>' + esc(STREAM_LABELS[r.stream] || r.stream) + '</td><td>' + (r.seriesNumber ? "#" + String(r.seriesNumber).padStart(3, "0") : "—") + '</td><td>' + esc(r.topic) + '</td><td>' + badge(r.status) + '</td></tr>').join("") +
+    '</tbody></table>';
+}
+
+/* ---------- Today's Queue ---------- */
+async function renderQueue() {
+  const el = document.getElementById("view-queue");
+  el.innerHTML = '<h2 class="view-title">Today\'s Queue</h2><p class="sub">Loading...</p>';
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const { items } = await api("/items?date=" + today);
+    let body = '<h2 class="view-title">Today\'s Queue</h2><p class="sub">Planned for ' + today + '</p>';
+    if (!items.length) {
+      body += '<div class="empty">Nothing planned for today.<br/><br/><button class="primary" onclick="openDraft()">+ New Draft</button></div>';
+    } else {
+      body += '<div class="grid">' + items.map(queueItem).join("") + '</div>';
+    }
+    el.innerHTML = body;
+  } catch (e) { el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function daypart(stream) {
+  if (stream === "orok-morning") return "Morning";
+  if (stream === "coffee-break-build") return "Evening";
+  return "All day";
+}
+function queueItem(i) {
+  return '<div class="queue-item">' +
+    '<div class="col"><span class="topic">' + esc(i.topic) + '</span>' +
+    '<span class="meta">' + esc(STREAM_LABELS[i.stream] || i.stream) + ' · ' + daypart(i.stream) +
+    (i.seriesNumber ? ' · #' + String(i.seriesNumber).padStart(3, "0") : "") + '</span></div>' +
+    '<div class="col"><span class="meta">' + (i.text || "").length + ' chars' + (i.imageRequired ? " · 🖼 image" : "") + '</span>' + badge(i.status) + '</div>' +
+    '<div class="spacer"></div>' +
+    '<button class="btn" onclick="openReview(\'' + i.id + '\')">Open Review</button>' +
+    '</div>';
+}
+
+/* ---------- Ledger ---------- */
+async function renderLedger() {
+  const el = document.getElementById("view-ledger");
+  el.innerHTML =
+    '<h2 class="view-title">Ledger</h2>' +
+    '<div class="filters">' +
+      '<select id="fStream"><option value="">All streams</option>' + Object.entries(STREAM_LABELS).map(([k, v]) => '<option value="' + k + '">' + v + '</option>').join("") + '</select>' +
+      '<select id="fStatus"><option value="">All statuses</option>' + ["idea","draft","review","approved","published","archived","rejected"].map((s) => '<option>' + s + '</option>').join("") + '</select>' +
+      '<input type="date" id="fDate" />' +
+      '<input type="text" id="fTopic" placeholder="Search topic/text..." />' +
+      '<button class="btn" id="fClear">Clear</button>' +
+    '</div><div id="ledgerTable"></div>';
+  ["fStream","fStatus","fDate","fTopic"].forEach((id) => {
+    document.getElementById(id).addEventListener("input", loadLedger);
+  });
+  document.getElementById("fClear").addEventListener("click", () => {
+    ["fStream","fStatus","fDate","fTopic"].forEach((id) => (document.getElementById(id).value = ""));
+    loadLedger();
+  });
+  loadLedger();
+}
+async function loadLedger() {
+  const q = new URLSearchParams();
+  const s = (id) => document.getElementById(id) && document.getElementById(id).value;
+  if (s("fStream")) q.set("stream", s("fStream"));
+  if (s("fStatus")) q.set("status", s("fStatus"));
+  if (s("fDate")) q.set("date", s("fDate"));
+  if (s("fTopic")) q.set("topic", s("fTopic"));
+  const target = document.getElementById("ledgerTable");
+  try {
+    const { items } = await api("/items?" + q.toString());
+    if (!items.length) { target.innerHTML = '<div class="empty">No matching items.</div>'; return; }
+    target.innerHTML = '<table><thead><tr><th>ID</th><th>Date</th><th>Stream</th><th>#</th><th>Topic</th><th>Ver</th><th>Status</th><th>Published</th><th>URL</th></tr></thead><tbody>' +
+      items.map((i) => '<tr style="cursor:pointer;" onclick="openReview(\'' + i.id + '\')">' +
+        '<td class="muted">' + esc(i.id.slice(0, 8)) + '</td>' +
+        '<td>' + fmtDate(i.plannedDate) + '</td>' +
+        '<td>' + esc(STREAM_LABELS[i.stream] || i.stream) + '</td>' +
+        '<td>' + (i.seriesNumber ? "#" + String(i.seriesNumber).padStart(3, "0") : "—") + '</td>' +
+        '<td>' + esc(i.topic) + '</td>' +
+        '<td>' + i.version + '</td>' +
+        '<td>' + badge(i.status) + '</td>' +
+        '<td>' + fmtDate(i.publishedAt) + '</td>' +
+        '<td>' + (i.postUrl ? '<a href="' + esc(i.postUrl) + '" target="_blank" onclick="event.stopPropagation()">link</a>' : "—") + '</td>' +
+      '</tr>').join("") + '</tbody></table>';
+  } catch (e) { target.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ---------- Archive ---------- */
+async function renderArchive() {
+  const el = document.getElementById("view-archive");
+  el.innerHTML = '<h2 class="view-title">Archive</h2><p class="sub">Loading...</p>';
+  try {
+    const { items } = await api("/items");
+    const arch = items.filter((i) => i.status === "published" || i.status === "archived");
+    if (!arch.length) { el.innerHTML = '<h2 class="view-title">Archive</h2><div class="empty">No published or archived items yet.</div>'; return; }
+    const groups = {};
+    arch.forEach((i) => {
+      const key = (i.publishedAt || i.plannedDate || "").slice(0, 7) || "undated";
+      (groups[key] = groups[key] || []).push(i);
+    });
+    let body = '<h2 class="view-title">Archive</h2><p class="sub">Published & archived items by month</p>';
+    Object.keys(groups).sort().reverse().forEach((month) => {
+      body += '<div class="month-group"><h4>' + month + '</h4><table><thead><tr><th>Stream</th><th>#</th><th>Topic</th><th>Status</th><th>Published</th><th>URL</th></tr></thead><tbody>' +
+        groups[month].map((i) => '<tr style="cursor:pointer;" onclick="openReview(\'' + i.id + '\')"><td>' + esc(STREAM_LABELS[i.stream] || i.stream) + '</td><td>' + (i.seriesNumber ? "#" + String(i.seriesNumber).padStart(3, "0") : "—") + '</td><td>' + esc(i.topic) + '</td><td>' + badge(i.status) + '</td><td>' + fmtDate(i.publishedAt) + '</td><td>' + (i.postUrl ? '<a href="' + esc(i.postUrl) + '" target="_blank" onclick="event.stopPropagation()">link</a>' : "—") + '</td></tr>').join("") +
+        '</tbody></table></div>';
+    });
+    el.innerHTML = body;
+  } catch (e) { el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ---------- New Draft ---------- */
+const draftOverlay = document.getElementById("draftOverlay");
+document.getElementById("newDraftBtn").addEventListener("click", openDraft);
+async function openDraft() {
+  document.getElementById("draftForm").reset();
+  document.getElementById("draftDate").value = new Date().toISOString().slice(0, 10);
+  document.getElementById("draftAdvisory").innerHTML = "";
+  updateSeriesField();
+  draftOverlay.classList.add("open");
+}
+document.getElementById("draftStream").addEventListener("change", updateSeriesField);
+document.getElementById("draftImageRequired").addEventListener("change", (e) => {
+  document.getElementById("draftImageBriefField").style.display = e.target.checked ? "block" : "none";
+});
+document.getElementById("draftText").addEventListener("input", (e) => {
+  document.getElementById("draftCharCount").textContent = e.target.value.length + " characters";
+});
+async function updateSeriesField() {
+  const stream = document.getElementById("draftStream").value;
+  const field = document.getElementById("seriesField");
+  if (stream === "coffee-break-build") {
+    field.style.display = "block";
+    try {
+      const { nextNumber } = await api("/next-number?stream=coffee-break-build");
+      document.getElementById("draftSeries").value = nextNumber;
+    } catch (_) {}
+  } else {
+    field.style.display = "none";
+    document.getElementById("draftSeries").value = "";
+  }
+}
+document.getElementById("draftForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const stream = document.getElementById("draftStream").value;
+  const body = {
+    stream,
+    plannedDate: document.getElementById("draftDate").value,
+    topic: document.getElementById("draftTopic").value,
+    category: document.getElementById("draftCategory").value || undefined,
+    text: document.getElementById("draftText").value,
+    imageRequired: document.getElementById("draftImageRequired").checked,
+    imageBrief: document.getElementById("draftImageBrief").value || undefined,
+  };
+  const seriesVal = document.getElementById("draftSeries").value;
+  if (stream === "coffee-break-build" && seriesVal) body.seriesNumber = Number(seriesVal);
+  try {
+    const res = await api("/items", { method: "POST", body: JSON.stringify(body) });
+    if (res.duplicateAdvisory && res.duplicateAdvisory.flagged) {
+      const m = res.duplicateAdvisory.matches[0];
+      document.getElementById("draftAdvisory").innerHTML =
+        '<div class="advisory">⚠ Advisory: this draft resembles an existing item ("' + esc(m.topic) + '") on ' + m.matchedDimensions.length + ' dimensions (' + esc(m.matchedDimensions.join(", ")) + '). Draft was still created — review before publishing.</div>';
+      toast("Draft created (possible duplicate)", "ok");
+    } else {
+      draftOverlay.classList.remove("open");
+      toast("Draft created", "ok");
+    }
+    show("queue");
+  } catch (err) { toast(err.message, "error"); }
+});
+
+/* ---------- Review ---------- */
+const reviewOverlay = document.getElementById("reviewOverlay");
+async function openReview(id) {
+  try {
+    const { item } = await api("/items/" + id);
+    currentItem = item;
+    document.getElementById("reviewTitle").textContent = "Review — " + item.topic;
+    document.getElementById("reviewText").value = item.text || "";
+    document.getElementById("reviewImageBrief").value = item.imageBrief || "";
+    updateReviewCharCount();
+    const sk = item.similarityKeys || {};
+    document.getElementById("reviewMeta").innerHTML =
+      kv("Stream", STREAM_LABELS[item.stream] || item.stream) +
+      kv("Series #", item.seriesNumber ? "#" + String(item.seriesNumber).padStart(3, "0") : "—") +
+      kv("Topic", item.topic) +
+      kv("Category", item.category || "—") +
+      kv("Status", item.status) +
+      kv("Version", item.version) +
+      kv("Planned", fmtDate(item.plannedDate)) +
+      kv("Image", item.imageRequired ? "required" : "no") +
+      kv("Similarity", "opening: " + esc(sk.opening || "—") + " · lesson: " + esc(sk.centralLesson || "—") + " · example: " + esc(sk.example || "—") + " · image: " + esc(sk.imageConcept || "—"));
+    // advisory
+    const adv = await api("/check-duplicates", { method: "POST", body: JSON.stringify(item) });
+    document.getElementById("reviewSimilarity").innerHTML = adv.flagged
+      ? '<div class="advisory">⚠ Resembles ' + adv.matches.length + ' other item(s). Top match: "' + esc(adv.matches[0].topic) + '" on ' + esc(adv.matches[0].matchedDimensions.join(", ")) + '.</div>'
+      : "";
+    setReviewButtons(item.status);
+    reviewOverlay.classList.add("open");
+  } catch (e) { toast(e.message, "error"); }
+}
+function kv(k, v) { return '<div class="k">' + esc(k) + '</div><div>' + esc(v) + '</div>'; }
+function updateReviewCharCount() {
+  document.getElementById("reviewCharCount").textContent = document.getElementById("reviewText").value.length + " characters";
+}
+document.getElementById("reviewText").addEventListener("input", updateReviewCharCount);
+function setReviewButtons(status) {
+  const allow = {
+    idea:      { save: 1, submit: 1, approve: 0, reject: 1, publish: 0, archive: 1 },
+    draft:     { save: 1, submit: 1, approve: 0, reject: 1, publish: 0, archive: 1 },
+    review:    { save: 1, submit: 0, approve: 1, reject: 1, publish: 0, archive: 1 },
+    approved:  { save: 1, submit: 0, approve: 0, reject: 1, publish: 1, archive: 1 },
+    published: { save: 0, submit: 0, approve: 0, reject: 0, publish: 0, archive: 1 },
+    archived:  { save: 0, submit: 0, approve: 0, reject: 0, publish: 0, archive: 0 },
+    rejected:  { save: 0, submit: 0, approve: 0, reject: 0, publish: 0, archive: 0 },
+  }[status] || {};
+  document.getElementById("btnSaveDraft").disabled = !allow.save;
+  document.getElementById("btnSubmit").disabled = !allow.submit;
+  document.getElementById("btnApprove").disabled = !allow.approve;
+  document.getElementById("btnReject").disabled = !allow.reject;
+  document.getElementById("btnPublish").disabled = !allow.publish;
+  document.getElementById("btnArchive").disabled = !allow.archive;
+}
+async function saveReviewEdits() {
+  return api("/items/" + currentItem.id, {
+    method: "PATCH",
+    body: JSON.stringify({
+      text: document.getElementById("reviewText").value,
+      imageBrief: document.getElementById("reviewImageBrief").value || undefined,
+    }),
+  });
+}
+document.getElementById("btnSaveDraft").addEventListener("click", async () => {
+  try { const { item } = await saveReviewEdits(); currentItem = item; toast("Saved (v" + item.version + ")"); openReview(item.id); refreshCurrentView(); }
+  catch (e) { toast(e.message, "error"); }
+});
+document.getElementById("btnSubmit").addEventListener("click", () => act("submit"));
+document.getElementById("btnApprove").addEventListener("click", () => act("approve"));
+document.getElementById("btnArchive").addEventListener("click", () => act("archive"));
+document.getElementById("btnReject").addEventListener("click", async () => {
+  const reason = prompt("Rejection reason (required):");
+  if (reason === null) return;
+  if (!reason.trim()) { toast("A rejection reason is required", "error"); return; }
+  try {
+    await saveReviewEdits().catch(() => {});
+    const { item } = await api("/items/" + currentItem.id + "/reject", { method: "POST", body: JSON.stringify({ reason }) });
+    toast("Rejected");
+    reviewOverlay.classList.remove("open");
+    refreshCurrentView();
+  } catch (e) { toast(e.message, "error"); }
+});
+document.getElementById("btnPublish").addEventListener("click", async () => {
+  const when = prompt("Published date/time (ISO, blank = now):", new Date().toISOString());
+  if (when === null) return;
+  const url = prompt("Post URL (optional):", currentItem.postUrl || "");
+  if (url === null) return;
+  if (!confirm("Confirm: mark this post as PUBLISHED? This is a manual, explicit action.")) return;
+  try {
+    await saveReviewEdits().catch(() => {});
+    const body = { confirm: true, text: document.getElementById("reviewText").value };
+    if (when.trim()) body.publishedAt = when.trim();
+    if (url.trim()) body.postUrl = url.trim();
+    await api("/items/" + currentItem.id + "/publish", { method: "POST", body: JSON.stringify(body) });
+    toast("Marked published");
+    reviewOverlay.classList.remove("open");
+    refreshCurrentView();
+  } catch (e) { toast(e.message, "error"); }
+});
+async function act(action) {
+  try {
+    await saveReviewEdits().catch(() => {});
+    const { item } = await api("/items/" + currentItem.id + "/" + action, { method: "POST", body: "{}" });
+    currentItem = item;
+    toast(action + " ok");
+    openReview(item.id);
+    refreshCurrentView();
+  } catch (e) { toast(e.message, "error"); }
+}
+function refreshCurrentView() {
+  const active = document.querySelector("nav button.active");
+  if (active) show(active.dataset.view);
+}
+window.openReview = openReview;
+window.openDraft = openDraft;
+
+/* ---------- boot ---------- */
+show("dashboard");
+</script>
+</body>
+</html>

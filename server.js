@@ -4,15 +4,49 @@ const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
 const path = require("path");
+const { createPublishing, UI_FILE } = require("./src/publishing");
+const { createGeneralHealthHandler } = require("./src/health");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
-app.use(express.static(__dirname));
+app.use(express.json({ limit: "1mb" }));
+// Serve the static generator UI. `dotfiles: "ignore"` prevents a local .env (or
+// any dotfile) from ever being served as a static asset.
+app.use(express.static(__dirname, { dotfiles: "ignore" }));
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Publishing System — review-first publishing workflow. Mounted alongside the
+// existing generator; it does not alter generator routes. A configuration
+// failure here (e.g. postgres selected without DATABASE_URL, or ephemeral
+// storage in production) is fatal and reported clearly without secrets.
+let publishing;
+try {
+  publishing = createPublishing();
+} catch (err) {
+  console.error(
+    "FATAL: cannot initialise publishing storage: " +
+      (err && err.message ? err.message : "unknown error")
+  );
+  process.exit(1);
+}
+publishing.ready.catch((err) => {
+  // A transient database problem must not take down the generator; it is
+  // surfaced via the health endpoints instead. Log only the message (no stack,
+  // no credentials).
+  console.error(
+    "PUBLISHING INIT WARNING: " + (err && err.message ? err.message : "init failed")
+  );
+});
+app.use("/api/publishing", publishing.router);
+app.get("/publishing", (req, res) => {
+  res.sendFile(UI_FILE);
+});
+
+// General application health for the platform (Render) health check.
+app.get("/health", createGeneralHealthHandler({ service: publishing.service }));
 
 const greeting = "Morning everyone 👋";
 const signoff = "Enjoy the day love you all c u this arvo😘";
@@ -658,6 +692,31 @@ app.post("/generate-image", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  const server = app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+
+  // Graceful shutdown: stop accepting connections, then close the publishing
+  // storage (database pool) so deploys/restarts release resources cleanly.
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`Received ${signal}, shutting down gracefully...`);
+    server.close(() => {
+      Promise.resolve(publishing.close())
+        .catch(() => {})
+        .finally(() => {
+          console.log("Shutdown complete.");
+          process.exit(0);
+        });
+    });
+    // Safety net: force exit if close hangs.
+    setTimeout(() => process.exit(0), 10000).unref();
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+module.exports = app;
