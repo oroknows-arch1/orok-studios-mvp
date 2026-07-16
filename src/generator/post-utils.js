@@ -1,0 +1,471 @@
+"use strict";
+
+const { GREETING, SIGNOFF, MAX_CHARS } = require("./constants");
+
+function soundsLikeHistoryLesson(text) {
+  const badPatterns = [
+    "is considered",
+    "historically",
+    "played a key role in",
+    "significant contribution",
+    "widely regarded as",
+    "according to history",
+    "throughout history",
+  ];
+
+  const lower = text.toLowerCase();
+  return badPatterns.some((p) => lower.includes(p));
+}
+
+function soundsTooGeneric(text) {
+  const badPhrases = [
+    "embrace the journey",
+    "unlock your potential",
+    "step into your power",
+    "foundation for tomorrow",
+    "version of yourself",
+    "believe in yourself",
+    "transform your life",
+  ];
+
+  const lower = text.toLowerCase();
+  return badPhrases.some((p) => lower.includes(p));
+}
+
+function cleanPost(post) {
+  let text = post.trim();
+
+  text = text.replace(/^Morning everyone.*\n?/i, "").trim();
+  text = text.replace(/Enjoy the day.*$/i, "").trim();
+
+  const reserved = GREETING.length + SIGNOFF.length + 2;
+  const room = MAX_CHARS - reserved;
+
+  if (text.length > room) {
+    text = text.slice(0, room).trim();
+  }
+
+  const sentenceMatches = text.match(/[^.!?]+[.!?]+/g);
+
+  if (sentenceMatches && sentenceMatches.length > 0) {
+    let rebuilt = "";
+
+    for (const sentence of sentenceMatches) {
+      const candidate = (rebuilt + " " + sentence.trim()).trim();
+      if (candidate.length <= room) {
+        rebuilt = candidate;
+      } else {
+        break;
+      }
+    }
+
+    if (rebuilt.length > 0) {
+      text = rebuilt.trim();
+    }
+  }
+
+  if (!/[.!?]$/.test(text)) {
+    const lastSentenceEnd = Math.max(
+      text.lastIndexOf("."),
+      text.lastIndexOf("!"),
+      text.lastIndexOf("?")
+    );
+
+    if (lastSentenceEnd > 40) {
+      text = text.slice(0, lastSentenceEnd + 1).trim();
+    }
+  }
+
+  return `${GREETING}\n${text}\n${SIGNOFF}`;
+}
+
+function toHashtag(text) {
+  return (
+    "#" +
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .trim()
+      .split(/\s+/)
+      .slice(0, 3)
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join("")
+  );
+}
+
+function pickRandom(arr, count = 1) {
+  const unique = [...new Set(arr)];
+  const shuffled = [...unique].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
+
+function buildVoiceInstructions(profile) {
+  if (!profile) {
+    return `
+TONE:
+- grounded
+- blue collar
+- calm
+- direct
+
+STYLE:
+- simple wording
+- real, not polished
+- observational more than inspirational
+`;
+  }
+
+  return `
+TONE:
+${(profile.tone || []).map((t) => `- ${t}`).join("\n")}
+
+STYLE:
+${(profile.style || []).map((s) => `- ${s}`).join("\n")}
+
+VOCABULARY:
+${(profile.vocabulary || []).map((v) => `- ${v}`).join("\n")}
+
+POSITIONING:
+${profile.positioning || ""}
+
+STRUCTURE:
+${profile.structure || ""}
+
+VOICE SUMMARY:
+${profile.voiceSummary || ""}
+
+DO RULES:
+${(profile.doRules || []).map((r) => `- ${r}`).join("\n")}
+
+DON'T RULES:
+${(profile.dontRules || []).map((r) => `- ${r}`).join("\n")}
+`;
+}
+
+function getHashtags(category, idea) {
+  const lowerIdea = (idea || "").toLowerCase();
+
+  const brandTags = ["#OurRootsOurKnowledge", "#OnlyRealOnesKnow"];
+
+  const categoryPools = {
+    "Motivation Monday": [
+      "#Mindset",
+      "#Consistency",
+      "#Focus",
+      "#WorkEthic",
+      "#Courage",
+      "#Persistence",
+      "#Drive",
+      "#Resilience",
+      "#Progress",
+      "#SelfBelief",
+      "#Momentum",
+      "#Purpose",
+    ],
+    "Wisdom Wednesday": [
+      "#Awareness",
+      "#Reflection",
+      "#Perspective",
+      "#Stillness",
+      "#Clarity",
+      "#Insight",
+      "#Presence",
+      "#Understanding",
+      "#InnerWork",
+      "#RealThought",
+      "#Discernment",
+      "#Wisdom",
+    ],
+    "Masters of Today": [
+      "#Respect",
+      "#Excellence",
+      "#Representation",
+      "#Achievement",
+      "#Influence",
+      "#Dedication",
+      "#Impact",
+      "#Recognition",
+      "#Craft",
+      "#Greatness",
+      "#Leadership",
+      "#Inspiration",
+    ],
+    "Masters of Yesterday": [
+      "#History",
+      "#Culture",
+      "#Legacy",
+      "#Origins",
+      "#Heritage",
+      "#Identity",
+      "#Tradition",
+      "#Ancestry",
+      "#HistoricalKnowledge",
+      "#AncientWorld",
+      "#Roots",
+      "#Civilization",
+    ],
+    "Friday Recap": [
+      "#Reflection",
+      "#WeeklyReset",
+      "#Perspective",
+      "#Lessons",
+      "#WeeklyThoughts",
+      "#LookingBack",
+      "#MovingForward",
+      "#Recap",
+      "#WeekInReview",
+      "#ProgressCheck",
+      "#WeeklyGrowth",
+      "#Reset",
+    ],
+    "Friday Freestyle": [
+      "#FridayVibes",
+      "#WeekendMood",
+      "#RealTalk",
+      "#GoodEnergy",
+      "#Expression",
+      "#LightWork",
+      "#Unwind",
+      "#Flow",
+      "#WeekendThoughts",
+      "#Vibes",
+      "#Ease",
+      "#Release",
+    ],
+  };
+
+  let topicPool = [];
+
+  if (lowerIdea.includes("safety")) {
+    topicPool = ["#SafetyCulture", "#WorkplaceSafety", "#RiskAwareness", "#SafeHabits"];
+  } else if (lowerIdea.includes("discipline")) {
+    topicPool = ["#SelfDiscipline", "#Routine", "#Habits", "#DailyWork"];
+  } else if (lowerIdea.includes("growth")) {
+    topicPool = ["#PersonalGrowth", "#GrowthMindset", "#Becoming", "#LevelUp"];
+  } else if (lowerIdea.includes("stillness")) {
+    topicPool = ["#MentalClarity", "#QuietMind", "#Stillness", "#InnerPeace"];
+  } else if (lowerIdea.includes("reflection")) {
+    topicPool = ["#SelfAwareness", "#InnerWork", "#PerspectiveShift", "#DeepThought"];
+  } else if (lowerIdea.includes("creativity")) {
+    topicPool = ["#Creativity", "#CreativeProcess", "#OriginalThought", "#MakeSomething"];
+  } else if (lowerIdea.includes("embarrass")) {
+    topicPool = ["#Courage", "#Confidence", "#PushThrough", "#GrowthEdge"];
+  } else if (lowerIdea.includes("mischief") || lowerIdea.includes("mischievous")) {
+    topicPool = ["#Mischief", "#SharpThinking", "#SmartMoves", "#PlayfulMind"];
+  } else if (lowerIdea.includes("cathy freeman")) {
+    topicPool = ["#CathyFreeman", "#AustralianAthletics", "#TrackLegend", "#SportHistory"];
+  } else if (lowerIdea.includes("gout gout")) {
+    topicPool = ["#GoutGout", "#TrackAndField", "#Sprint", "#AustralianSprint"];
+  } else if (lowerIdea.includes("anglo saxon")) {
+    topicPool = ["#AngloSaxons", "#EnglishOrigins", "#EarlyEngland", "#HistoricalRoots"];
+  } else if (lowerIdea.includes("malcolm x")) {
+    topicPool = ["#MalcolmX", "#CivilRights", "#BlackHistory", "#PoliticalThought"];
+  } else if (lowerIdea.includes("mayan") || lowerIdea.includes("maya")) {
+    topicPool = ["#Maya", "#AncientCivilizations", "#Mesoamerica", "#CulturalLegacy"];
+  } else if (lowerIdea.includes("aguaruna") || lowerIdea.includes("awajun")) {
+    topicPool = ["#Aguaruna", "#Awajun", "#IndigenousKnowledge", "#AmazonPeoples"];
+  } else if (lowerIdea.includes("arawa") || lowerIdea.includes("te arawa")) {
+    topicPool = ["#TeArawa", "#MaoriHistory", "#Aotearoa", "#WakaTraditions"];
+  } else if (idea && idea.trim().length > 0) {
+    topicPool = [toHashtag(idea)];
+  }
+
+  const brandTag = pickRandom(brandTags, 1)[0];
+  const categoryTag = pickRandom(categoryPools[category] || ["#Expression"], 1)[0];
+
+  let topicTag = "";
+  if (topicPool.length > 0) {
+    topicTag = pickRandom(topicPool, 1)[0];
+  } else {
+    topicTag =
+      category === "Masters of Today" || category === "Masters of Yesterday"
+        ? "#Legacy"
+        : "#RealTalk";
+  }
+
+  let tags = [brandTag, categoryTag, topicTag];
+  tags = [...new Set(tags)];
+
+  const fallbackPool = [
+    ...(categoryPools[category] || []),
+    "#Signal",
+    "#Identity",
+    "#Expression",
+    "#BrandVoice",
+    "#Perspective",
+    "#Purpose",
+  ];
+
+  while (tags.length < 3) {
+    const next = pickRandom(fallbackPool, 1)[0] || "#Expression";
+    if (!tags.includes(next)) tags.push(next);
+    else break;
+  }
+
+  return tags.slice(0, 3).join(" ");
+}
+
+function categoryExtraRules(category) {
+  if (category === "Motivation Monday") {
+    return `
+- Tone should be direct, disciplined and action-based
+- Focus on effort, consistency, discipline, pressure, persistence, or doing the work
+- The post must contain 3 layers:
+  1. a clear opening truth
+  2. a deeper explanation of what that truth means
+  3. a grounded real-world point or behavioural takeaway
+- Keep the body between 260 and 360 characters
+- 3 to 5 sentences maximum
+- End with a complete thought that feels fully landed
+`;
+  }
+  if (category === "Masters of Today") {
+    return `
+- Tone should be respectful, factual, grounded and biographical
+- Focus on a living person
+
+MANDATORY DETAILS (must include at least 3 of these):
+- age OR approximate life stage (young, teenager, early career, established etc)
+- where they are from (country, region, background or origin)
+- what they are known for (profession, field, role or craft)
+- what stage they are at (emerging, active, established, influential, veteran etc)
+- at least one clear achievement, contribution, body of work, milestone or recognised impact
+
+STRUCTURE:
+1. Identify the person clearly (name + role + origin if possible)
+2. Include multiple factual details (NOT just one repeated point)
+3. Add context around their stage, body of work or contribution
+4. Explain why it matters now
+
+STRICT RULES:
+- Do NOT stay general
+- Do NOT only repeat one achievement
+- Do NOT describe personality, aura, energy or attitude
+- This is a factual tribute, not a character observation
+- Be informative first, reflective second
+
+- Keep the body between 320 and 420 characters
+- 4 to 6 sentences
+- End with a complete thought
+`;
+  }
+  if (category === "Wisdom Wednesday") {
+    return `
+- Tone should be reflective, pattern-based and awareness-driven
+- Focus on how life really works beneath the surface
+- The post must contain 3 layers:
+  1. an observation
+  2. what that observation actually means
+  3. why that matters in real life
+- Keep the body between 260 and 360 characters
+- 3 to 5 sentences maximum
+- End with a complete thought
+`;
+  }
+  if (category === "Masters of Yesterday") {
+    return `
+- Tone should be respectful, factual, grounded and biographical
+- Focus on historical people, cultures, groups, waka, or places
+
+MANDATORY DETAILS (must include at least 3 of these):
+- what or who the subject is
+- where it is from or tied to
+- what it is known for
+- what it carried, built, represented or contributed
+- at least one clear historical, cultural or legacy detail
+
+STRUCTURE:
+1. Identify the subject clearly
+2. Include multiple factual details
+3. Add context around its historical or cultural significance
+4. Explain why it still matters today
+
+STRICT RULES:
+- Do NOT stay general
+- Do NOT only repeat one point
+- Do NOT sound like a textbook
+- This is a factual tribute, not an artistic reflection
+- Be informative first, reflective second
+
+- Keep the body between 320 and 420 characters
+- 4 to 6 sentences
+- End with a complete thought
+`;
+  }
+  if (category === "Friday Recap") {
+    return `
+- Tone should be reflective, summarising and grounded
+- Use the weekly posts provided as the source material
+- Identify the shared pattern, lesson or theme across the week
+- Do not simply repeat each day one by one
+- Turn the week into one clear recap with depth
+- Keep the body between 320 and 420 characters
+- 4 to 6 sentences maximum
+- End with a complete thought
+`;
+  }
+  if (category === "Friday Freestyle") {
+    return `
+- Tone should be lighter, more relaxed, human and slightly playful
+- Still keep it grounded and real
+- Keep the body between 260 and 340 characters
+- 3 to 5 sentences maximum
+- End with a complete thought
+`;
+  }
+  return "";
+}
+
+/**
+ * Split raw model output into post bodies and apply the same cleaning /
+ * filtering / hashtag rules as the existing `/generate` route.
+ * @param {string} rawText
+ * @param {string} category
+ * @param {string} idea
+ * @returns {string[]}
+ */
+function processGeneratedPosts(rawText, category, idea) {
+  let posts = String(rawText || "")
+    .split("---")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (posts.length !== 3) {
+    posts = String(rawText || "")
+      .split(/\n\s*\n/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+  }
+
+  if (category === "Masters of Today" || category === "Masters of Yesterday") {
+    const filteredHistory = posts.filter((p) => !soundsLikeHistoryLesson(p));
+    if (filteredHistory.length === 3) {
+      posts = filteredHistory;
+    }
+  }
+
+  const filteredGeneric = posts.filter((p) => !soundsTooGeneric(p));
+  if (filteredGeneric.length === 3) {
+    posts = filteredGeneric;
+  }
+
+  return posts.map((post) => {
+    let cleaned = cleanPost(post);
+    cleaned = cleaned.replace(/\n?#\w+(?:\s+#\w+)*/g, "").trim();
+    const generatedTags = getHashtags(category, idea);
+    return `${cleaned}\n${generatedTags}`;
+  });
+}
+
+module.exports = {
+  soundsLikeHistoryLesson,
+  soundsTooGeneric,
+  cleanPost,
+  toHashtag,
+  pickRandom,
+  buildVoiceInstructions,
+  getHashtags,
+  categoryExtraRules,
+  processGeneratedPosts,
+};

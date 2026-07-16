@@ -54,6 +54,7 @@ test("smoke test never calls generation, image, or approve/publish endpoints", a
   await runSmokeTest({ baseUrl: base, fetchImpl: recordingFetch });
   const joined = requestedUrls.join("\n");
   assert.ok(!/\/generate(\b|-image)/.test(joined), "must not call /generate or /generate-image");
+  assert.ok(!/\/api\/publishing\/generate/.test(joined), "must not call publishing draft generation");
   assert.ok(!/\/analyze-voice/.test(joined), "must not call /analyze-voice");
   assert.ok(!/\/approve\b/.test(joined), "must not approve");
   assert.ok(!/\/publish\b/.test(joined), "must not publish");
