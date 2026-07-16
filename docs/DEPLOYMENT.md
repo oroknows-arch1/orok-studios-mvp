@@ -130,6 +130,10 @@ provision a throwaway PostgreSQL and set `TEST_DATABASE_URL` (the suite
   # restore (into a fresh/empty database):
   pg_restore --no-owner --dbname="$TARGET_DATABASE_URL" orok-publishing-YYYYMMDD-HHMM.dump
   ```
+- **Cost Ledger v0.1** adds migration `004_publishing_generation_costs.sql`
+  (observational text-generation usage table). Run `npm run db:migrate` before
+  relying on `/api/publishing/costs/*` in postgres mode. Pricing estimates live
+  in `src/publishing/costs/pricing.js` and require manual updates.
 - **Current migrations are additive** (create table/indexes only). They do not
   drop or rewrite data, so applying them is low-risk. This section becomes
   mandatory only if a future migration is destructive.

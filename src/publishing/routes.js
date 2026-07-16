@@ -3,16 +3,19 @@
 const express = require("express");
 const { ValidationError } = require("./validation");
 const { TransitionError } = require("./transitions");
+const { GenerationUnavailableError } = require("./generation-service");
 
 /**
  * Build an Express router for the publishing system, backed by the given
  * service instance. Mount at /api/publishing.
  *
  * @param {import("./service").PublishingService} service
+ * @param {{ generationService?: import("./generation-service").PublishingGenerationService }} [opts]
  * @returns {import("express").Router}
  */
-function createPublishingRouter(service) {
+function createPublishingRouter(service, opts = {}) {
   const router = express.Router();
+  const generationService = opts.generationService || null;
 
   const wrap = (handler) => async (req, res) => {
     try {
@@ -24,6 +27,9 @@ function createPublishingRouter(service) {
       }
       if (err instanceof TransitionError) {
         return res.status(409).json({ error: err.message });
+      }
+      if (err instanceof GenerationUnavailableError) {
+        return res.status(503).json({ error: err.message });
       }
       // Unexpected errors (e.g. database/driver errors) may contain SQL or
       // internal details, so log server-side only and return a generic message.
@@ -72,6 +78,99 @@ function createPublishingRouter(service) {
     wrap(async (req, res) => {
       const advisory = await service.checkDuplicatesFor(req.body || {});
       res.json(advisory);
+    })
+  );
+
+  // --- Draft Generation v0.4 ----------------------------------------------
+  // Preview candidates (no persistence). Never approves or publishes.
+  router.post(
+    "/generate/preview",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      const result = await generationService.preview(req.body || {});
+      res.json(result);
+    })
+  );
+
+  // Generate (or accept selected text) → validated draft → review queue.
+  // Never auto-approves. Never marks published. Never calls X.
+  // Selecting a preview candidate with generationId does NOT create a new cost row.
+  router.post(
+    "/generate",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      const result = await generationService.generateDraft(req.body || {});
+      res.status(201).json(result);
+    })
+  );
+
+  // Mark a prior generation as discarded (abandoned / replaced). Observational.
+  router.post(
+    "/generate/discard",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      const generationId = (req.body || {}).generationId;
+      const result = await generationService.discardGeneration(generationId);
+      res.json({
+        generationId,
+        status: result.record.status,
+      });
+    })
+  );
+
+  // --- Cost Ledger v0.1 (read-only) ---------------------------------------
+  router.get(
+    "/costs/summary",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      const summary = await generationService.getCostSummary({
+        from: req.query.from,
+        to: req.query.to,
+      });
+      res.json({
+        from: req.query.from || null,
+        to: req.query.to || null,
+        ...summary,
+        note: "Estimated API cost for text generation only. Provider pricing estimate.",
+      });
+    })
+  );
+
+  router.get(
+    "/costs/recent",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      const limit = req.query.limit ? Number(req.query.limit) : 25;
+      const records = await generationService.listRecentCosts({
+        limit: Number.isFinite(limit) ? limit : 25,
+      });
+      res.json({
+        records: records.map((r) => ({
+          generationId: r.generationId,
+          publishingItemId: r.publishingItemId,
+          stream: r.stream,
+          category: r.category,
+          model: r.model,
+          provider: r.provider,
+          inputTokens: r.inputTokens,
+          outputTokens: r.outputTokens,
+          totalTokens: r.totalTokens,
+          estimatedCostUsd: r.estimatedCostUsd,
+          status: r.status,
+          createdAt: r.createdAt,
+        })),
+        count: records.length,
+      });
     })
   );
 
