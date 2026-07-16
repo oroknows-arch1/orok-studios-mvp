@@ -5,6 +5,7 @@ const fsp = require("fs/promises");
 const path = require("path");
 
 const { PublishingRepository } = require("./repository-interface");
+const { assertStorageAllowed } = require("./storage-policy");
 
 /**
  * In-memory adapter. Useful for isolated tests and as an explicit
@@ -200,6 +201,10 @@ function applyInMemoryFilter(items, filter) {
  */
 function createRepositoryFromEnv(opts = {}) {
   const mode = (opts.mode || process.env.PUBLISHING_STORAGE || "file").toLowerCase();
+
+  // Enforce the production storage policy: ephemeral stores are rejected when
+  // NODE_ENV=production unless the emergency override is explicitly set.
+  assertStorageAllowed(mode, process.env);
 
   if (mode === "memory") {
     return new InMemoryPublishingRepository(opts.seed || []);
