@@ -32,6 +32,22 @@ function createPublishingRouter(service) {
 
   const notFound = (res) => res.status(404).json({ error: "Item not found" });
 
+  // Storage readiness. Returns only safe fields — never credentials, hostnames,
+  // SQL, stack traces, or file paths. 200 when healthy, 503 otherwise.
+  router.get("/health", async (req, res) => {
+    try {
+      const health = await service.health();
+      res.status(health.ok ? 200 : 503).json(health);
+    } catch (_err) {
+      res.status(503).json({
+        ok: false,
+        storage: "unknown",
+        databaseReachable: false,
+        migrationsCurrent: false,
+      });
+    }
+  });
+
   router.get(
     "/dashboard",
     wrap(async (req, res) => {

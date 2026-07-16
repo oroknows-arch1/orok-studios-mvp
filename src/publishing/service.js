@@ -8,10 +8,10 @@ const {
   collectPatchErrors,
   isNonEmptyString,
 } = require("./validation");
-const { assertTransition } = require("./transitions");
+const { assertTransition, TransitionError } = require("./transitions");
 const { nextCoffeeBreakNumber, COFFEE_BREAK_STREAM } = require("./numbering");
 const { checkDuplicates } = require("./similarity");
-const { STREAMS, STATUSES, DEFAULT_RHYTHM } = require("./constants");
+const { DEFAULT_RHYTHM } = require("./constants");
 
 /** Stable id for the seeded Coffee Break Build #001 record. */
 const SEED_CBB_001_ID = "seed-coffee-break-build-001";
@@ -71,8 +71,7 @@ class PublishingService {
   }
 
   async listItems(filter = {}) {
-    let items = await this.repo.list();
-    items = applyFilter(items, filter);
+    const items = await this.repo.list(filter || {});
     // newest planned first, then most recently updated
     items.sort((a, b) => {
       const byPlanned = String(b.plannedDate).localeCompare(String(a.plannedDate));
@@ -163,50 +162,56 @@ class PublishingService {
     const errors = collectPatchErrors(patch);
     if (errors.length) throw new ValidationError("Invalid update", errors);
 
-    const current = await this.repo.get(id);
-    if (!current) return null;
-
-    // Published items must not be silently re-edited/renumbered.
-    if (current.status === "published") {
-      if (patch.seriesNumber !== undefined && patch.seriesNumber !== current.seriesNumber) {
+    // The read-modify-write runs atomically under a row lock (postgres) so a
+    // concurrent update cannot be silently overwritten.
+    return this.repo.atomicUpdate(id, (current) => {
+      // Published items must not be silently re-edited/renumbered.
+      if (
+        current.status === "published" &&
+        patch.seriesNumber !== undefined &&
+        patch.seriesNumber !== current.seriesNumber
+      ) {
         throw new ValidationError("Invalid update", [
           "cannot renumber a published item",
         ]);
       }
-    }
 
-    const next = { ...current };
-    const editable = [
-      "stream",
-      "plannedDate",
-      "category",
-      "topic",
-      "dominantPattern",
-      "text",
-      "imageRequired",
-      "imageBrief",
-      "notes",
-      "seriesNumber",
-    ];
-    let textChanged = false;
-    for (const field of editable) {
-      if (patch[field] !== undefined) {
-        if (field === "text" && patch.text !== current.text) textChanged = true;
-        next[field] = patch[field];
+      const next = { ...current };
+      const editable = [
+        "stream",
+        "plannedDate",
+        "category",
+        "topic",
+        "dominantPattern",
+        "text",
+        "imageRequired",
+        "imageBrief",
+        "notes",
+        "seriesNumber",
+      ];
+      let textChanged = false;
+      for (const field of editable) {
+        if (patch[field] !== undefined) {
+          if (field === "text" && patch.text !== current.text) textChanged = true;
+          next[field] = patch[field];
+        }
       }
-    }
-    if (patch.similarityKeys && typeof patch.similarityKeys === "object") {
-      next.similarityKeys = { ...current.similarityKeys, ...patch.similarityKeys };
-    }
+      if (patch.similarityKeys && typeof patch.similarityKeys === "object") {
+        next.similarityKeys = {
+          ...current.similarityKeys,
+          ...patch.similarityKeys,
+        };
+      }
 
-    if (textChanged) {
-      next.history = withHistorySnapshot(current);
-      next.version = (current.version || 1) + 1;
-    }
-    next.updatedAt = new Date().toISOString();
+      if (textChanged) {
+        next.history = withHistorySnapshot(current);
+        next.version = (current.version || 1) + 1;
+      }
+      next.updatedAt = new Date().toISOString();
 
-    assertValidItem(next);
-    return this.repo.save(next);
+      assertValidItem(next);
+      return next;
+    });
   }
 
   /**
@@ -255,6 +260,33 @@ class PublishingService {
         "publishing requires explicit confirmation",
       ]);
     }
+
+    // Defense-in-depth: refuse to publish a Coffee Break Build number that is
+    // already published on another item. For postgres the authoritative
+    // guarantee is the partial unique index (which also covers true concurrent
+    // publishes); this pre-check provides a clean error and covers the
+    // single-process memory/file adapters.
+    const target = await this.repo.get(id);
+    if (
+      target &&
+      target.stream === COFFEE_BREAK_STREAM &&
+      Number.isInteger(target.seriesNumber)
+    ) {
+      const all = await this.repo.list();
+      const clash = all.some(
+        (i) =>
+          i.id !== id &&
+          i.stream === COFFEE_BREAK_STREAM &&
+          i.status === "published" &&
+          i.seriesNumber === target.seriesNumber
+      );
+      if (clash) {
+        throw new TransitionError(
+          `Coffee Break Build #${target.seriesNumber} is already published; refusing to duplicate the number.`
+        );
+      }
+    }
+
     return this._transition(id, "published", (item) => {
       item.publishedAt = isNonEmptyString(details.publishedAt)
         ? details.publishedAt
@@ -284,15 +316,25 @@ class PublishingService {
    * @param {(item: object) => void} [mutate]
    */
   async _transition(id, to, mutate) {
-    const current = await this.repo.get(id);
-    if (!current) return null;
-    assertTransition(current.status, to);
+    return this.repo.atomicUpdate(id, (current) => {
+      assertTransition(current.status, to);
+      const next = {
+        ...current,
+        status: to,
+        updatedAt: new Date().toISOString(),
+      };
+      if (typeof mutate === "function") mutate(next);
+      assertValidItem(next);
+      return next;
+    });
+  }
 
-    const next = { ...current, status: to, updatedAt: new Date().toISOString() };
-    if (typeof mutate === "function") mutate(next);
-
-    assertValidItem(next);
-    return this.repo.save(next);
+  /**
+   * Storage readiness for the publishing subsystem (safe to expose).
+   * @returns {Promise<{ok:boolean, storage:string, databaseReachable:boolean, migrationsCurrent:boolean}>}
+   */
+  async health() {
+    return this.repo.health();
   }
 
   /**
@@ -366,30 +408,6 @@ function summarize(item) {
     imageRequired: item.imageRequired,
     characterCount: (item.text || "").length,
   };
-}
-
-function applyFilter(items, filter) {
-  let out = items;
-  if (filter.stream && STREAMS.includes(filter.stream)) {
-    out = out.filter((i) => i.stream === filter.stream);
-  }
-  if (filter.status && STATUSES.includes(filter.status)) {
-    out = out.filter((i) => i.status === filter.status);
-  }
-  if (filter.date) {
-    const d = toDateStr(filter.date);
-    out = out.filter((i) => toDateStr(i.plannedDate) === d);
-  }
-  if (filter.topic && String(filter.topic).trim()) {
-    const q = String(filter.topic).toLowerCase().trim();
-    out = out.filter(
-      (i) =>
-        (i.topic || "").toLowerCase().includes(q) ||
-        (i.text || "").toLowerCase().includes(q) ||
-        (i.category || "").toLowerCase().includes(q)
-    );
-  }
-  return out;
 }
 
 function countBy(items, key) {
