@@ -3,11 +3,18 @@
 const { GENERATOR_CATEGORIES } = require("../generator");
 const { STREAMS } = require("./constants");
 const { ValidationError, isNonEmptyString } = require("./validation");
+const {
+  resolveEditorialContext,
+  EditorialResolutionError,
+  EditorialValidationError,
+  NeedsGroundingError,
+  PROFILE_LABELS,
+  OUTPUT_SURFACES,
+  describeScheduleResolution,
+} = require("../editorial");
 
 /**
- * Error thrown when generation is requested but no PostGenerator is configured
- * (e.g. missing OPENAI_API_KEY wiring). Distinct from ValidationError so the
- * HTTP layer can return 503 rather than 400.
+ * Error thrown when generation is requested but no PostGenerator is configured.
  */
 class GenerationUnavailableError extends Error {
   constructor(message = "Generation service unavailable") {
@@ -18,17 +25,13 @@ class GenerationUnavailableError extends Error {
 }
 
 /**
- * Publishing Generation Service (v0.4).
+ * Publishing Generation Service (v0.4) — OROK editorial system.
  *
  * Flow:
- *   Publishing UI → Generation API → this service → PostGenerator interface
- *   → Validated PublishingItem draft → repository → Today's Queue
+ *   schedule/category → resolve editorial profile → OrokPromptBuilder
+ *   → PostGenerator → validate → draft → review queue
  *
- * Safety:
- *   - Creates only idea/draft items, then optionally submits to `review`.
- *   - NEVER auto-approves.
- *   - NEVER marks published.
- *   - NEVER calls X or any external publishing network.
+ * No publishing generation request may proceed without a resolved profile.
  */
 class PublishingGenerationService {
   /**
@@ -45,49 +48,97 @@ class PublishingGenerationService {
     this.postGenerator = deps.postGenerator || null;
   }
 
-  /** Whether a PostGenerator is wired and ready to call. */
   isAvailable() {
-    return Boolean(this.postGenerator && typeof this.postGenerator.generatePosts === "function");
+    return Boolean(
+      this.postGenerator && typeof this.postGenerator.generatePosts === "function"
+    );
   }
 
   /**
-   * Preview candidates without writing to the repository.
+   * Resolve editorial metadata for UI without generating.
    * @param {object} body
-   * @returns {Promise<{ candidates: string[], category: string, idea: string }>}
+   */
+  resolveEditorial(body = {}) {
+    const context = resolveEditorialContext({
+      idea: body.idea || body.topic,
+      topic: body.topic || body.idea,
+      category: body.category,
+      stream: body.stream,
+      surface: body.surface,
+      scheduledFor: body.scheduledFor || body.plannedDate,
+      grounding: body.grounding,
+      profile: body.profile || body.editorialProfile,
+    });
+    return {
+      editorialProfile: context.profile.id,
+      editorialProfileLabel: context.profile.label,
+      surface: context.surface,
+      stream: context.stream,
+      category: context.category,
+      scheduledFor: context.scheduledFor,
+      topic: context.topic,
+      scheduleNote: describeScheduleResolution(context.scheduleMeta),
+      requiresGrounding: context.profile.requiresGrounding,
+    };
+  }
+
+  /**
+   * Preview candidates — requires resolved OROK editorial profile.
    */
   async preview(body = {}) {
     this._assertGenerator();
-    const { idea, category, weeklyPosts, voiceProfile } = this._collectGenerationInput(body);
+
+    let context;
+    try {
+      context = await this._resolveContext(body);
+    } catch (err) {
+      throw mapEditorialError(err);
+    }
+
     const result = await this.postGenerator.generatePosts({
-      idea,
-      category,
-      weeklyPosts,
-      voiceProfile,
+      editorialContext: context,
+      idea: context.topic,
+      topic: context.topic,
+      category: context.category,
+      stream: context.stream,
+      surface: context.surface,
+      grounding: context.grounding,
+      weeklyPosts: context.weeklyPosts,
+      voiceProfile: context.voiceProfile,
+      recentContext: context.recentContext,
     });
-    const candidates = Array.isArray(result.posts) ? result.posts.filter(Boolean) : [];
+
+    const candidates = Array.isArray(result.posts)
+      ? result.posts.filter(Boolean)
+      : [];
     if (!candidates.length) {
       throw new ValidationError("Generation produced no posts", [
         "the generator returned no usable post candidates",
       ]);
     }
-    return { candidates, category, idea };
+
+    return {
+      candidates,
+      category: context.category,
+      idea: context.topic,
+      topic: context.topic,
+      editorialProfile: context.profile.id,
+      editorialProfileLabel: context.profile.label,
+      surface: context.surface,
+      scheduleNote: describeScheduleResolution(context.scheduleMeta),
+      validationStatus:
+        (result.editorial && result.editorial.validationStatus) || "passed",
+      profiles: PROFILE_LABELS,
+      surfaces: OUTPUT_SURFACES,
+    };
   }
 
   /**
-   * Generate (or accept pre-selected text), create a validated draft, and place
-   * it into the review queue (status `review`) by default.
-   *
-   * @param {object} body
-   * @returns {Promise<{
-   *   item: object,
-   *   candidates: string[]|null,
-   *   selectedIndex: number|null,
-   *   duplicateAdvisory: object
-   * }>}
+   * Create a validated draft and place it into the review queue by default.
    */
   async generateDraft(body = {}) {
     const stream = body.stream;
-    const plannedDate = body.plannedDate;
+    const plannedDate = body.plannedDate || body.scheduledFor;
     const errors = [];
 
     if (!STREAMS.includes(stream)) {
@@ -112,19 +163,36 @@ class PublishingGenerationService {
     let candidates = null;
     let selectedIndex = null;
     let text = typeof body.text === "string" ? body.text : "";
+    let editorialMeta = null;
 
-    // If the caller already chose a candidate (from /generate/preview), persist
-    // that text without a second OpenAI call. Otherwise call the generator.
     if (!isNonEmptyString(text)) {
       this._assertGenerator();
-      const { idea, category, weeklyPosts, voiceProfile } =
-        this._collectGenerationInput({ ...body, idea: body.idea || topic });
+      let context;
+      try {
+        context = await this._resolveContext({
+          ...body,
+          topic,
+          idea: body.idea || topic,
+          plannedDate,
+          scheduledFor: body.scheduledFor || plannedDate,
+        });
+      } catch (err) {
+        throw mapEditorialError(err);
+      }
+
       const result = await this.postGenerator.generatePosts({
-        idea,
-        category,
-        weeklyPosts,
-        voiceProfile,
+        editorialContext: context,
+        idea: context.topic,
+        topic: context.topic,
+        category: context.category,
+        stream: context.stream,
+        surface: context.surface,
+        grounding: context.grounding,
+        weeklyPosts: context.weeklyPosts,
+        voiceProfile: context.voiceProfile,
+        recentContext: context.recentContext,
       });
+
       candidates = Array.isArray(result.posts) ? result.posts.filter(Boolean) : [];
       if (!candidates.length) {
         throw new ValidationError("Generation produced no posts", [
@@ -138,11 +206,36 @@ class PublishingGenerationService {
         ]);
       }
       text = candidates[selectedIndex];
+      editorialMeta = result.editorial || {
+        editorialProfile: context.profile.id,
+        surface: context.surface,
+        validationStatus: "passed",
+      };
+    } else {
+      // Selecting a pre-generated candidate — still resolve profile for metadata
+      try {
+        const context = await this._resolveContext({
+          ...body,
+          topic,
+          plannedDate,
+          scheduledFor: body.scheduledFor || plannedDate,
+        });
+        editorialMeta = {
+          editorialProfile: context.profile.id,
+          editorialProfileLabel: context.profile.label,
+          surface: context.surface,
+          validationStatus: "passed",
+        };
+      } catch (_err) {
+        editorialMeta = null;
+      }
     }
 
     const category = isNonEmptyString(body.category)
       ? body.category.trim()
-      : undefined;
+      : editorialMeta && editorialMeta.editorialProfileLabel
+        ? editorialMeta.editorialProfileLabel
+        : undefined;
 
     const createBody = {
       stream,
@@ -166,14 +259,12 @@ class PublishingGenerationService {
     const { item, duplicateAdvisory } =
       await this.publishingService.createDraft(createBody);
 
-    // Default: place into the review queue. Never approve or publish.
     const placeInReview = body.placeInReview !== false;
     let finalItem = item;
     if (placeInReview) {
       finalItem = await this.publishingService.submit(item.id);
     }
 
-    // Defense-in-depth: generation must never produce approved/published.
     if (finalItem.status === "approved" || finalItem.status === "published") {
       throw new Error(
         "Safety violation: generation attempted to produce an approved/published item"
@@ -185,7 +276,44 @@ class PublishingGenerationService {
       candidates,
       selectedIndex,
       duplicateAdvisory,
+      editorialProfile: editorialMeta && editorialMeta.editorialProfile,
+      editorialProfileLabel: editorialMeta && editorialMeta.editorialProfileLabel,
+      surface: editorialMeta && editorialMeta.surface,
+      validationStatus: editorialMeta && editorialMeta.validationStatus,
     };
+  }
+
+  async _resolveContext(body) {
+    const recentContext = await this._loadRecentContext();
+    return resolveEditorialContext({
+      idea: body.idea || body.topic,
+      topic: body.topic || body.idea,
+      category: body.category,
+      stream: body.stream,
+      surface: body.surface || "family-message",
+      scheduledFor: body.scheduledFor || body.plannedDate,
+      plannedDate: body.plannedDate,
+      grounding: body.grounding,
+      weeklyPosts: body.weeklyPosts,
+      voiceProfile: body.voiceProfile,
+      recentContext,
+      profile: body.profile || body.editorialProfile,
+    });
+  }
+
+  async _loadRecentContext() {
+    try {
+      const items = await this.publishingService.listItems({});
+      return items.slice(0, 20).map((i) => ({
+        stream: i.stream,
+        category: i.category,
+        topic: i.topic,
+        text: i.text,
+        status: i.status,
+      }));
+    } catch (_err) {
+      return [];
+    }
   }
 
   _assertGenerator() {
@@ -195,39 +323,20 @@ class PublishingGenerationService {
       );
     }
   }
+}
 
-  /**
-   * @param {object} body
-   * @returns {{ idea: string, category: string, weeklyPosts?: string, voiceProfile?: object }}
-   */
-  _collectGenerationInput(body) {
-    const idea = isNonEmptyString(body.idea)
-      ? body.idea.trim()
-      : isNonEmptyString(body.topic)
-        ? body.topic.trim()
-        : "";
-    const category = isNonEmptyString(body.category) ? body.category.trim() : "";
-    const errors = [];
-    if (!idea) errors.push("idea (or topic) is required for generation");
-    if (!category) errors.push("category is required for generation");
-    else if (!GENERATOR_CATEGORIES.includes(category)) {
-      errors.push(
-        `category must be one of: ${GENERATOR_CATEGORIES.join(", ")}`
-      );
-    }
-    if (errors.length) throw new ValidationError("Invalid generation request", errors);
-
-    return {
-      idea,
-      category,
-      weeklyPosts:
-        typeof body.weeklyPosts === "string" ? body.weeklyPosts : undefined,
-      voiceProfile:
-        body.voiceProfile && typeof body.voiceProfile === "object"
-          ? body.voiceProfile
-          : undefined,
-    };
+function mapEditorialError(err) {
+  if (
+    err instanceof EditorialResolutionError ||
+    err instanceof EditorialValidationError ||
+    err instanceof NeedsGroundingError
+  ) {
+    const mapped = new ValidationError(err.message, err.errors || err.missing || []);
+    mapped.code = err.code || err.name;
+    mapped.statusCode = err.statusCode || 400;
+    return mapped;
   }
+  return err;
 }
 
 module.exports = {

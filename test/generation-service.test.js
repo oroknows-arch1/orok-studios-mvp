@@ -29,9 +29,12 @@ test("preview returns candidates without persisting", async () => {
   const result = await generationService.preview({
     idea: "consistency",
     category: "Motivation Monday",
+    surface: "family-message",
   });
   assert.ok(Array.isArray(result.candidates));
   assert.equal(result.candidates.length, 3);
+  assert.equal(result.editorialProfile, "motivation");
+  assert.equal(result.surface, "family-message");
   assert.equal((await publishingService.listItems()).length, before);
 });
 
@@ -49,7 +52,7 @@ test("generateDraft creates a draft and places it in review by default", async (
   assert.equal(item.stream, "orok-morning");
   assert.equal(item.topic, "consistency under pressure");
   assert.equal(item.category, "Motivation Monday");
-  assert.ok(item.text.includes("Stub post"));
+  assert.match(item.text, /Morning everyone/);
   assert.ok(Array.isArray(candidates));
   assert.equal(selectedIndex, 0);
   assert.ok(duplicateAdvisory);
@@ -128,7 +131,12 @@ test("Coffee Break Build generation reserves the next number", async () => {
     stream: "coffee-break-build",
     plannedDate: "2026-07-16",
     idea: "build #002",
-    category: "Friday Freestyle",
+    category: "Coffee Break Build",
+    grounding: {
+      stage: "implementation",
+      problem: "editorial wiring",
+      lesson: "resolve profile before generate",
+    },
   });
   assert.equal(item.seriesNumber, 2);
   assert.equal(item.status, "review");

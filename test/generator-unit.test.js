@@ -10,15 +10,12 @@ const {
   StubPostGenerator,
 } = require("../src/generator");
 
-test("GENERATOR_CATEGORIES matches the Create Post UI set", () => {
-  assert.deepEqual(GENERATOR_CATEGORIES, [
-    "Motivation Monday",
-    "Masters of Today",
-    "Wisdom Wednesday",
-    "Masters of Yesterday",
-    "Friday Recap",
-    "Friday Freestyle",
-  ]);
+test("GENERATOR_CATEGORIES includes full OROK editorial set", () => {
+  assert.ok(GENERATOR_CATEGORIES.includes("Motivation Monday"));
+  assert.ok(GENERATOR_CATEGORIES.includes("Cultural Series"));
+  assert.ok(GENERATOR_CATEGORIES.includes("Coffee Break Build"));
+  assert.ok(GENERATOR_CATEGORIES.includes("Long Game"));
+  assert.ok(GENERATOR_CATEGORIES.includes("Saturday Mixed Pack"));
 });
 
 test("cleanPost wraps with greeting and signoff", () => {
@@ -44,12 +41,15 @@ test("processGeneratedPosts splits on --- and adds hashtags", () => {
   }
 });
 
-test("StubPostGenerator never needs OpenAI", async () => {
+test("StubPostGenerator never needs OpenAI and uses editorial profile", async () => {
   const gen = new StubPostGenerator();
   const result = await gen.generatePosts({
     idea: "growth",
     category: "Motivation Monday",
+    surface: "family-message",
   });
   assert.equal(result.posts.length, 3);
   assert.ok(result.text.includes("\n\n\n"));
+  assert.equal(result.editorial.editorialProfile, "motivation");
+  assert.equal(result.editorial.validationStatus, "passed");
 });

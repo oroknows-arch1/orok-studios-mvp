@@ -109,12 +109,17 @@
   .candidate.selected { border-color: var(--accent); background: rgba(110,168,254,.08); }
   .candidate .cand-meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
   .btn.accent { border-color: var(--accent); color: var(--accent); }
+  .gen-cost {
+    border: 1px dashed var(--border); border-radius: 8px;
+    padding: 10px 12px; margin: 10px 0 14px; font-size: 12px; color: var(--muted);
+  }
+  .gen-cost strong { color: var(--text); }
 </style>
 </head>
 <body>
 <header>
   <h1>OROK Studios</h1>
-  <span class="tag">Publishing v0.4 · draft generation · manual approval</span>
+  <span class="tag">Publishing v0.4 · OROK editorial · manual approval</span>
   <nav>
     <button data-view="dashboard" class="active">Dashboard</button>
     <button data-view="queue">Today's Queue</button>
@@ -139,7 +144,7 @@
       <h3 id="generateHeading">Generate Draft</h3>
       <button class="close" data-close="generateOverlay" aria-label="Close generate draft dialog">&times;</button>
     </div>
-    <p class="sub" style="margin-top:0;">Uses the existing OROK generator. Creates a draft and places it into the review queue — never auto-approves or publishes.</p>
+    <p class="sub" style="margin-top:0;">Uses the canonical OROK editorial system. Creates a draft and places it into the review queue — never auto-approves or publishes. Generation refuses to run without a resolved editorial profile.</p>
     <form id="generateForm">
       <div class="row">
         <div class="field">
@@ -152,7 +157,7 @@
           </select>
         </div>
         <div class="field">
-          <label>Planned date</label>
+          <label>Scheduled / planned date</label>
           <input type="date" name="plannedDate" id="genDate" required />
         </div>
         <div class="field" id="genSeriesField" style="display:none;">
@@ -162,29 +167,47 @@
       </div>
       <div class="row">
         <div class="field">
-          <label>Generator category</label>
-          <select id="genCategory" required>
+          <label>Post type (editorial category)</label>
+          <select id="genCategory">
+            <option value="">(resolve from schedule)</option>
             <option>Motivation Monday</option>
             <option>Masters of Today</option>
             <option>Wisdom Wednesday</option>
             <option>Masters of Yesterday</option>
+            <option>Cultural Series</option>
             <option>Friday Recap</option>
             <option>Friday Freestyle</option>
+            <option>Coffee Break Build</option>
+            <option>Long Game</option>
+            <option>Saturday Mixed Pack</option>
           </select>
         </div>
         <div class="field">
-          <label>Idea / topic</label>
-          <input type="text" id="genIdea" required placeholder="e.g. staying consistent under pressure" />
+          <label>Output surface</label>
+          <select id="genSurface">
+            <option value="family-message">Family message</option>
+            <option value="x-post">X post</option>
+          </select>
         </div>
       </div>
+      <div class="field">
+        <label>Topic / subject</label>
+        <input type="text" id="genIdea" required placeholder="e.g. Boonwurrung people, consistency under pressure" />
+      </div>
+      <div id="genResolveMeta" class="gen-cost" style="margin-top:0;" aria-live="polite">Resolving editorial profile…</div>
       <div class="field" id="genWeeklyWrap" style="display:none;">
         <label>Weekly posts / notes (Friday Recap)</label>
         <textarea id="genWeeklyPosts" rows="5" placeholder="Paste Monday–Thursday posts here..."></textarea>
+      </div>
+      <div class="field" id="genGroundingWrap" style="display:none;">
+        <label>Factual grounding (JSON — required for Cultural Series, Masters, Coffee Break Build)</label>
+        <textarea id="genGrounding" rows="6" placeholder='{"nation":"...","region":"...","practices":["..."],"continuity":"..."}'></textarea>
       </div>
       <div class="field">
         <label><input type="checkbox" id="genImageRequired" style="width:auto;margin-right:6px;" /> Image required</label>
       </div>
       <div id="generateStatus" class="muted" style="margin-bottom:10px;" aria-live="polite"></div>
+      <div id="generateEditorialAfter" class="gen-cost" hidden></div>
       <div id="generateCandidates"></div>
       <div id="generateAdvisory"></div>
       <div class="modal-actions">
@@ -471,10 +494,11 @@ async function renderArchive() {
   } catch (e) { el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 
-/* ---------- Generate Draft (v0.4) ---------- */
+/* ---------- Generate Draft (v0.4 OROK editorial) ---------- */
 const generateOverlay = document.getElementById("generateOverlay");
 let genCandidates = [];
 let genSelectedIndex = 0;
+let genResolved = null;
 document.getElementById("generateDraftBtn").addEventListener("click", openGenerate);
 async function openGenerate() {
   document.getElementById("generateForm").reset();
@@ -482,18 +506,29 @@ async function openGenerate() {
   document.getElementById("generateCandidates").innerHTML = "";
   document.getElementById("generateAdvisory").innerHTML = "";
   document.getElementById("generateStatus").textContent = "";
+  document.getElementById("generateEditorialAfter").hidden = true;
   document.getElementById("genQueueBtn").disabled = true;
   genCandidates = [];
   genSelectedIndex = 0;
+  genResolved = null;
   toggleGenWeekly();
   updateGenSeriesField();
   generateOverlay.classList.add("open");
+  refreshGenResolve();
 }
-document.getElementById("genStream").addEventListener("change", updateGenSeriesField);
-document.getElementById("genCategory").addEventListener("change", toggleGenWeekly);
+document.getElementById("genStream").addEventListener("change", () => { updateGenSeriesField(); refreshGenResolve(); });
+document.getElementById("genCategory").addEventListener("change", () => { toggleGenWeekly(); refreshGenResolve(); });
+document.getElementById("genSurface").addEventListener("change", refreshGenResolve);
+document.getElementById("genDate").addEventListener("change", refreshGenResolve);
+document.getElementById("genIdea").addEventListener("change", refreshGenResolve);
 function toggleGenWeekly() {
+  const cat = document.getElementById("genCategory").value;
   document.getElementById("genWeeklyWrap").style.display =
-    document.getElementById("genCategory").value === "Friday Recap" ? "block" : "none";
+    cat === "Friday Recap" ? "block" : "none";
+  const needsGrounding = [
+    "Cultural Series", "Masters of Today", "Masters of Yesterday", "Coffee Break Build"
+  ].includes(cat) || document.getElementById("genStream").value === "coffee-break-build" && !cat;
+  document.getElementById("genGroundingWrap").style.display = needsGrounding ? "block" : "none";
 }
 async function updateGenSeriesField() {
   const stream = document.getElementById("genStream").value;
@@ -508,6 +543,42 @@ async function updateGenSeriesField() {
     field.style.display = "none";
     document.getElementById("genSeries").value = "";
   }
+  toggleGenWeekly();
+}
+async function refreshGenResolve() {
+  const meta = document.getElementById("genResolveMeta");
+  const topic = document.getElementById("genIdea").value.trim() || "(topic required)";
+  const body = {
+    stream: document.getElementById("genStream").value,
+    plannedDate: document.getElementById("genDate").value,
+    scheduledFor: document.getElementById("genDate").value,
+    category: document.getElementById("genCategory").value || undefined,
+    surface: document.getElementById("genSurface").value,
+    topic,
+    idea: topic,
+  };
+  try {
+    genResolved = await api("/generate/resolve", { method: "POST", body: JSON.stringify(body) });
+    meta.innerHTML =
+      "<strong>Before generation</strong><br/>" +
+      "Stream: " + esc(STREAM_LABELS[genResolved.stream] || genResolved.stream || "—") +
+      " · Post type: " + esc(genResolved.editorialProfileLabel || genResolved.editorialProfile) +
+      " · Surface: " + esc(genResolved.surface) +
+      " · Scheduled: " + esc(genResolved.scheduledFor || "—") +
+      " · Topic: " + esc(genResolved.topic) +
+      "<br/><span class='muted'>" + esc(genResolved.scheduleNote || "") +
+      (genResolved.requiresGrounding ? " · Factual grounding required" : "") + "</span>";
+  } catch (err) {
+    genResolved = null;
+    meta.innerHTML = "<strong>Editorial profile not resolved</strong> — " + esc(err.message) +
+      "<br/><span class='muted'>Generation will refuse generic content until this is fixed.</span>";
+  }
+}
+function parseGrounding() {
+  const raw = document.getElementById("genGrounding").value.trim();
+  if (!raw) return undefined;
+  try { return JSON.parse(raw); }
+  catch (_e) { throw new Error("Grounding must be valid JSON"); }
 }
 function renderCandidates(list) {
   const el = document.getElementById("generateCandidates");
@@ -529,20 +600,33 @@ document.getElementById("generateForm").addEventListener("submit", async (e) => 
   e.preventDefault();
   const status = document.getElementById("generateStatus");
   const btn = document.getElementById("genPreviewBtn");
-  status.textContent = "Generating options…";
+  status.textContent = "Generating OROK options…";
   btn.disabled = true;
   document.getElementById("genQueueBtn").disabled = true;
   document.getElementById("generateAdvisory").innerHTML = "";
   try {
     const body = {
+      stream: document.getElementById("genStream").value,
+      plannedDate: document.getElementById("genDate").value,
+      scheduledFor: document.getElementById("genDate").value,
       idea: document.getElementById("genIdea").value,
-      category: document.getElementById("genCategory").value,
+      topic: document.getElementById("genIdea").value,
+      category: document.getElementById("genCategory").value || undefined,
+      surface: document.getElementById("genSurface").value,
       weeklyPosts: document.getElementById("genWeeklyPosts").value || undefined,
+      grounding: parseGrounding(),
     };
     const res = await api("/generate/preview", { method: "POST", body: JSON.stringify(body) });
     genCandidates = res.candidates || [];
     genSelectedIndex = 0;
     renderCandidates(genCandidates);
+    const after = document.getElementById("generateEditorialAfter");
+    after.hidden = false;
+    after.innerHTML =
+      "<strong>After generation</strong><br/>" +
+      "Editorial profile: " + esc(res.editorialProfileLabel || res.editorialProfile) +
+      " · Surface: " + esc(res.surface) +
+      " · Validation: " + esc(res.validationStatus || "passed");
     document.getElementById("genQueueBtn").disabled = genCandidates.length === 0;
     status.textContent = genCandidates.length
       ? "Select a candidate, then add it to the review queue."
@@ -561,13 +645,19 @@ document.getElementById("genQueueBtn").addEventListener("click", async () => {
   status.textContent = "Creating draft in review queue…";
   btn.disabled = true;
   const stream = document.getElementById("genStream").value;
+  let grounding;
+  try { grounding = parseGrounding(); }
+  catch (err) { toast(err.message, "error"); btn.disabled = false; return; }
   const body = {
     stream,
     plannedDate: document.getElementById("genDate").value,
+    scheduledFor: document.getElementById("genDate").value,
     topic: document.getElementById("genIdea").value,
     idea: document.getElementById("genIdea").value,
-    category: document.getElementById("genCategory").value,
+    category: document.getElementById("genCategory").value || undefined,
+    surface: document.getElementById("genSurface").value,
     text: genCandidates[genSelectedIndex],
+    grounding,
     imageRequired: document.getElementById("genImageRequired").checked,
     placeInReview: true,
   };
@@ -580,7 +670,7 @@ document.getElementById("genQueueBtn").addEventListener("click", async () => {
       document.getElementById("generateAdvisory").innerHTML =
         '<div class="advisory">⚠ Advisory: this draft resembles an existing item ("' + esc(m.topic) + '") on ' + m.matchedDimensions.length + ' dimensions (' + esc(m.matchedDimensions.join(", ")) + '). Draft was still queued for review — approve manually before publishing.</div>';
     }
-    toast("Draft added to review queue", "ok");
+    toast("Draft added to review queue (" + (res.editorialProfileLabel || res.editorialProfile || "OROK") + ")", "ok");
     generateOverlay.classList.remove("open");
     show("queue");
     if (res.item && res.item.id) openReview(res.item.id);

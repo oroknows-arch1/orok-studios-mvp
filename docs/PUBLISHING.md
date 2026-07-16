@@ -53,17 +53,24 @@ src/publishing/
 test/                         node:test suites (unit, service, HTTP integration)
 ```
 
-### Draft Generation flow (v0.4)
+### Draft Generation flow (v0.4) — OROK editorial system
 
 ```
-Publishing UI
-→ Generation API (/api/publishing/generate[/preview])
-→ Publishing Generation Service
-→ PostGenerator interface (existing OpenAI capability)
-→ Validated PublishingItem draft
-→ PostgreSQL (or file/memory) repository
-→ Today's Queue (status: review)
+Publishing schedule / explicit category
+→ resolve today’s stream and post type
+→ load canonical OROK editorial profile (src/editorial)
+→ OrokPromptBuilder (core voice + profile + surface + grounding)
+→ PostGenerator
+→ validate against profile
+→ draft candidates
+→ review queue
 ```
+
+**No publishing generation request may proceed without a resolved editorial
+profile.** Missing profile → explicit error (never generic fallback).
+
+Canonical editorial source of truth: `src/editorial/`
+(profiles, voice, schedule, formatting, prompt-builder, validation, examples).
 
 Safety rules for generation:
 
@@ -72,10 +79,15 @@ Safety rules for generation:
 - Generation **never** marks an item published.
 - There is **no** X / network publishing from this path.
 - Manual draft creation (`POST /items`) remains fully supported.
+- Cultural / Masters / Coffee Break Build profiles require factual `grounding`.
+- Family message and X are distinct output surfaces (not one post trimmed twice).
+
+Historical approved OROK examples should be imported next into
+`src/editorial/examples/` (labelled by profile, surface, quality, topic, date).
+Do not invent a two-year archive.
 
 The legacy Create Post routes (`/generate`, `/generate-image`, `/analyze-voice`)
-keep working. `/generate` now calls the same `PostGenerator` instance that
-Publishing uses.
+keep working. `/generate` uses the same canonical editorial `PostGenerator`.
 
 ---
 
@@ -282,7 +294,8 @@ Base path: `/api/publishing`
 | GET | `/dashboard` | dashboard summary |
 | GET | `/next-number?stream=` | suggested next series number |
 | POST | `/check-duplicates` | advisory duplicate check for a candidate |
-| POST | `/generate/preview` | **v0.4** generate candidate posts (no persistence) |
+| POST | `/generate/resolve` | **v0.4** resolve editorial profile/surface/schedule (no OpenAI) |
+| POST | `/generate/preview` | **v0.4** generate OROK candidates (requires resolved profile) |
 | POST | `/generate` | **v0.4** create draft from generation/selection → review queue |
 | GET | `/health` | storage readiness (safe fields only; 200 ok / 503 not) |
 

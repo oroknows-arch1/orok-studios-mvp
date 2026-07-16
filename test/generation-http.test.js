@@ -42,11 +42,15 @@ test("POST /api/publishing/generate/preview returns candidates", async () => {
       body: JSON.stringify({
         idea: "consistency",
         category: "Motivation Monday",
+        surface: "family-message",
+        stream: "orok-morning",
       }),
     });
     assert.equal(res.status, 200);
     const body = await res.json();
     assert.equal(body.candidates.length, 3);
+    assert.equal(body.editorialProfile, "motivation");
+    assert.equal(body.surface, "family-message");
   } finally {
     await close();
   }
@@ -63,6 +67,7 @@ test("POST /api/publishing/generate creates review-queue item (never approved/pu
         plannedDate: "2026-07-16",
         idea: "http generated draft",
         category: "Motivation Monday",
+        surface: "family-message",
         selectedIndex: 1,
       }),
     });
@@ -97,8 +102,14 @@ test("POST /api/publishing/generate with text skips OpenAI and queues review", a
         stream: "coffee-break-build",
         plannedDate: "2026-07-16",
         topic: "cbb generated",
-        category: "Friday Freestyle",
+        category: "Coffee Break Build",
+        surface: "family-message",
         text,
+        grounding: {
+          stage: "implementation",
+          problem: "generic prompts",
+          lesson: "use editorial profiles",
+        },
         placeInReview: true,
       }),
     });

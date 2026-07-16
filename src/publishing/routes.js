@@ -4,6 +4,11 @@ const express = require("express");
 const { ValidationError } = require("./validation");
 const { TransitionError } = require("./transitions");
 const { GenerationUnavailableError } = require("./generation-service");
+const {
+  EditorialResolutionError,
+  EditorialValidationError,
+  NeedsGroundingError,
+} = require("../editorial");
 
 /**
  * Build an Express router for the publishing system, backed by the given
@@ -21,9 +26,24 @@ function createPublishingRouter(service, opts = {}) {
     try {
       await handler(req, res);
     } catch (err) {
+      if (
+        err instanceof NeedsGroundingError ||
+        err instanceof EditorialValidationError ||
+        err instanceof EditorialResolutionError
+      ) {
+        return res.status(err.statusCode || 422).json({
+          error: err.message,
+          errors: err.errors || err.missing || [],
+          code: err.code || err.name,
+        });
+      }
       if (err instanceof ValidationError) {
-        // ValidationError messages are curated, user-facing, and secret-free.
-        return res.status(400).json({ error: err.message, errors: err.errors });
+        const status = err.statusCode && err.statusCode !== 400 ? err.statusCode : 400;
+        return res.status(status).json({
+          error: err.message,
+          errors: err.errors,
+          code: err.code,
+        });
       }
       if (err instanceof TransitionError) {
         return res.status(409).json({ error: err.message });
@@ -81,8 +101,20 @@ function createPublishingRouter(service, opts = {}) {
     })
   );
 
-  // --- Draft Generation v0.4 ----------------------------------------------
-  // Preview candidates (no persistence). Never approves or publishes.
+  // --- Draft Generation v0.4 (OROK editorial) -----------------------------
+  // Resolve profile/surface/schedule without generating.
+  router.post(
+    "/generate/resolve",
+    wrap(async (req, res) => {
+      if (!generationService) {
+        throw new GenerationUnavailableError();
+      }
+      res.json(generationService.resolveEditorial(req.body || {}));
+    })
+  );
+
+  // Preview candidates (no publishing-item persistence). Never approves/publishes.
+  // Refuses to run without a resolved OROK editorial profile.
   router.post(
     "/generate/preview",
     wrap(async (req, res) => {

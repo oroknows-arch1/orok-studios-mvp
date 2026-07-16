@@ -113,20 +113,44 @@ app.post("/analyze-voice", async (req, res) => {
 });
 
 app.post("/generate", async (req, res) => {
-  const { idea, category, weeklyPosts, voiceProfile } = req.body;
+  const {
+    idea,
+    category,
+    weeklyPosts,
+    voiceProfile,
+    surface,
+    stream,
+    grounding,
+    scheduledFor,
+  } = req.body;
 
   try {
-    // Existing generator UI path — same PostGenerator used by Publishing v0.4.
+    // Same canonical OROK editorial PostGenerator used by Publishing v0.4.
     const result = await postGenerator.generatePosts({
       idea,
+      topic: idea,
       category,
       weeklyPosts,
       voiceProfile,
+      surface: surface || "family-message",
+      stream,
+      grounding,
+      scheduledFor,
     });
-    res.json({ text: result.text });
+    res.json({
+      text: result.text,
+      editorialProfile: result.editorial && result.editorial.editorialProfile,
+      surface: result.editorial && result.editorial.surface,
+      validationStatus: result.editorial && result.editorial.validationStatus,
+    });
   } catch (err) {
     console.error("SERVER ERROR:", err);
-    res.status(500).json({ error: err.message });
+    const status = err.statusCode || 500;
+    res.status(status).json({
+      error: err.message,
+      errors: err.errors || err.missing,
+      code: err.code || err.name,
+    });
   }
 });
 
