@@ -19,14 +19,17 @@ function createPublishingRouter(service) {
       await handler(req, res);
     } catch (err) {
       if (err instanceof ValidationError) {
+        // ValidationError messages are curated, user-facing, and secret-free.
         return res.status(400).json({ error: err.message, errors: err.errors });
       }
       if (err instanceof TransitionError) {
         return res.status(409).json({ error: err.message });
       }
+      // Unexpected errors (e.g. database/driver errors) may contain SQL or
+      // internal details, so log server-side only and return a generic message.
       // eslint-disable-next-line no-console
-      console.error("PUBLISHING ERROR:", err);
-      return res.status(500).json({ error: err.message || "Internal error" });
+      console.error("PUBLISHING ERROR:", err && err.message ? err.message : err);
+      return res.status(500).json({ error: "Internal server error" });
     }
   };
 
