@@ -339,13 +339,17 @@ async function renderLedger() {
       '<select id="fStatus"><option value="">All statuses</option>' + ["idea","draft","review","approved","published","archived","rejected"].map((s) => '<option>' + s + '</option>').join("") + '</select>' +
       '<input type="date" id="fDate" />' +
       '<input type="text" id="fTopic" placeholder="Search topic/text..." />' +
+      '<input type="text" id="fPattern" placeholder="Pattern..." />' +
+      '<input type="text" id="fPublisher" placeholder="Publisher..." />' +
+      '<input type="number" id="fYear" placeholder="Year" min="2000" max="2100" style="width:5.5rem;" />' +
+      '<input type="text" id="fSource" placeholder="Source title/URL..." />' +
       '<button class="btn" id="fClear">Clear</button>' +
     '</div><div id="ledgerTable"></div>';
-  ["fStream","fStatus","fDate","fTopic"].forEach((id) => {
+  ["fStream","fStatus","fDate","fTopic","fPattern","fPublisher","fYear","fSource"].forEach((id) => {
     document.getElementById(id).addEventListener("input", loadLedger);
   });
   document.getElementById("fClear").addEventListener("click", () => {
-    ["fStream","fStatus","fDate","fTopic"].forEach((id) => (document.getElementById(id).value = ""));
+    ["fStream","fStatus","fDate","fTopic","fPattern","fPublisher","fYear","fSource"].forEach((id) => (document.getElementById(id).value = ""));
     loadLedger();
   });
   loadLedger();
@@ -357,17 +361,25 @@ async function loadLedger() {
   if (s("fStatus")) q.set("status", s("fStatus"));
   if (s("fDate")) q.set("date", s("fDate"));
   if (s("fTopic")) q.set("topic", s("fTopic"));
+  if (s("fPattern")) q.set("pattern", s("fPattern"));
+  if (s("fPublisher")) q.set("publisher", s("fPublisher"));
+  if (s("fYear")) q.set("year", s("fYear"));
+  if (s("fSource")) q.set("source", s("fSource"));
   const target = document.getElementById("ledgerTable");
   try {
     const { items } = await api("/items?" + q.toString());
     if (!items.length) { target.innerHTML = '<div class="empty">No matching items.</div>'; return; }
-    target.innerHTML = '<table><thead><tr><th>ID</th><th>Date</th><th>Stream</th><th>#</th><th>Topic</th><th>Ver</th><th>Status</th><th>Published</th><th>URL</th></tr></thead><tbody>' +
+    target.innerHTML = '<table><thead><tr><th>ID</th><th>Date</th><th>Stream</th><th>#</th><th>Topic</th><th>Pattern</th><th>Sources</th><th>Ver</th><th>Status</th><th>Published</th><th>URL</th></tr></thead><tbody>' +
       items.map((i) => '<tr style="cursor:pointer;" onclick="openReview(\'' + i.id + '\')">' +
         '<td class="muted">' + esc(i.id.slice(0, 8)) + '</td>' +
         '<td>' + fmtDate(i.plannedDate) + '</td>' +
         '<td>' + esc(STREAM_LABELS[i.stream] || i.stream) + '</td>' +
         '<td>' + (i.seriesNumber ? "#" + String(i.seriesNumber).padStart(3, "0") : "—") + '</td>' +
         '<td>' + esc(i.topic) + '</td>' +
+        '<td class="muted">' + esc(i.dominantPattern || "—") + '</td>' +
+        '<td>' + (Array.isArray(i.sources) && i.sources.length
+          ? i.sources.length + ' <span class="muted">(' + esc((i.sources[0] && i.sources[0].publisher) || "link") + ')</span>'
+          : "—") + '</td>' +
         '<td>' + i.version + '</td>' +
         '<td>' + badge(i.status) + '</td>' +
         '<td>' + fmtDate(i.publishedAt) + '</td>' +
@@ -470,11 +482,21 @@ async function openReview(id) {
     document.getElementById("reviewImageBrief").value = item.imageBrief || "";
     updateReviewCharCount();
     const sk = item.similarityKeys || {};
+    const sourcesHtml = Array.isArray(item.sources) && item.sources.length
+      ? item.sources.map((s) =>
+          '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>' +
+          (s.publisher ? ' <span class="muted">(' + esc(s.publisher) + ')</span>' : "")
+        ).join("<br>")
+      : "—";
     document.getElementById("reviewMeta").innerHTML =
       kv("Stream", STREAM_LABELS[item.stream] || item.stream) +
       kv("Series #", item.seriesNumber ? "#" + String(item.seriesNumber).padStart(3, "0") : "—") +
       kv("Topic", item.topic) +
       kv("Category", item.category || "—") +
+      kv("Macro Signal", item.macroSignal || "—") +
+      kv("Dominant Pattern", item.dominantPattern || "—") +
+      kv("Family Lesson", item.familyLesson || "—") +
+      '<div class="k">Sources</div><div>' + sourcesHtml + '</div>' +
       kv("Status", item.status) +
       kv("Version", item.version) +
       kv("Planned", fmtDate(item.plannedDate)) +

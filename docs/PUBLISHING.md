@@ -40,6 +40,7 @@ src/publishing/
   service.js                  business rules; seeds Coffee Break Build #001
   routes.js                   Express router (mounted at /api/publishing)
   index.js                    wires repository + service + router together
+  long-game/                  Amendment 001 — Weekly Intelligence Brief engine
   ui/index.html               self-contained single-page UI (served at /publishing)
 test/                         node:test suites (unit, service, HTTP integration)
 ```
@@ -242,7 +243,7 @@ Base path: `/api/publishing`
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/items` | list items (filters: `stream`, `status`, `date`, `topic`) |
+| GET | `/items` | list items (filters: `stream`, `status`, `date`, `topic`, `pattern`, `publisher`, `year`, `source`) |
 | GET | `/items/:id` | get one item |
 | POST | `/items` | create a draft/idea (returns `duplicateAdvisory`) |
 | PATCH | `/items/:id` | edit editable fields (not status) |
@@ -255,6 +256,9 @@ Base path: `/api/publishing`
 | GET | `/next-number?stream=` | suggested next series number |
 | POST | `/check-duplicates` | advisory duplicate check for a candidate |
 | GET | `/health` | storage readiness (safe fields only; 200 ok / 503 not) |
+| GET | `/long-game/categories` | weekly source categories for The Long Game |
+| POST | `/long-game/analyze` | run Weekly Intelligence Brief without persisting |
+| POST | `/long-game/generate` | generate brief + store sunday-long-game draft in the ledger |
 
 `GET /api/publishing/health` returns only safe information and never exposes
 credentials, hostnames, SQL, stack traces, or file paths:
@@ -269,3 +273,35 @@ unhealthy, unless the selected repository cannot be safely initialised at startu
 
 All request bodies are validated; validation failures return `400` with an
 `errors` array, illegal transitions return `409`.
+
+---
+
+## 12. Amendment 001 — Sunday Long Game Intelligence Engine
+
+The Sunday Long Game workflow is a **Weekly Intelligence Brief**, not a manual
+financial summary. Module: `src/publishing/long-game/`.
+
+Process for every weekly edition:
+
+1. Collect relevant macro developments across weekly source categories
+2. Identify recurring themes / remove noise
+3. Determine the week's dominant pattern
+4. Translate that pattern into practical family decision making
+5. Generate the Long Game post (family text + X text) with sources
+
+**Post format (required):** Title, Body, One practical family lesson, Macro
+Signal, Dominant Pattern, Sources.
+
+**Sources (mandatory for Sunday Long Game only):** every edition finishes with a
+`Sources` section containing **2–5 clickable** primary links (RBA, ABS, ASIC,
+Treasury, company reports, government announcements, official research).
+Reputable financial journalism is acceptable when primary sources are
+unavailable.
+
+**Do not** attach sources to Motivation Monday, Words of Wisdom, Masters of
+Today, Masters of Yesterday, or Coffee Break Build.
+
+**Ledger fields:** `macroSignal`, `dominantPattern`, `familyLesson`, and
+`sources[]` (`title`, `url`, `publisher`, `publicationDate`, `accessDate`,
+optional `topic`/`category`). Historical editions retain source references.
+Editions are searchable by topic, pattern, publisher, year, and source.

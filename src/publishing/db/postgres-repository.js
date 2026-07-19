@@ -1,12 +1,14 @@
 "use strict";
 
+const crypto = require("crypto");
 const { PublishingRepository } = require("../repository-interface");
-const { rowToModel, modelToValues, COLUMNS } = require("./mapper");
+const { rowToModel, modelToValues, COLUMNS, sourcesToRows } = require("./mapper");
 const { migrationStatus } = require("./migrate");
 const { TransitionError } = require("../transitions");
 const { STREAMS, STATUSES } = require("../constants");
 
 const TABLE = "publishing_items";
+const SOURCES_TABLE = "publishing_long_game_sources";
 const SELECT_ALL = `SELECT * FROM ${TABLE}`;
 
 /**
@@ -33,29 +35,7 @@ class PostgresPublishingRepository extends PublishingRepository {
   async init() {}
 
   async list(filter = {}) {
-    const where = [];
-    const values = [];
-    let n = 1;
-    if (filter.stream && STREAMS.includes(filter.stream)) {
-      where.push(`stream = $${n++}`);
-      values.push(filter.stream);
-    }
-    if (filter.status && STATUSES.includes(filter.status)) {
-      where.push(`status = $${n++}`);
-      values.push(filter.status);
-    }
-    if (filter.date) {
-      where.push(`planned_date = $${n++}`);
-      values.push(String(filter.date).slice(0, 10));
-    }
-    if (filter.topic && String(filter.topic).trim()) {
-      const q = `%${String(filter.topic).trim()}%`;
-      where.push(
-        `(topic ILIKE $${n} OR text ILIKE $${n} OR COALESCE(category,'') ILIKE $${n})`
-      );
-      values.push(q);
-      n++;
-    }
+    const { where, values } = buildFilter(filter);
     const sql =
       SELECT_ALL +
       (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
@@ -70,35 +50,50 @@ class PostgresPublishingRepository extends PublishingRepository {
   }
 
   async create(item) {
-    const values = modelToValues(item);
-    const placeholders = COLUMNS.map((_, i) => `$${i + 1}`).join(", ");
-    const sql = `INSERT INTO ${TABLE} (${COLUMNS.join(", ")}) VALUES (${placeholders}) RETURNING *`;
+    const client = await this.pool.connect();
     try {
-      const res = await this.pool.query(sql, values);
+      await client.query("BEGIN");
+      const values = modelToValues(item);
+      const placeholders = COLUMNS.map((_, i) => `$${i + 1}`).join(", ");
+      const sql = `INSERT INTO ${TABLE} (${COLUMNS.join(", ")}) VALUES (${placeholders}) RETURNING *`;
+      const res = await client.query(sql, values);
+      await syncSources(client, item);
+      await client.query("COMMIT");
       return rowToModel(res.rows[0]);
     } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
       throw mapPgError(err);
+    } finally {
+      client.release();
     }
   }
 
   async save(item) {
-    const values = modelToValues(item);
-    const updates = COLUMNS.filter((c) => c !== "id")
-      .map((c, i) => `${c} = $${i + 2}`)
-      .join(", ");
-    const placeholders = COLUMNS.map((_, i) => `$${i + 1}`).join(", ");
-    const sql =
-      `INSERT INTO ${TABLE} (${COLUMNS.join(", ")}) VALUES (${placeholders}) ` +
-      `ON CONFLICT (id) DO UPDATE SET ${updates} RETURNING *`;
+    const client = await this.pool.connect();
     try {
-      const res = await this.pool.query(sql, values);
+      await client.query("BEGIN");
+      const values = modelToValues(item);
+      const updates = COLUMNS.filter((c) => c !== "id")
+        .map((c, i) => `${c} = $${i + 2}`)
+        .join(", ");
+      const placeholders = COLUMNS.map((_, i) => `$${i + 1}`).join(", ");
+      const sql =
+        `INSERT INTO ${TABLE} (${COLUMNS.join(", ")}) VALUES (${placeholders}) ` +
+        `ON CONFLICT (id) DO UPDATE SET ${updates} RETURNING *`;
+      const res = await client.query(sql, values);
+      await syncSources(client, item);
+      await client.query("COMMIT");
       return rowToModel(res.rows[0]);
     } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
       throw mapPgError(err);
+    } finally {
+      client.release();
     }
   }
 
   async delete(id) {
+    // Child sources cascade via FK ON DELETE CASCADE.
     const res = await this.pool.query(`DELETE FROM ${TABLE} WHERE id = $1`, [id]);
     return res.rowCount > 0;
   }
@@ -137,6 +132,7 @@ class PostgresPublishingRepository extends PublishingRepository {
         .join(", ");
       const sql = `UPDATE ${TABLE} SET ${updates} WHERE id = $1 RETURNING *`;
       const updated = await client.query(sql, values);
+      await syncSources(client, next);
       await client.query("COMMIT");
       return rowToModel(updated.rows[0]);
     } catch (err) {
@@ -180,6 +176,113 @@ class PostgresPublishingRepository extends PublishingRepository {
 }
 
 /**
+ * Replace child source rows for an item so historical editions retain searchable
+ * source metadata (topic, pattern via parent, publisher, year, url).
+ * @param {import("pg").PoolClient} client
+ * @param {object} item
+ */
+async function syncSources(client, item) {
+  // Table may not exist until migration 004 is applied — fail clearly via SQL.
+  await client.query(`DELETE FROM ${SOURCES_TABLE} WHERE item_id = $1`, [item.id]);
+  const rows = sourcesToRows(item);
+  for (const row of rows) {
+    await client.query(
+      `INSERT INTO ${SOURCES_TABLE}
+        (id, item_id, title, url, publisher, publication_date, access_date, topic, category)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [
+        row.id || crypto.randomUUID(),
+        row.item_id,
+        row.title,
+        row.url,
+        row.publisher,
+        row.publication_date,
+        row.access_date,
+        row.topic,
+        row.category,
+      ]
+    );
+  }
+}
+
+/**
+ * Build WHERE clauses for list filters, including Long Game search dimensions:
+ * topic, pattern, publisher, year, source (title/url).
+ */
+function buildFilter(filter = {}) {
+  const where = [];
+  const values = [];
+  let n = 1;
+
+  if (filter.stream && STREAMS.includes(filter.stream)) {
+    where.push(`stream = $${n++}`);
+    values.push(filter.stream);
+  }
+  if (filter.status && STATUSES.includes(filter.status)) {
+    where.push(`status = $${n++}`);
+    values.push(filter.status);
+  }
+  if (filter.date) {
+    where.push(`planned_date = $${n++}`);
+    values.push(String(filter.date).slice(0, 10));
+  }
+  if (filter.topic && String(filter.topic).trim()) {
+    const q = `%${String(filter.topic).trim()}%`;
+    where.push(
+      `(topic ILIKE $${n} OR text ILIKE $${n} OR COALESCE(category,'') ILIKE $${n} OR COALESCE(macro_signal,'') ILIKE $${n})`
+    );
+    values.push(q);
+    n++;
+  }
+  if (filter.pattern && String(filter.pattern).trim()) {
+    where.push(`COALESCE(dominant_pattern,'') ILIKE $${n++}`);
+    values.push(`%${String(filter.pattern).trim()}%`);
+  }
+  if (filter.publisher && String(filter.publisher).trim()) {
+    where.push(
+      `EXISTS (
+         SELECT 1 FROM ${SOURCES_TABLE} s
+         WHERE s.item_id = ${TABLE}.id
+           AND COALESCE(s.publisher,'') ILIKE $${n}
+       )`
+    );
+    values.push(`%${String(filter.publisher).trim()}%`);
+    n++;
+  }
+  if (filter.year && String(filter.year).trim()) {
+    const year = Number(filter.year);
+    if (Number.isInteger(year) && year >= 1900 && year <= 2100) {
+      where.push(
+        `(
+           EXTRACT(YEAR FROM planned_date) = $${n}
+           OR EXISTS (
+             SELECT 1 FROM ${SOURCES_TABLE} s
+             WHERE s.item_id = ${TABLE}.id
+               AND EXTRACT(YEAR FROM s.access_date) = $${n}
+           )
+         )`
+      );
+      values.push(year);
+      n++;
+    }
+  }
+  if (filter.source && String(filter.source).trim()) {
+    const q = `%${String(filter.source).trim()}%`;
+    where.push(
+      `EXISTS (
+         SELECT 1 FROM ${SOURCES_TABLE} s
+         WHERE s.item_id = ${TABLE}.id
+           AND (s.title ILIKE $${n} OR s.url ILIKE $${n} OR COALESCE(s.publisher,'') ILIKE $${n})
+       )`
+    );
+    values.push(q);
+    n++;
+  }
+
+  return { where, values };
+}
+
+/**
  * Translate a raw PostgreSQL error into a safe application error. A unique
  * violation on the published Coffee Break Build series index becomes a 409
  * conflict with a credential-free message.
@@ -194,4 +297,4 @@ function mapPgError(err) {
   return err;
 }
 
-module.exports = { PostgresPublishingRepository, TABLE };
+module.exports = { PostgresPublishingRepository, TABLE, SOURCES_TABLE };

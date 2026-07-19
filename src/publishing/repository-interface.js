@@ -20,7 +20,7 @@ class PublishingRepository {
 
   /**
    * List items, optionally filtered.
-   * @param {{stream?:string,status?:string,date?:string,topic?:string}} [filter]
+   * @param {{stream?:string,status?:string,date?:string,topic?:string,pattern?:string,publisher?:string,year?:string|number,source?:string}} [filter]
    * @returns {Promise<Array<object>>}
    */
   async list(_filter) {

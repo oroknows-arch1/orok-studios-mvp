@@ -3,22 +3,27 @@
 const express = require("express");
 const { ValidationError } = require("./validation");
 const { TransitionError } = require("./transitions");
+const { SourceValidationError } = require("./long-game/sources");
+const { LongGameEngine } = require("./long-game");
 
 /**
  * Build an Express router for the publishing system, backed by the given
  * service instance. Mount at /api/publishing.
  *
  * @param {import("./service").PublishingService} service
+ * @param {{ longGameEngine?: import("./long-game").LongGameEngine }} [opts]
  * @returns {import("express").Router}
  */
-function createPublishingRouter(service) {
+function createPublishingRouter(service, opts = {}) {
   const router = express.Router();
+  const longGame =
+    opts.longGameEngine || new LongGameEngine({ publishingService: service });
 
   const wrap = (handler) => async (req, res) => {
     try {
       await handler(req, res);
     } catch (err) {
-      if (err instanceof ValidationError) {
+      if (err instanceof ValidationError || err instanceof SourceValidationError) {
         // ValidationError messages are curated, user-facing, and secret-free.
         return res.status(400).json({ error: err.message, errors: err.errors });
       }
@@ -75,11 +80,69 @@ function createPublishingRouter(service) {
     })
   );
 
+  // --- Sunday Long Game Intelligence Engine ---
+  router.get(
+    "/long-game/categories",
+    wrap(async (_req, res) => {
+      res.json({ categories: longGame.categories() });
+    })
+  );
+
+  router.post(
+    "/long-game/analyze",
+    wrap(async (req, res) => {
+      const brief = longGame.generateBrief(req.body || {});
+      res.json({
+        title: brief.title,
+        familyLesson: brief.familyLesson,
+        macroSignal: brief.macroSignal,
+        dominantPattern: brief.dominantPattern,
+        themes: brief.themes,
+        sources: brief.sources,
+        familyText: brief.familyText,
+        xText: brief.xText,
+        categoriesCovered: brief.categoriesCovered,
+        noiseRemoved: brief.noiseRemoved,
+      });
+    })
+  );
+
+  router.post(
+    "/long-game/generate",
+    wrap(async (req, res) => {
+      const body = req.body || {};
+      const { brief, item, duplicateAdvisory } = await longGame.generateAndStore(
+        {
+          developments: body.developments,
+          accessDate: body.accessDate,
+          weekOf: body.weekOf || body.plannedDate,
+        },
+        {
+          plannedDate: body.plannedDate || body.weekOf,
+          status: body.status,
+          notes: body.notes,
+          surface: body.surface,
+        }
+      );
+      res.status(201).json({ item, brief, duplicateAdvisory });
+    })
+  );
+
   router.get(
     "/items",
     wrap(async (req, res) => {
-      const { stream, status, date, topic } = req.query;
-      const items = await service.listItems({ stream, status, date, topic });
+      const { stream, status, date, topic, pattern, publisher, year, source } =
+        req.query;
+      const items = await service.listItems({
+        stream,
+        status,
+        date,
+        topic,
+        pattern,
+        publisher,
+        year,
+        source,
+      });
       res.json({ items, count: items.length });
     })
   );

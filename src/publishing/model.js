@@ -23,6 +23,9 @@ const { deriveOpening } = require("./similarity");
  * @property {string} [category]
  * @property {string} topic
  * @property {string} [dominantPattern]
+ * @property {string} [macroSignal]
+ * @property {string} [familyLesson]
+ * @property {Array<{title:string,url:string,publisher?:string,publicationDate?:string,accessDate?:string,topic?:string,category?:string}>} [sources]
  * @property {number} version
  * @property {string} text
  * @property {boolean} imageRequired
@@ -68,6 +71,9 @@ function createItem(input = {}) {
     category: input.category,
     topic: input.topic,
     dominantPattern: input.dominantPattern,
+    macroSignal: input.macroSignal,
+    familyLesson: input.familyLesson,
+    sources: Array.isArray(input.sources) ? input.sources : [],
     version: input.version || 1,
     text,
     imageRequired:

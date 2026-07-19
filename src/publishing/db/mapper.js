@@ -22,6 +22,47 @@ function toDateOnly(value) {
 }
 
 /**
+ * Normalize sources JSON (array, string, or null) to an array of source objects.
+ * @param {any} value
+ * @returns {Array<object>}
+ */
+function normalizeSources(value) {
+  if (Array.isArray(value)) return value.map(normalizeSourceRow);
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.map(normalizeSourceRow) : [];
+    } catch (_e) {
+      return [];
+    }
+  }
+  return [];
+}
+
+function normalizeSourceRow(s) {
+  if (!s || typeof s !== "object") return s;
+  return {
+    title: s.title,
+    url: s.url,
+    publisher: s.publisher == null ? undefined : s.publisher,
+    publicationDate:
+      s.publicationDate != null
+        ? toDateOnly(s.publicationDate)
+        : s.publication_date != null
+          ? toDateOnly(s.publication_date)
+          : undefined,
+    accessDate:
+      s.accessDate != null
+        ? toDateOnly(s.accessDate)
+        : s.access_date != null
+          ? toDateOnly(s.access_date)
+          : undefined,
+    topic: s.topic == null ? undefined : s.topic,
+    category: s.category == null ? undefined : s.category,
+  };
+}
+
+/**
  * Map a database row to the application model.
  * @param {object} row
  * @returns {object} PublishingItem
@@ -41,6 +82,9 @@ function rowToModel(row) {
     topic: row.topic,
     dominantPattern:
       row.dominant_pattern == null ? undefined : row.dominant_pattern,
+    macroSignal: row.macro_signal == null ? undefined : row.macro_signal,
+    familyLesson: row.family_lesson == null ? undefined : row.family_lesson,
+    sources: normalizeSources(row.sources),
     version: Number(row.version),
     text: row.text == null ? "" : row.text,
     imageRequired: row.image_required === true,
@@ -93,6 +137,9 @@ const COLUMNS = [
   "category",
   "topic",
   "dominant_pattern",
+  "macro_signal",
+  "family_lesson",
+  "sources",
   "version",
   "text",
   "image_required",
@@ -115,6 +162,7 @@ const COLUMNS = [
  */
 function modelToValues(item) {
   const sk = item.similarityKeys || {};
+  const sources = Array.isArray(item.sources) ? item.sources : [];
   return [
     item.id,
     item.stream,
@@ -126,6 +174,9 @@ function modelToValues(item) {
     nullable(item.category),
     item.topic,
     nullable(item.dominantPattern),
+    nullable(item.macroSignal),
+    nullable(item.familyLesson),
+    JSON.stringify(sources),
     item.version,
     item.text == null ? "" : item.text,
     item.imageRequired === true,
@@ -147,4 +198,32 @@ function nullable(v) {
   return v == null ? null : v;
 }
 
-module.exports = { rowToModel, modelToValues, COLUMNS };
+/**
+ * Build rows for publishing_long_game_sources from an item.
+ * @param {object} item
+ * @returns {Array<object>}
+ */
+function sourcesToRows(item) {
+  const sources = Array.isArray(item.sources) ? item.sources : [];
+  return sources.map((s, i) => ({
+    id: `${item.id}:src:${i}`,
+    item_id: item.id,
+    title: s.title,
+    url: s.url,
+    publisher: s.publisher == null ? null : s.publisher,
+    publication_date: s.publicationDate ? String(s.publicationDate).slice(0, 10) : null,
+    access_date: s.accessDate
+      ? String(s.accessDate).slice(0, 10)
+      : new Date().toISOString().slice(0, 10),
+    topic: s.topic == null ? null : s.topic,
+    category: s.category == null ? null : s.category,
+  }));
+}
+
+module.exports = {
+  rowToModel,
+  modelToValues,
+  COLUMNS,
+  normalizeSources,
+  sourcesToRows,
+};
