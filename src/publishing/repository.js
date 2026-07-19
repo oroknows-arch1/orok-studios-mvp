@@ -169,6 +169,10 @@ function applyInMemoryFilter(items, filter) {
   let out = items;
   if (filter.stream) out = out.filter((i) => i.stream === filter.stream);
   if (filter.status) out = out.filter((i) => i.status === filter.status);
+  if (filter.category && String(filter.category).trim()) {
+    const q = String(filter.category).toLowerCase().trim();
+    out = out.filter((i) => (i.category || "").toLowerCase() === q);
+  }
   if (filter.date) {
     const d = String(filter.date).slice(0, 10);
     out = out.filter((i) => String(i.plannedDate).slice(0, 10) === d);

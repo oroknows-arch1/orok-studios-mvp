@@ -139,6 +139,7 @@ Application startup **never** runs or rewrites migrations — it only seeds data
 | `002_publishing_items_indexes.sql` | partial unique index on published CBB numbers + status/stream/date indexes |
 | `003_publishing_topic_search.sql` | `pg_trgm` extension + trigram indexes for topic/category search |
 | `004_long_game_sources.sql` | `macro_signal`, `family_lesson`, `sources` JSONB on items + `publishing_long_game_sources` child table for searchable source metadata |
+| `005_series_meta.sql` | `series_meta` JSONB for Masters of Yesterday cultural rotation + Thursday Lingo podcast metadata |
 
 ### pg_trgm policy (deterministic)
 

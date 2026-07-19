@@ -307,3 +307,22 @@ Today, Masters of Yesterday, or Coffee Break Build.
 `sources[]` (`title`, `url`, `publisher`, `publicationDate`, `accessDate`,
 optional `topic`/`category`). Historical editions retain source references.
 Editions are searchable by topic, pattern, publisher, year, and source.
+---
+
+## 13. Masters of Yesterday Cultural Series (Thursday)
+
+Module: `src/publishing/masters-of-yesterday/`.
+
+**Country rotation (exactly one per Thursday):** Indigenous Australia → Cook Islands → Aotearoa New Zealand → Peru → repeat.
+
+**Anchor date:** `2026-01-01` (Thursday). Elapsed calendar Thursdays from this anchor (modulo 4) select the country. Missed or unpublished weeks do **not** delay or corrupt the sequence.
+
+**Cultural catalogue:** approved seed entries with distinct subjectType values. Only `reviewStatus: approved` entries are used for automatic prep. Anti-repetition avoids premature subject reuse; after exhaustion uses least-recently-used.
+
+**Editorial style:** family greeting + subject-first observation + grounded facts + modern significance + farewell + exactly three hashtags.
+
+**Heritage Lens:** image brief via the existing `/generate-image` system — documentary realism, behaviour-driven, no mixed-culture or fake-ceremony imagery.
+
+**Thursday Lingo:** every Thursday recommends one Learn Cook Islands Māori episode (Junior Charlie & Tom Harrison) with a verified Apple Podcasts episode URL (`?i=`). Seed catalogue with optional iTunes refresh; missing data marks Requires Review without inventing episode facts.
+
+**Persistence:** `series_meta` JSONB (migration `005`) stores rotation, cultural subject, Heritage Lens signatures, and podcast metadata.

@@ -34,6 +34,7 @@ const { deriveOpening } = require("./similarity");
  * @property {string} [postUrl]
  * @property {string} [rejectionReason]
  * @property {string} [notes]
+ * @property {object} [seriesMeta] Masters of Yesterday / series-specific metadata
  * @property {SimilarityKeys} similarityKeys
  * @property {Array<{version:number,status:string,text:string,at:string}>} history
  */
@@ -83,6 +84,10 @@ function createItem(input = {}) {
     postUrl: input.postUrl,
     rejectionReason: input.rejectionReason,
     notes: input.notes,
+    seriesMeta:
+      input.seriesMeta && typeof input.seriesMeta === "object"
+        ? input.seriesMeta
+        : undefined,
     similarityKeys,
     history: Array.isArray(input.history) ? input.history : [],
   };

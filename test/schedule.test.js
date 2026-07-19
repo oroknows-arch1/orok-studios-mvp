@@ -78,8 +78,8 @@ async function makePrep() {
 
 test("preparation is idempotent for morning + CBB on a weekday", async () => {
   const { svc, preparation } = await makePrep();
-  // Thursday 05:30 UTC (avoid 2026-07-15 seed CBB planned date)
-  const now = new Date("2026-07-16T05:30:00.000Z");
+  // Friday 05:30 UTC (avoid Thursday MoY path and 2026-07-15 seed CBB date)
+  const now = new Date("2026-07-17T05:30:00.000Z");
   const first = await preparation.prepare({
     now,
     force: true,
@@ -97,13 +97,13 @@ test("preparation is idempotent for morning + CBB on a weekday", async () => {
 
   const morning = await svc.listItems({
     stream: "orok-morning",
-    date: "2026-07-16",
+    date: "2026-07-17",
   });
   assert.equal(morning.length, 1);
 
   const cbb = await svc.listItems({
     stream: "coffee-break-build",
-    date: "2026-07-16",
+    date: "2026-07-17",
   });
   assert.equal(cbb.length, 1);
   assert.equal(cbb[0].seriesNumber, 2); // after seeded #001

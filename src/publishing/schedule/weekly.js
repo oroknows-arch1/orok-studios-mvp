@@ -34,17 +34,20 @@ const WEEKDAY_MORNING = Object.freeze({
     id: "masters-of-yesterday",
     label: "Masters of Yesterday",
     stream: "orok-morning",
-    requiresTheme: true,
+    requiresTheme: false,
+    culturalSeries: true,
     includeCookIslandsMaori: true,
     notes:
-      "Historical/cultural feature plus one valid Learn Cook Islands Māori episode.",
+      "Cultural series with four-country rotation plus Thursday Lingo (Learn Cook Islands Māori).",
   }),
   5: Object.freeze({
     id: "weekly-reflection",
     label: "Weekly Reflection",
     stream: "orok-morning",
     requiresWeeklyContext: true,
-    notes: "Connect the week’s ideas into one lesson — not a simple day-by-day recap.",
+    fridayRecap: true,
+    notes:
+      "Friday recap/reflection — connect the week’s ideas into one lesson (not a day-by-day list).",
   }),
   6: Object.freeze({
     id: "saturday-mixed",
@@ -95,6 +98,8 @@ function generatorCategoryFor(label) {
   if (label === "Words of Wisdom") return "Wisdom Wednesday";
   if (label === "Weekly Reflection") return "Friday Recap";
   if (label === "The Long Game") return "Sunday Long Game";
+  if (label === "Saturday Mixed") return "Friday Freestyle";
+  if (label === "Coffee Break Build") return "Friday Freestyle";
   return label;
 }
 

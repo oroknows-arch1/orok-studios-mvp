@@ -5,6 +5,7 @@ const { createRepositoryFromEnv } = require("./repository");
 const { PublishingService } = require("./service");
 const { createPublishingRouter } = require("./routes");
 const { LongGameEngine } = require("./long-game");
+const { MastersOfYesterdayEngine } = require("./masters-of-yesterday");
 const {
   DraftPreparationService,
   PublishingScheduler,
@@ -12,7 +13,7 @@ const {
 
 /**
  * Create and initialise the publishing capability of the original OROK app
- * (repository + service + router + Long Game + draft preparation scheduler).
+ * (repository + service + router + Long Game + MoY + draft preparation).
  *
  * @param {object} [opts]
  */
@@ -20,9 +21,11 @@ function createPublishing(opts = {}) {
   const repository = opts.repository || createRepositoryFromEnv(opts);
   const service = new PublishingService(repository);
   const longGame = new LongGameEngine({ publishingService: service });
+  const moy = new MastersOfYesterdayEngine({ publishingService: service });
   const preparation = new DraftPreparationService({
     publishingService: service,
     longGameEngine: longGame,
+    moyEngine: moy,
     postGenerator: opts.postGenerator || null,
     timeZone: opts.timeZone,
   });
@@ -33,6 +36,7 @@ function createPublishing(opts = {}) {
   });
   const router = createPublishingRouter(service, {
     longGameEngine: longGame,
+    moyEngine: moy,
     preparation,
     scheduler,
   });
@@ -49,6 +53,7 @@ function createPublishing(opts = {}) {
     router,
     service,
     longGame,
+    moy,
     preparation,
     scheduler,
     ready,

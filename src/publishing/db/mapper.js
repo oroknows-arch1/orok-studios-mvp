@@ -94,6 +94,7 @@ function rowToModel(row) {
     rejectionReason:
       row.rejection_reason == null ? undefined : row.rejection_reason,
     notes: row.notes == null ? undefined : row.notes,
+    seriesMeta: normalizeSeriesMeta(row.series_meta),
     similarityKeys: {
       opening: row.similarity_opening == null ? undefined : row.similarity_opening,
       centralLesson:
@@ -123,6 +124,24 @@ function normalizeHistory(value) {
   return [];
 }
 
+function normalizeSeriesMeta(value) {
+  if (value == null) return undefined;
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return Object.keys(value).length ? value : undefined;
+  }
+  if (typeof value === "string" && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return Object.keys(parsed).length ? parsed : undefined;
+      }
+    } catch (_e) {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
 /**
  * Ordered column list used for INSERT/UPDATE statements.
  */
@@ -148,6 +167,7 @@ const COLUMNS = [
   "post_url",
   "rejection_reason",
   "notes",
+  "series_meta",
   "similarity_opening",
   "similarity_central_lesson",
   "similarity_example",
@@ -185,6 +205,9 @@ function modelToValues(item) {
     nullable(item.postUrl),
     nullable(item.rejectionReason),
     nullable(item.notes),
+    JSON.stringify(
+      item.seriesMeta && typeof item.seriesMeta === "object" ? item.seriesMeta : {}
+    ),
     nullable(sk.opening),
     nullable(sk.centralLesson),
     nullable(sk.example),
@@ -226,4 +249,5 @@ module.exports = {
   COLUMNS,
   normalizeSources,
   sourcesToRows,
+  normalizeSeriesMeta,
 };

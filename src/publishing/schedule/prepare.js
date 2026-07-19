@@ -35,6 +35,7 @@ class DraftPreparationService {
     }
     this.publishingService = deps.publishingService;
     this.longGameEngine = deps.longGameEngine || null;
+    this.moyEngine = deps.moyEngine || null;
     this.postGenerator = deps.postGenerator || null;
     this.timeZone = resolveTimeZone(deps.timeZone);
   }
@@ -115,6 +116,14 @@ class DraftPreparationService {
       return this._ensureLongGame(parts, opts);
     }
 
+    if (plan.mixed) {
+      return this._ensureSaturdayMixed(parts, opts);
+    }
+
+    if (plan.culturalSeries || plan.id === "masters-of-yesterday") {
+      return this._ensureMastersOfYesterday(parts, opts);
+    }
+
     const existing = await this._findActive(plan.stream, plannedDate);
     if (existing) {
       return {
@@ -124,10 +133,6 @@ class DraftPreparationService {
         stream: plan.stream,
         category: plan.label,
       };
-    }
-
-    if (plan.mixed) {
-      return this._ensureSaturdayMixed(parts, opts);
     }
 
     const theme = (opts.theme && String(opts.theme).trim()) || "";
@@ -198,6 +203,31 @@ class DraftPreparationService {
       stream: item.stream,
       category: plan.label,
       status: item.status,
+    };
+  }
+
+  async _ensureMastersOfYesterday(parts, opts) {
+    if (!this.moyEngine) {
+      return skipped("masters-of-yesterday", "MastersOfYesterdayEngine not configured");
+    }
+    const plannedDate = parts.dateStr;
+    const { item, action, edition } = await this.moyEngine.generateAndStore({
+      scheduledDate: plannedDate,
+      timeZone: this.timeZone,
+      now: opts.now,
+    });
+    return {
+      kind: "masters-of-yesterday",
+      action: action === "exists" ? "exists" : "created",
+      itemId: item.id,
+      category: "Masters of Yesterday",
+      countryStream: edition && edition.seriesMeta && edition.seriesMeta.countryStream,
+      culturalSubject: edition && edition.seriesMeta && edition.seriesMeta.culturalSubject,
+      lingoEpisode:
+        edition &&
+        edition.seriesMeta &&
+        edition.seriesMeta.thursdayLingo &&
+        edition.seriesMeta.thursdayLingo.episodeTitle,
     };
   }
 

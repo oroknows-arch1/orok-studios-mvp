@@ -218,11 +218,15 @@ function buildFilter(filter = {}) {
     where.push(`stream = $${n++}`);
     values.push(filter.stream);
   }
-  if (filter.status && STATUSES.includes(filter.status)) {
-    where.push(`status = $${n++}`);
-    values.push(filter.status);
-  }
-  if (filter.date) {
+    if (filter.status && STATUSES.includes(filter.status)) {
+      where.push(`status = $${n++}`);
+      values.push(filter.status);
+    }
+    if (filter.category && String(filter.category).trim()) {
+      where.push(`category = $${n++}`);
+      values.push(String(filter.category).trim());
+    }
+    if (filter.date) {
     where.push(`planned_date = $${n++}`);
     values.push(String(filter.date).slice(0, 10));
   }

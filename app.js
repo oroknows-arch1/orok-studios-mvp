@@ -56,9 +56,9 @@ function updateCategoryUi() {
       "Includes tribute + Dad Joke Tuesday. Upload the tribute image manually — likeness images are not auto-generated.",
     "Words of Wisdom": "Requires a user theme.",
     "Masters of Yesterday":
-      "Historical/cultural feature plus one valid Learn Cook Islands Māori episode.",
+      "Cultural series (Australia → Cook Islands → Aotearoa → Peru) plus Thursday Lingo from Learn Cook Islands Māori.",
     "Weekly Reflection":
-      "Connect the week’s ideas into one lesson — not a simple day-by-day recap.",
+      "Friday recap/reflection — connect the week’s ideas into one lesson — not a simple day-by-day list.",
     "Saturday Mixed": "Choose from established OROK categories; avoid recent repetition.",
     "The Long Game":
       "Weekly Intelligence Brief with macro signal, pattern, family lesson, and 2–5 clickable sources.",
@@ -838,17 +838,52 @@ function renderReview() {
     kv("Macro Signal", item.macroSignal || "—") +
     kv("Dominant Pattern", item.dominantPattern || "—") +
     kv("Family Lesson", item.familyLesson || "—") +
+    moyMetaHtml(item) +
     kv("Status", item.status) +
     kv("Version", item.version);
 
   document.getElementById("reviewSources").innerHTML =
-    "<strong>Sources</strong>" + sourcesHtml;
+    "<strong>Sources</strong>" + sourcesHtml + lingoHtml(item);
   document.getElementById("reviewText").value = item.text || "";
   document.getElementById("reviewImageBrief").value = item.imageBrief || "";
   document.getElementById("reviewCharCount").textContent =
     (item.text || "").length + " characters";
   setReviewButtons(item.status);
   document.getElementById("reviewMsg").textContent = "";
+}
+
+function moyMetaHtml(item) {
+  const m = item.seriesMeta;
+  if (!m || m.category !== "Masters of Yesterday") return "";
+  return (
+    kv("Country stream", m.countryStreamLabel || m.countryStream || "—") +
+    kv("Cultural subject", m.culturalSubject || "—") +
+    kv("Subject type", m.subjectType || "—") +
+    kv("Rotation", String(m.rotationIndex) + " · " + (m.rotationVersion || "")) +
+    kv("Heritage Lens", m.imageLens || "—") +
+    kv("MoY review", m.reviewStatus || "—")
+  );
+}
+
+function lingoHtml(item) {
+  const lingo = item.seriesMeta && item.seriesMeta.thursdayLingo;
+  if (!lingo) return "";
+  let html = "<div style=\"margin-top:12px;\"><strong>Thursday Lingo</strong>";
+  html += "<div class=\"hint\">" + esc(lingo.podcastName || "Learn Cook Islands Māori") + "</div>";
+  if (lingo.status === "Requires Review") {
+    html += "<div class=\"hint\">Requires Review — select episode manually.</div></div>";
+    return html;
+  }
+  if (lingo.episodeTitle) html += "<div>" + esc(lingo.episodeTitle) + "</div>";
+  if (lingo.episodeNumber) html += "<div class=\"hint\">Episode " + esc(lingo.episodeNumber) + "</div>";
+  if (lingo.applePodcastsUrl) {
+    html +=
+      '<div><a href="' +
+      esc(lingo.applePodcastsUrl) +
+      '" target="_blank" rel="noopener">Open in Apple Podcasts</a></div>';
+  }
+  html += "</div>";
+  return html;
 }
 
 function kv(k, v) {

@@ -112,6 +112,30 @@ function createPublishingRouter(service, opts = {}) {
     })
   );
 
+  router.get(
+    "/weekly/resolve",
+    wrap(async (req, res) => {
+      const {
+        morningForWeekday: mfw,
+        COFFEE_BREAK: cbb,
+        generatorCategoryFor: gcf,
+        localParts: lp,
+        resolveTimeZone: rtz,
+      } = require("./schedule");
+      const weekday = req.query.weekday
+        ? Number(req.query.weekday)
+        : lp(new Date(), rtz()).weekday;
+      const morning = mfw(weekday);
+      res.json({
+        weekday,
+        morning,
+        coffeeBreak: weekday >= 1 && weekday <= 5 ? cbb : null,
+        generatorCategory: morning ? gcf(morning.label) : null,
+        timeZone: rtz(),
+      });
+    })
+  );
+
   /**
    * Idempotent draft preparation. Protected by PUBLISHING_CRON_SECRET in
    * production. Also used by the in-app Today panel and optional Render cron.
