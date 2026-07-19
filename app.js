@@ -208,119 +208,178 @@ function stripGreetingAndSignoff(post) {
 
 function buildImagePrompt(post, category, idea, weeklyPosts) {
   const bodyOnly = stripGreetingAndSignoff(post);
+
+  const coreStyle = `You are the official image generation engine for OROK.
+Your objective is to create documentary-realistic images that express the behavioural meaning of the accompanying post through authentic, ordinary life.
+The image must never explain the lesson.
+The post teaches.
+The image invites curiosity.
+
+CORE STYLE:
+- Documentary realism only.
+- Must look like a genuine photograph.
+- No AI-art appearance.
+- No fantasy.
+- No cinematic exaggeration.
+- No movie poster styling.
+- No inspirational poster styling.
+- No symbolic objects.
+- No visual metaphors.
+- No text overlays.
+- No writing on walls.
+- No writing in notebooks.
+- No whiteboards.
+- No labels.
+- No quotes.
+- No watermarks.
+- No visible writing.
+
+PHOTOGRAPHY:
+- Natural available lighting that suits the environment and time of day.
+- Natural colours.
+- Realistic depth of field.
+- Authentic documentary photography.
+- No HDR.
+- No lens flare.
+- No cinematic grading.
+
+FORBIDDEN:
+- No text, labels, signs, or visible writing.
+- No visual metaphors.
+- No fantasy.
+- No AI-art appearance.
+
+FINAL VALIDATION (apply before producing the image):
+- Does the image express the behavioural meaning of the post?
+- Does it naturally support the written message?
+- Could this genuinely have been photographed?
+- Would a Pacific Island family recognise themselves?
+- Does it feel authentic rather than staged?
+If any answer is no, internally regenerate before producing the final image.`;
+
+  const familyContinuity = `FAMILY CONTINUITY:
+Use one consistent Pacific Island / Polynesian / Pasifika family across panels and weeks:
+- Father
+- Mother
+- 22-year-old son
+- 18-year-old son
+- 12–13-year-old daughter
+- realistic brown skin tones
+- Polynesian / Pasifika facial features
+- dark hair
+- clear family resemblance
+Maintain visual continuity across weeks.`;
+
+  const collageRules = `FOUR-PANEL COLLAGE:
+- Panel 1: 22-year-old son
+- Panel 2: 18-year-old son
+- Panel 3: 12–13-year-old daughter
+- Panel 4: Parents
+Each panel should naturally differ in activity, location, composition, camera angle, and perspective.
+Differences must arise naturally rather than feeling forced.`;
+
+  const environmentsAndClothing = `ENVIRONMENTS:
+Rotate authentic locations such as: home, garage, kitchen, workshop, sports field, walking track, community garden, market, beach, volunteer setting, community centre, library, café.
+Avoid obvious repetition over time.
+
+CLOTHING:
+Rotate wardrobe naturally. Avoid repeated outfits.
+Mix workwear, sportswear, denim, casual clothing, island floral clothing, cream, navy, burgundy, green, tan.
+Use realistic combinations.`;
+
   let prompt = "";
 
-  if (category === "Motivation Monday") {
-    prompt = `Create a realistic 4-panel family collage. Documentary photography. No text.
+  if (category === "Motivation Monday" || category === "Wisdom Wednesday") {
+    const everydayTone =
+      category === "Wisdom Wednesday"
+        ? `EVERYDAY LENS emphasis for Wisdom Wednesday:
+- Quieter, reflective behavioural moments.
+- Prefer listening, observing, conversation, patience, helping, remembering, considering, quiet reflection.
+- Still build around behaviour, not wording.`
+        : `EVERYDAY LENS emphasis for Motivation Monday:
+- Emotion comes from behaviour such as repeating, correcting, pausing, checking, restarting, cleaning up, trying again, quiet guidance.
+- Nobody poses. Nobody celebrates. Nobody has already succeeded.`;
 
-FAMILY (the subject — consistent across all panels):
-- one Polynesian / Pasifika family: mother, father, 22-year-old son, 18-year-old son, 12–13-year-old daughter
-- realistic brown skin tones
-- Polynesian / Pasifika facial features
-- dark hair
-- clear family resemblance
-- ordinary, believable behaviour
-- understated facial expressions
+    prompt = `${coreStyle}
 
-STORYTELLING:
-- Extract the underlying human observation from the post.
-- Do not illustrate the wording literally.
+LENS: Everyday Lens
+Hero = Behaviour
+
+STEP — FIND THE BEHAVIOUR:
+- Ignore keywords.
+- Identify the dominant behavioural pattern in the source post (examples: letting go, rebuilding, preparing, supporting, practising, learning, recovering, waiting, persevering, reconnecting, adapting).
+- Build the image around behaviour. Never around individual sentences.
+
+STEP — OBSERVE REAL LIFE:
+Ask: "What would somebody genuinely be doing if this lesson were naturally unfolding?"
+Create that moment. Never stage the scene.
+
+${familyContinuity}
+
+${collageRules}
+
+${environmentsAndClothing}
+
+EVERYDAY RULES:
+- Show internal experience through behaviour.
+- Never depend on facial expressions.
+- Never depend on symbols.
+- Reveal emotion through small interruptions to ordinary routines.
+- Do not illustrate the post literally.
 - Do not depict slogans, metaphors, or symbolic visual shortcuts.
-- The four panels must be four connected moments of one family story.
-- Possible observations include: discomfort, uncertainty, persistence, awkward learning, rebuilding habits, patience, discipline, restarting, unfinished progress.
-- Emotion must come from behaviour such as: repeating, correcting, pausing, checking, restarting, cleaning up, trying again, quiet guidance.
-- Nobody poses. Nobody celebrates. Nobody has already succeeded.
+- The image must never explain the lesson.
 
-SOURCE POST (for observation only — do not illustrate literally):
-"${bodyOnly}"
+${everydayTone}
 
-GLOBAL RULES:
-- documentary realism
-- realistic photography
-- no text or captions
-- no fantasy
-- no cinematic exaggeration
-- no generic stock-photo appearance
-- no motivational-advertising composition
-- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
+SOURCE POST (teaches in writing — image invites curiosity only; do not illustrate literally):
+"${bodyOnly}"`;
   } else if (category === "Masters of Today") {
-    prompt = `Create a realistic 4-panel editorial-style collage. Documentary / editorial realism. No text.
+    prompt = `${coreStyle}
 
-SUBJECT TYPE:
-- a modern professional in entertainment or performance
-- NOT any real person
-- NOT a celebrity likeness
-- NOT a recognizable public figure
+LENS: Legacy Lens
+Hero = Contribution
+
+STEP — FIND THE BEHAVIOUR / CONTRIBUTION:
+- Ignore celebrity keywords and likeness.
+- Ask: "What ordinary lives changed because this person existed?"
+- Show contribution. Not celebrity.
+- Never recreate the honoured person.
 
 SAFETY / LIKENESS RULES (MANDATORY):
-- Do NOT depict any real living person or public figure
-- Do NOT generate a direct likeness, portrait, or recognizable face
-- Do NOT include any celebrity name in the image concept
-- Do NOT recreate paparazzi, press, or red carpet photos of a real person
-- If people appear, they must be generic, non-identifiable, and shown from a distance, from behind, in silhouette, or partially obscured
+- Do NOT depict any real living person or public figure.
+- Do NOT generate a direct likeness, portrait, or recognizable face.
+- Do NOT include any celebrity name in the image concept.
+- Do NOT recreate paparazzi, press, or red carpet photos of a real person.
+- If people appear, they must be generic, non-identifiable, and shown from a distance, from behind, in silhouette, or partially obscured — or show ordinary people whose lives were changed, without resembling the honoured person.
 
-WHAT TO SHOW INSTEAD:
-- editorial-style career context only
-- film set atmosphere
-- studio lighting rigs
-- script pages on a table
-- wardrobe and makeup station
-- director chair and camera gear
-- rehearsal spaces
-- generic award/event atmosphere without faces
-- behind-the-scenes entertainment industry environments
+${familyContinuity}
 
-VISUAL GOAL:
-- celebrate the field, craft, pressure, growth, and career environment
-- no fan art
-- no portrait
-- no text overlays
-- no fake labels
-- grounded documentary/editorial realism only
-- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
-  } else if (category === "Wisdom Wednesday") {
-    prompt = `Create a realistic 4-panel family collage. Documentary photography. No text.
+${collageRules}
 
-FAMILY (the subject — consistent across all panels):
-- one Polynesian / Pasifika family: mother, father, 22-year-old son, 18-year-old son, 12–13-year-old daughter
-- realistic brown skin tones
-- Polynesian / Pasifika facial features
-- dark hair
-- clear family resemblance
-- ordinary, believable behaviour
-- understated facial expressions
+${environmentsAndClothing}
 
-STORYTELLING:
-- Create a quieter, reflective family story based on the underlying observation in the post.
-- Do not illustrate the post literally.
-- Avoid motivational poses, dramatic emotion, and literal illustration of the post.
-- The four panels must remain connected by one theme.
-- Use ordinary moments involving: listening, observing, conversation, patience, helping, remembering, considering, quiet reflection.
-- The image should feel thoughtful and naturally observed.
+LEGACY RULES:
+- Four connected moments of ordinary life shaped by contribution.
+- Documentary realism only — never Hollywood, never fan art, never portrait tribute.
+- No symbolic objects or visual metaphors.
 
-SOURCE POST (for observation only — do not illustrate literally):
-"${bodyOnly}"
+HONOURED SUBJECT CONTEXT (do not depict this person):
+${idea}
 
-GLOBAL RULES:
-- documentary realism
-- realistic photography
-- no text or captions
-- no fantasy
-- no cinematic exaggeration
-- no generic stock-photo appearance
-- no motivational-advertising composition
-- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
+SOURCE POST (teaches in writing — image invites curiosity only; do not illustrate literally):
+"${bodyOnly}"`;
   } else if (category === "Masters of Yesterday") {
-    prompt = `Create a realistic 4-panel documentary collage. Documentary photography. No text.
+    prompt = `${coreStyle}
 
-FAMILY (visual thread across all panels):
-- one Polynesian / Pasifika family: mother, father, 22-year-old son, 18-year-old son, 12–13-year-old daughter
-- realistic brown skin tones
-- Polynesian / Pasifika facial features
-- dark hair
-- clear family resemblance
-- ordinary, believable behaviour
-- understated facial expressions
+LENS: Heritage Lens
+Hero = Culture
+
+STEP — FIND THE BEHAVIOUR / CULTURAL CONTINUITY:
+- Culture is the hero.
+- Family may appear only if appropriate.
+- Prioritise craftsmanship, landscape, traditional knowledge, community, continuity, authentic technology.
+- Think documentary. Never Hollywood.
+- If uncertain, reduce specificity rather than invent history.
 
 CULTURAL SUBJECT (source of truth):
 Thursday post:
@@ -329,100 +388,76 @@ Thursday post:
 Selected cultural subject:
 ${idea}
 
-PANEL FLOW:
-- Panel 1: The family entering, arriving at, or moving through the featured place, Country, or cultural environment.
-- Panel 2: The family respectfully observing, listening, or learning.
-- Panel 3: The strongest cultural panel. Show a close and authentic connection to the people, place, practice, knowledge, or living culture featured in the post. Place the family close to the featured tribal, Indigenous, iwi, island, national, or cultural community while keeping the cultural subject central and respected.
-- Panel 4: The family quietly reflecting, continuing their journey, or carrying the learning forward.
-
-CULTURAL RULES:
-- The featured culture must be authentically and respectfully integrated into the family’s journey.
-- The family experiences and learns from the culture.
-- The family does not replace or dominate it.
-- culturally grounded, respectful representation
-- authentic people, authentic environment, authentic material culture where relevant
-- no stereotypes
-- no costume-like treatment
-- no fake ceremonies
-- no invented cultural details
-- no generic tourism advertisement
-- no movie-poster imagery
-
-GLOBAL RULES:
-- documentary realism
-- realistic photography
-- no text or captions
-- no fantasy
-- no cinematic exaggeration
-- no generic stock-photo appearance
-- no motivational-advertising composition
-- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
+HERITAGE PANEL GUIDANCE (four-panel documentary collage):
+- Panel 1: entering, arriving at, or moving through the featured place, Country, or cultural environment.
+- Panel 2: respectfully observing, listening, or learning.
+- Panel 3: the strongest cultural panel — close authentic connection to people, place, practice, knowledge, or living culture; keep the cultural subject central and respected.
+- Panel 4: quiet reflection, continuing the journey, or carrying learning forward.
+- The family does not replace or dominate the culture when present.
+- No stereotypes, costume-like treatment, fake ceremonies, invented cultural details, tourism advertisement, or movie-poster imagery.
+- No text, labels, maps with writing, or visible writing.`;
   } else if (category === "Friday Recap") {
-    prompt = `Create a realistic 4-panel family collage. Documentary photography. No text.
+    prompt = `${coreStyle}
 
-FAMILY (the subject — consistent across all panels):
-- one Polynesian / Pasifika family: mother, father, 22-year-old son, 18-year-old son, 12–13-year-old daughter
-- realistic brown skin tones
-- Polynesian / Pasifika facial features
-- dark hair
-- clear family resemblance
-- ordinary, believable behaviour
-- understated facial expressions
+LENS: Recap Lens
+Hero = Connection
 
-STORYTELLING:
-- Create a visual recap of the week.
-- The four panels may draw from different parts of the week, but they must feel like one connected family journey rather than four unrelated activities.
-- The recap may mix: effort, learning, reflection, heritage, family routine, quiet progress.
-- Use the actual weekly posts supplied below.
+STEP — FIND THE BEHAVIOUR:
+- Create one connected family story.
+- Do not illustrate individual posts.
+- Focus on connection, reflection, moving forward, shared learning, quiet confidence.
+
+${familyContinuity}
+
+${collageRules}
+
+${environmentsAndClothing}
+
+RECAP RULES:
+- Four panels may draw from different parts of the week, but must feel like one connected family journey.
 - Do not create generic Friday celebration scenes.
 - No trophies. No victory poses. No staged group celebration.
-- The result should feel like a family looking back on a real week they lived through together.
 - Do not illustrate captions literally.
 
 RECAP POST:
 "${bodyOnly}"
 
 WEEKLY SOURCE MATERIAL:
-"${weeklyPosts}"
-
-GLOBAL RULES:
-- documentary realism
-- realistic photography
-- no text or captions
-- no fantasy
-- no cinematic exaggeration
-- no generic stock-photo appearance
-- no motivational-advertising composition
-- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
+"${weeklyPosts}"`;
   } else if (category === "Friday Freestyle") {
-    prompt = `Create a realistic 4-panel collage. Documentary photography. No text.
+    prompt = `${coreStyle}
 
-The post is:
-"${bodyOnly}"
+LENS: Everyday Lens
+Hero = Behaviour
 
-RULES:
-- lighter, relaxed, human feeling
-- grounded and believable
-- documentary realism
-- realistic photography
-- no fantasy
-- no cinematic exaggeration
-- no text or captions
-- no generic stock-photo appearance
-- everyday life, humour, ease, end-of-week release
-- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
+Lighter end-of-week everyday life — humour, ease, release — still documentary and behavioural.
+Never stage the scene. No text. No metaphors.
+
+${familyContinuity}
+
+${collageRules}
+
+${environmentsAndClothing}
+
+SOURCE POST (teaches in writing — image invites curiosity only; do not illustrate literally):
+"${bodyOnly}"`;
   } else {
-    prompt = `Create a realistic 4-panel collage. Documentary photography. No text. Aligned with this post:
-"${bodyOnly}"
+    prompt = `${coreStyle}
 
-GLOBAL RULES:
-- documentary realism
-- realistic photography
-- no text or captions
-- no fantasy
-- no cinematic exaggeration
-- no generic stock-photo appearance
-- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
+LENS: Everyday Lens
+Hero = Behaviour
+
+Identify the dominant behavioural pattern. Build around behaviour, not wording.
+Never stage the scene. No text. No metaphors.
+
+${familyContinuity}
+
+${collageRules}
+
+${environmentsAndClothing}
+
+SOURCE POST (teaches in writing — image invites curiosity only; do not illustrate literally):
+"${bodyOnly}"`;
   }
 
   return prompt;
