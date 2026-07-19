@@ -137,17 +137,35 @@ IDENTITY RULES:
 - clear family resemblance across all panels
 - do not default to white European-looking subjects
 
-PANEL RULES (age-relevant activity required):
-- Panel 1: 22-year-old doing structured effort (work, training, focused responsibility)
-- Panel 2: 18-year-old doing a DIFFERENT skill activity (sport/study/practice)
-- Panel 3: 12–13-year-old daughter doing a DIFFERENT focused activity (dance practice / repetition)
-- Panel 4: parents actively guiding/teaching (not passive)
+STORYTELLING RULES (MANDATORY):
+- Do not illustrate the post literally. Do not depict slogans, captions, metaphors, or on-the-nose symbols from the text.
+- Extract the underlying human observation from the post (the lived experience behind the words).
+- Show one connected visual story across all four panels — the same underlying theme continuing through the family.
+- Each panel must be a different moment of that same theme, not four unrelated stock-photo activities.
+- Show internal experience through behaviour and body language, not exaggerated facial expressions.
+- Prefer ordinary moments such as: repetition, correction, restarting, unfinished work, waiting, checking, cleaning up, comparing progress, quiet guidance.
+- Avoid posed achievement scenes.
+- Avoid generic “hard work” images.
+- Avoid motivational-advertising composition.
+- The image must feel like a real family was observed during normal life.
 
-VISUAL VARIETY RULE:
-- Each panel must show a different activity AND a different setting. No duplication.
+PANEL RULES (same theme, different moments — adapt to the extracted observation):
+- Panel 1: 22-year-old in one ordinary behavioural moment of the theme
+- Panel 2: 18-year-old in a different moment of the same theme
+- Panel 3: 12–13-year-old daughter in another moment of the same theme (dance practice when relevant)
+- Panel 4: parents quietly helping review progress or guide the next attempt — same theme, quiet guidance
 
-MEANING:
-The scenes must reflect this post:
+EXAMPLE (when the observation is unfinished progress / the messy middle):
+- Panel 1: 22-year-old working through crossed-out or unfinished plans
+- Panel 2: 18-year-old resetting after a mistake in training
+- Panel 3: 12–13-year-old daughter repeating the same dance movement
+- Panel 4: parents quietly helping review progress or guide the next attempt
+
+EMOTIONAL TONE (from behaviour, not performance):
+- steady, imperfect, unfinished, trying again
+- calm documentary observation — not drama, not triumph
+
+SOURCE POST (for observation only — do not illustrate literally):
 "${bodyOnly}"
 
 GLOBAL RULES:
@@ -155,9 +173,9 @@ GLOBAL RULES:
 - no text overlays
 - no fantasy or cinematic exaggeration
 - no uniforms or harsh institutional settings
-- natural environments: home, park, beach, backyard, study space, everyday life
-- emotion: calm, focused, steady effort
-- avoid generic stock-photo feel`;
+- natural everyday settings: home, park, beach, backyard, study space, practice space
+- clear family resemblance across all panels
+- avoid generic stock-photo feel, staged poses, and motivational advertising aesthetics`;
   } else if (category === "Masters of Today") {
     prompt = `Create a realistic 4-panel editorial-style collage with warm natural lighting and no text.
 
@@ -210,26 +228,36 @@ IDENTITY RULES:
 - clear family resemblance across all panels
 - do not default to white European-looking subjects
 
-PANEL RULES (age-relevant stillness/reflection):
-- Panel 1: 22-year-old in quiet reflection (journaling, thinking, observing)
-- Panel 2: 18-year-old paused in thought (sitting alone, looking out, quiet reset)
-- Panel 3: 12–13-year-old in calm focus (dance practice, reading, drawing, concentration)
-- Panel 4: parents in calm awareness (listening, present, quietly guiding)
+STORYTELLING RULES (MANDATORY):
+- Do not illustrate the post literally. Do not depict slogans, captions, metaphors, or on-the-nose symbols from the text.
+- Extract the underlying human observation from the post (the lived experience behind the words).
+- Show one connected visual story across all four panels — the same underlying theme continuing through the family.
+- Each panel must be a different moment of that same theme, not four unrelated stock-photo activities.
+- Show internal experience through behaviour and body language, not exaggerated facial expressions.
+- Prefer ordinary quiet moments such as: pausing, checking, waiting, listening, repeating a small action, unfinished work set aside, quiet guidance.
+- Avoid posed achievement scenes, generic “hard work” images, and motivational-advertising composition.
+- The image must feel like a real family was observed during normal life.
 
-VISUAL VARIETY RULE:
-- Each panel must show a different activity AND a different setting. No duplication.
+PANEL RULES (same reflective theme, different moments):
+- Panel 1: 22-year-old in one ordinary behavioural moment of the theme
+- Panel 2: 18-year-old in a different moment of the same theme
+- Panel 3: 12–13-year-old daughter in another moment of the same theme
+- Panel 4: parents quietly present — listening, reviewing, or gently guiding within the same theme
 
-MEANING:
-The visuals must reflect this Wisdom post:
+EMOTIONAL TONE (from behaviour, not performance):
+- reflective, steady, imperfect, unfinished
+- calm documentary observation — not drama, not triumph
+
+SOURCE POST (for observation only — do not illustrate literally):
 "${bodyOnly}"
 
 GLOBAL RULES:
 - documentary realism only
 - no text overlays
 - no fantasy or surreal effects
-- calm environments: home, nature, beach, yard, quiet room
-- emotion: reflective, not dramatic
-- avoid staged/stock-photo feel`;
+- natural everyday settings: home, nature, beach, yard, quiet room
+- clear family resemblance across all panels
+- avoid generic stock-photo feel, staged poses, and motivational advertising aesthetics`;
   } else if (category === "Masters of Yesterday") {
     prompt = `Create a realistic 4-panel documentary collage with warm natural lighting and no text.
 
