@@ -18,7 +18,11 @@ test("PostgresPublishingRepository.close() ends the connection pool", async () =
 
 test("createPublishing(...).close() releases the postgres pool", async () => {
   const pool = createPool("postgres://user@127.0.0.1:5432/db");
-  const { close, ready } = createPublishing({ mode: "postgres", pool });
+  const { close, ready } = createPublishing({
+    mode: "postgres",
+    pool,
+    startScheduler: false,
+  });
   // seed/init will fail against this unused URL; that's fine here — swallow it.
   ready.catch(() => {});
   await close();
@@ -26,7 +30,7 @@ test("createPublishing(...).close() releases the postgres pool", async () => {
 });
 
 test("close() on memory/file adapters is a safe no-op", async () => {
-  const mem = createPublishing({ mode: "memory" });
+  const mem = createPublishing({ mode: "memory", startScheduler: false });
   await mem.ready;
   await mem.close(); // should not throw
   assert.ok(true);

@@ -102,7 +102,7 @@ npm run db:migrate
 npm run db:status     # should show all migrations applied and "Current: yes"
 
 # run the app
-npm start             # http://localhost:3000/publishing
+npm start             # http://localhost:3000/
 ```
 
 To run the PostgreSQL integration tests, set `TEST_DATABASE_URL` to a database

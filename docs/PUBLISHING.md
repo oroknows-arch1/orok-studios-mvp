@@ -24,11 +24,13 @@ recorded posts, with an auditable ledger and archive. It answers:
 
 ## 2. Architecture placement
 
-The publishing system is an **additive module inside the existing Express app**.
-It does not replace or fork the application.
+The publishing system is a **capability of the original OROK Express app**, not a
+separate product. Domain logic lives under `src/publishing/`; the user-facing
+flow is the original `index.html` (Create Post · Today · Ledger · Review).
 
 ```
-server.js                     existing app; mounts the publishing router + UI
+server.js                     original app; mounts /api/publishing + redirects /publishing → /#today
+index.html / app.js           sole frontend (generator + publishing panels)
 src/publishing/
   constants.js                streams, statuses, transition table, rhythm
   validation.js               item + request-body validation (ValidationError)
@@ -39,16 +41,15 @@ src/publishing/
   repository.js               repository interface + in-memory & file adapters
   service.js                  business rules; seeds Coffee Break Build #001
   routes.js                   Express router (mounted at /api/publishing)
-  index.js                    wires repository + service + router together
-  long-game/                  Amendment 001 — Weekly Intelligence Brief engine
-  ui/index.html               self-contained single-page UI (served at /publishing)
+  index.js                    wires repository + service + router + scheduler
+  long-game/                  Weekly Intelligence Brief engine
+  schedule/                   timezone windows + idempotent draft preparation
 test/                         node:test suites (unit, service, HTTP integration)
 ```
 
 The existing generator routes (`/generate`, `/generate-image`, `/analyze-voice`)
-are untouched. `server.js` was changed only to (a) mount the publishing router
-and UI, (b) export the app and guard `app.listen` behind `require.main` so the
-app can be imported by tests.
+remain the canonical generation paths. `GET /publishing` redirects into the
+original app (`/#today`); there is no standalone publishing SPA.
 
 ---
 
@@ -102,8 +103,9 @@ npm start            # serves on http://localhost:3000
 
 Then open:
 
-- Generator (existing):  http://localhost:3000/
-- Publishing system:     http://localhost:3000/publishing
+- OROK app (sole UI):  http://localhost:3000/
+- Publishing API:      http://localhost:3000/api/publishing/dashboard
+- Legacy `/publishing` redirects to `/#today`
 
 Run tests (the full suite):
 
