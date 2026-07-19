@@ -1,6 +1,13 @@
 "use strict";
 
 const { STREAMS, STATUSES } = require("./constants");
+const {
+  streamAllowsSources,
+  collectSourceErrors,
+  MIN_SOURCES,
+  MAX_SOURCES,
+  isValidHttpUrl,
+} = require("./long-game/sources");
 
 /**
  * Error thrown when a publishing item or request body fails validation.
@@ -111,6 +118,49 @@ function collectItemErrors(item) {
     errors.push("similarityKeys must be an object");
   }
 
+  errors.push(...collectLongGameLedgerErrors(item));
+
+  return errors;
+}
+
+/**
+ * Ledger rules for Sunday Long Game intelligence fields and sources.
+ * Other streams must not carry source links.
+ * @param {any} item
+ * @returns {string[]}
+ */
+function collectLongGameLedgerErrors(item) {
+  const errors = [];
+  const sources = item.sources;
+  const hasSources = Array.isArray(sources) && sources.length > 0;
+
+  if (!streamAllowsSources(item.stream)) {
+    if (hasSources) {
+      errors.push(
+        "source links are only allowed on sunday-long-game items (not Motivation Monday, Words of Wisdom, Masters, or Coffee Break Build)"
+      );
+    }
+    return errors;
+  }
+
+  // Sunday Long Game: when sources are present (or item is published), enforce 2–5 valid links.
+  if (hasSources || item.status === "published") {
+    if (!Array.isArray(sources)) {
+      errors.push("sources must be an array for sunday-long-game items");
+      return errors;
+    }
+    if (sources.length < MIN_SOURCES || sources.length > MAX_SOURCES) {
+      errors.push(
+        `sunday-long-game requires between ${MIN_SOURCES} and ${MAX_SOURCES} source links (got ${sources.length})`
+      );
+    }
+    sources.forEach((s, i) => {
+      errors.push(...collectSourceErrors(s, i));
+    });
+  } else if (sources !== undefined && !Array.isArray(sources)) {
+    errors.push("sources must be an array when present");
+  }
+
   return errors;
 }
 
@@ -159,6 +209,7 @@ function collectCreateErrors(body) {
   ) {
     errors.push("seriesNumber must be a positive integer when present");
   }
+  errors.push(...collectSourcesBodyErrors(body));
   return errors;
 }
 
@@ -198,6 +249,48 @@ function collectPatchErrors(body) {
   if (body.status !== undefined) {
     errors.push("status cannot be changed via PATCH; use the transition endpoints");
   }
+  errors.push(...collectSourcesBodyErrors(body));
+  return errors;
+}
+
+/**
+ * Request-body source validation (create/patch). Does not require sources on
+ * drafts; forbids sources on non-long-game streams.
+ * @param {any} body
+ * @returns {string[]}
+ */
+function collectSourcesBodyErrors(body) {
+  const errors = [];
+  if (body.sources === undefined) return errors;
+
+  if (!Array.isArray(body.sources)) {
+    errors.push("sources must be an array");
+    return errors;
+  }
+
+  const stream = body.stream;
+  if (stream && !streamAllowsSources(stream) && body.sources.length > 0) {
+    errors.push(
+      "source links are only allowed on sunday-long-game items"
+    );
+    return errors;
+  }
+
+  if (streamAllowsSources(stream) || (!stream && body.sources.length > 0)) {
+    if (body.sources.length > 0) {
+      if (
+        body.sources.length < MIN_SOURCES ||
+        body.sources.length > MAX_SOURCES
+      ) {
+        errors.push(
+          `sunday-long-game requires between ${MIN_SOURCES} and ${MAX_SOURCES} source links`
+        );
+      }
+      body.sources.forEach((s, i) => {
+        errors.push(...collectSourceErrors(s, i));
+      });
+    }
+  }
   return errors;
 }
 
@@ -205,7 +298,9 @@ module.exports = {
   ValidationError,
   isNonEmptyString,
   isValidDateString,
+  isValidHttpUrl,
   collectItemErrors,
+  collectLongGameLedgerErrors,
   assertValidItem,
   collectCreateErrors,
   collectPatchErrors,

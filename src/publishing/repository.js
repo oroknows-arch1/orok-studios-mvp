@@ -169,6 +169,10 @@ function applyInMemoryFilter(items, filter) {
   let out = items;
   if (filter.stream) out = out.filter((i) => i.stream === filter.stream);
   if (filter.status) out = out.filter((i) => i.status === filter.status);
+  if (filter.category && String(filter.category).trim()) {
+    const q = String(filter.category).toLowerCase().trim();
+    out = out.filter((i) => (i.category || "").toLowerCase() === q);
+  }
   if (filter.date) {
     const d = String(filter.date).slice(0, 10);
     out = out.filter((i) => String(i.plannedDate).slice(0, 10) === d);
@@ -179,7 +183,49 @@ function applyInMemoryFilter(items, filter) {
       (i) =>
         (i.topic || "").toLowerCase().includes(q) ||
         (i.text || "").toLowerCase().includes(q) ||
-        (i.category || "").toLowerCase().includes(q)
+        (i.category || "").toLowerCase().includes(q) ||
+        (i.macroSignal || "").toLowerCase().includes(q)
+    );
+  }
+  if (filter.pattern && String(filter.pattern).trim()) {
+    const q = String(filter.pattern).toLowerCase().trim();
+    out = out.filter((i) => (i.dominantPattern || "").toLowerCase().includes(q));
+  }
+  if (filter.publisher && String(filter.publisher).trim()) {
+    const q = String(filter.publisher).toLowerCase().trim();
+    out = out.filter((i) =>
+      (Array.isArray(i.sources) ? i.sources : []).some((s) =>
+        String(s.publisher || "")
+          .toLowerCase()
+          .includes(q)
+      )
+    );
+  }
+  if (filter.year && String(filter.year).trim()) {
+    const year = String(filter.year).trim();
+    out = out.filter((i) => {
+      const plannedYear = String(i.plannedDate || "").slice(0, 4);
+      if (plannedYear === year) return true;
+      return (Array.isArray(i.sources) ? i.sources : []).some((s) =>
+        String(s.accessDate || s.publicationDate || "").startsWith(year)
+      );
+    });
+  }
+  if (filter.source && String(filter.source).trim()) {
+    const q = String(filter.source).toLowerCase().trim();
+    out = out.filter((i) =>
+      (Array.isArray(i.sources) ? i.sources : []).some(
+        (s) =>
+          String(s.title || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(s.url || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(s.publisher || "")
+            .toLowerCase()
+            .includes(q)
+      )
     );
   }
   return out;

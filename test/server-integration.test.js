@@ -52,12 +52,23 @@ test("existing generator routes are still registered (not 404)", async () => {
   assert.notEqual(img.status, 404);
 });
 
-/* Publishing UI + API over HTTP */
-test("publishing UI is served at /publishing", async () => {
-  const res = await fetch(base + "/publishing");
+/* Publishing is a capability of the original app — not a separate SPA */
+test("standalone /publishing redirects into the original app", async () => {
+  const res = await fetch(base + "/publishing", { redirect: "manual" });
+  assert.ok([301, 302].includes(res.status));
+  const loc = res.headers.get("location") || "";
+  assert.ok(loc.includes("/#today") || loc.endsWith("/"), loc);
+});
+
+test("original app UI exposes publishing panels", async () => {
+  const res = await fetch(base + "/");
   assert.equal(res.status, 200);
   const html = await res.text();
-  assert.ok(html.includes("Publishing"));
+  assert.ok(html.includes("Create Post"));
+  assert.ok(html.includes('data-panel="today"'));
+  assert.ok(html.includes('data-panel="ledger"'));
+  assert.ok(html.includes('data-panel="review"'));
+  assert.ok(!html.includes("Publishing v0.1 · local · manual approval"));
 });
 
 test("publishing health endpoint works with the memory adapter", async () => {

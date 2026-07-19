@@ -4,7 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
 const path = require("path");
-const { createPublishing, UI_FILE } = require("./src/publishing");
+const { createPublishing } = require("./src/publishing");
 const { createGeneralHealthHandler } = require("./src/health");
 
 const app = express();
@@ -18,12 +18,16 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Publishing System — review-first publishing workflow. Mounted alongside the
-// existing generator; it does not alter generator routes. A configuration
-// failure here (e.g. postgres selected without DATABASE_URL, or ephemeral
-// storage in production) is fatal and reported clearly without secrets.
+// Publishing capability — ledger, review, Long Game, draft preparation.
+// Mounted as API capability of this app (not a separate product).
 let publishing;
 try {
+  // Disable in-process scheduler during automated tests unless explicitly enabled.
+  if (process.env.NODE_ENV === "test" || process.env.PUBLISHING_STORAGE === "memory") {
+    if (process.env.PUBLISHING_SCHEDULER === undefined) {
+      process.env.PUBLISHING_SCHEDULER = "0";
+    }
+  }
   publishing = createPublishing();
 } catch (err) {
   console.error(
@@ -33,16 +37,18 @@ try {
   process.exit(1);
 }
 publishing.ready.catch((err) => {
-  // A transient database problem must not take down the generator; it is
-  // surfaced via the health endpoints instead. Log only the message (no stack,
-  // no credentials).
   console.error(
     "PUBLISHING INIT WARNING: " + (err && err.message ? err.message : "init failed")
   );
 });
 app.use("/api/publishing", publishing.router);
+
+// Former standalone publishing SPA entry — redirect into the original app.
 app.get("/publishing", (req, res) => {
-  res.sendFile(UI_FILE);
+  res.redirect(301, "/#today");
+});
+app.get("/publishing/", (req, res) => {
+  res.redirect(301, "/#today");
 });
 
 // General application health for the platform (Render) health check.

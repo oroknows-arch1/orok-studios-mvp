@@ -46,6 +46,16 @@ services:
       # means Render will not read a value from this file and will prompt for it.
       - key: OPENAI_API_KEY
         sync: false
+      # Local timezone for draft preparation windows (Morning 05–06, CBB 15–18).
+      - key: PUBLISHING_TIMEZONE
+        value: Australia/Sydney
+      # Optional: protect POST /api/publishing/prepare for external cron.
+      # Set in the Render dashboard; leave unset to rely on in-process scheduler.
+      - key: PUBLISHING_CRON_SECRET
+        sync: false
+      # Optional: set to "0" to disable the in-process preparation ticker.
+      # - key: PUBLISHING_SCHEDULER
+      #   value: "0"
       # Optional: safe defaults. Leave PUBLISHING_ALLOW_EPHEMERAL_STORAGE unset
       # (disabled). Only set it to "true" in a genuine emergency (see docs).
 

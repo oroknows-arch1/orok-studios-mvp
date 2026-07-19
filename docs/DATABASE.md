@@ -102,7 +102,7 @@ npm run db:migrate
 npm run db:status     # should show all migrations applied and "Current: yes"
 
 # run the app
-npm start             # http://localhost:3000/publishing
+npm start             # http://localhost:3000/
 ```
 
 To run the PostgreSQL integration tests, set `TEST_DATABASE_URL` to a database
@@ -138,6 +138,8 @@ Application startup **never** runs or rewrites migrations — it only seeds data
 | `001_create_publishing_items.sql` | table + `version >= 1` and positive-series-number checks |
 | `002_publishing_items_indexes.sql` | partial unique index on published CBB numbers + status/stream/date indexes |
 | `003_publishing_topic_search.sql` | `pg_trgm` extension + trigram indexes for topic/category search |
+| `004_long_game_sources.sql` | `macro_signal`, `family_lesson`, `sources` JSONB on items + `publishing_long_game_sources` child table for searchable source metadata |
+| `005_series_meta.sql` | `series_meta` JSONB for Masters of Yesterday cultural rotation + Thursday Lingo podcast metadata |
 
 ### pg_trgm policy (deterministic)
 
@@ -169,11 +171,21 @@ development database where `003` already applied keeps working unchanged.
 
 `id (PK, text)`, `stream`, `series_number (int, nullable)`, `planned_date
 (date)`, `generated_at/updated_at/published_at/created_at (timestamptz)`,
-`status`, `category`, `topic`, `dominant_pattern`, `version (int, CHECK >= 1)`,
+`status`, `category`, `topic`, `dominant_pattern`, `macro_signal`,
+`family_lesson`, `sources (jsonb)`, `version (int, CHECK >= 1)`,
 `text`, `image_required (bool)`, `image_brief`, `post_url`, `rejection_reason`,
 `notes`, `similarity_opening/central_lesson/example/image_concept`, `history
 (jsonb)`. Nullable fields remain nullable; timestamps are timezone-aware
 (stored UTC); `planned_date` is a calendar date.
+
+### Schema (publishing_long_game_sources)
+
+Child table for Sunday Long Game source metadata (Amendment 001). Cascades on
+item delete. Columns: `id`, `item_id` (FK), `title`, `url`, `publisher`,
+`publication_date`, `access_date`, `topic`, `category`, `created_at`. Indexed
+for search by publisher, topic, access year, and URL. The denormalised
+`publishing_items.sources` JSONB remains the single-row read path; this table
+is the searchable authority for historical source queries.
 
 ### Indexes / constraints
 

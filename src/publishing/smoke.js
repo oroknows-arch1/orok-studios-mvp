@@ -59,13 +59,31 @@ async function runSmokeTest(opts) {
     record("GET / serves generator UI", false, e.message);
   }
 
-  // 3. publishing UI
+  // 3. publishing is integrated into the original app (no standalone SPA)
   try {
-    const r = await doFetch(base + "/publishing");
-    const text = await r.text();
-    record("GET /publishing serves publishing UI", r.status === 200 && /Publishing/.test(text));
+    const r = await doFetch(base + "/publishing", { redirect: "manual" });
+    const loc = r.headers.get("location") || "";
+    record(
+      "GET /publishing redirects into original app",
+      (r.status === 301 || r.status === 302) && /#today/.test(loc),
+      `status ${r.status} loc ${loc}`
+    );
   } catch (e) {
-    record("GET /publishing serves publishing UI", false, e.message);
+    record("GET /publishing redirects into original app", false, e.message);
+  }
+
+  try {
+    const r = await doFetch(base + "/");
+    const text = await r.text();
+    record(
+      "GET / exposes Today/Ledger/Review panels",
+      r.status === 200 &&
+        /data-panel="today"/.test(text) &&
+        /data-panel="ledger"/.test(text) &&
+        /data-panel="review"/.test(text)
+    );
+  } catch (e) {
+    record("GET / exposes Today/Ledger/Review panels", false, e.message);
   }
 
   // 4. publishing health

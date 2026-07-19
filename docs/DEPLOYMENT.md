@@ -84,7 +84,8 @@ npm run smoke:test -- --base-url https://<your-service>.onrender.com
 Then manually verify:
 - **Existing generator**: open `/`, generate/preview still works (a real
   generation will call OpenAI — optional and operator-initiated only).
-- **Publishing dashboard**: open `/publishing`, dashboard loads.
+- **Publishing in the original app**: open `/` → Today / Ledger / Review panels.
+- Legacy `/publishing` redirects to `/#today`.
 - **Coffee Break Build #001**: present, `published`, series number 1.
 - **Controlled draft persistence across restart**: create a draft in the UI,
   restart the web service from the Render dashboard, confirm the draft is still

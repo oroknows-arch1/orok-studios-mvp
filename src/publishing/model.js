@@ -23,6 +23,9 @@ const { deriveOpening } = require("./similarity");
  * @property {string} [category]
  * @property {string} topic
  * @property {string} [dominantPattern]
+ * @property {string} [macroSignal]
+ * @property {string} [familyLesson]
+ * @property {Array<{title:string,url:string,publisher?:string,publicationDate?:string,accessDate?:string,topic?:string,category?:string}>} [sources]
  * @property {number} version
  * @property {string} text
  * @property {boolean} imageRequired
@@ -31,6 +34,7 @@ const { deriveOpening } = require("./similarity");
  * @property {string} [postUrl]
  * @property {string} [rejectionReason]
  * @property {string} [notes]
+ * @property {object} [seriesMeta] Masters of Yesterday / series-specific metadata
  * @property {SimilarityKeys} similarityKeys
  * @property {Array<{version:number,status:string,text:string,at:string}>} history
  */
@@ -68,6 +72,9 @@ function createItem(input = {}) {
     category: input.category,
     topic: input.topic,
     dominantPattern: input.dominantPattern,
+    macroSignal: input.macroSignal,
+    familyLesson: input.familyLesson,
+    sources: Array.isArray(input.sources) ? input.sources : [],
     version: input.version || 1,
     text,
     imageRequired:
@@ -77,6 +84,10 @@ function createItem(input = {}) {
     postUrl: input.postUrl,
     rejectionReason: input.rejectionReason,
     notes: input.notes,
+    seriesMeta:
+      input.seriesMeta && typeof input.seriesMeta === "object"
+        ? input.seriesMeta
+        : undefined,
     similarityKeys,
     history: Array.isArray(input.history) ? input.history : [],
   };

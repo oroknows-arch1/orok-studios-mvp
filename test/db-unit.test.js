@@ -166,17 +166,39 @@ test("row/model round-trip preserves core fields", () => {
     text: "content",
     status: "draft",
     imageRequired: false,
+    macroSignal: "Rate hold",
+    dominantPattern: "Steady habits",
+    familyLesson: "Keep a buffer",
+    sources: [
+      {
+        title: "RBA",
+        url: "https://www.rba.gov.au/media-releases/",
+        publisher: "Reserve Bank of Australia",
+        accessDate: "2026-07-19",
+      },
+      {
+        title: "ABS",
+        url: "https://www.abs.gov.au/media-centre/media-releases",
+        publisher: "Australian Bureau of Statistics",
+        accessDate: "2026-07-19",
+      },
+    ],
   });
   const values = modelToValues(item);
   const row = {};
   COLUMNS.forEach((c, i) => (row[c] = values[i]));
   row.history = values[COLUMNS.indexOf("history")]; // JSON string
+  row.sources = values[COLUMNS.indexOf("sources")];
   const back = rowToModel(row);
   assert.equal(back.id, item.id);
   assert.equal(back.stream, item.stream);
   assert.equal(back.topic, item.topic);
   assert.equal(back.plannedDate, "2026-07-19");
   assert.equal(back.version, 1);
+  assert.equal(back.macroSignal, "Rate hold");
+  assert.equal(back.familyLesson, "Keep a buffer");
+  assert.equal(back.sources.length, 2);
+  assert.equal(back.sources[0].url, "https://www.rba.gov.au/media-releases/");
 });
 
 /* import CLI arg parsing */

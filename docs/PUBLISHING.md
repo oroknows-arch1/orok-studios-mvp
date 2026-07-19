@@ -24,11 +24,13 @@ recorded posts, with an auditable ledger and archive. It answers:
 
 ## 2. Architecture placement
 
-The publishing system is an **additive module inside the existing Express app**.
-It does not replace or fork the application.
+The publishing system is a **capability of the original OROK Express app**, not a
+separate product. Domain logic lives under `src/publishing/`; the user-facing
+flow is the original `index.html` (Create Post · Today · Ledger · Review).
 
 ```
-server.js                     existing app; mounts the publishing router + UI
+server.js                     original app; mounts /api/publishing + redirects /publishing → /#today
+index.html / app.js           sole frontend (generator + publishing panels)
 src/publishing/
   constants.js                streams, statuses, transition table, rhythm
   validation.js               item + request-body validation (ValidationError)
@@ -39,15 +41,15 @@ src/publishing/
   repository.js               repository interface + in-memory & file adapters
   service.js                  business rules; seeds Coffee Break Build #001
   routes.js                   Express router (mounted at /api/publishing)
-  index.js                    wires repository + service + router together
-  ui/index.html               self-contained single-page UI (served at /publishing)
+  index.js                    wires repository + service + router + scheduler
+  long-game/                  Weekly Intelligence Brief engine
+  schedule/                   timezone windows + idempotent draft preparation
 test/                         node:test suites (unit, service, HTTP integration)
 ```
 
 The existing generator routes (`/generate`, `/generate-image`, `/analyze-voice`)
-are untouched. `server.js` was changed only to (a) mount the publishing router
-and UI, (b) export the app and guard `app.listen` behind `require.main` so the
-app can be imported by tests.
+remain the canonical generation paths. `GET /publishing` redirects into the
+original app (`/#today`); there is no standalone publishing SPA.
 
 ---
 
@@ -101,8 +103,9 @@ npm start            # serves on http://localhost:3000
 
 Then open:
 
-- Generator (existing):  http://localhost:3000/
-- Publishing system:     http://localhost:3000/publishing
+- OROK app (sole UI):  http://localhost:3000/
+- Publishing API:      http://localhost:3000/api/publishing/dashboard
+- Legacy `/publishing` redirects to `/#today`
 
 Run tests (the full suite):
 
@@ -242,7 +245,7 @@ Base path: `/api/publishing`
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| GET | `/items` | list items (filters: `stream`, `status`, `date`, `topic`) |
+| GET | `/items` | list items (filters: `stream`, `status`, `date`, `topic`, `pattern`, `publisher`, `year`, `source`) |
 | GET | `/items/:id` | get one item |
 | POST | `/items` | create a draft/idea (returns `duplicateAdvisory`) |
 | PATCH | `/items/:id` | edit editable fields (not status) |
@@ -255,6 +258,9 @@ Base path: `/api/publishing`
 | GET | `/next-number?stream=` | suggested next series number |
 | POST | `/check-duplicates` | advisory duplicate check for a candidate |
 | GET | `/health` | storage readiness (safe fields only; 200 ok / 503 not) |
+| GET | `/long-game/categories` | weekly source categories for The Long Game |
+| POST | `/long-game/analyze` | run Weekly Intelligence Brief without persisting |
+| POST | `/long-game/generate` | generate brief + store sunday-long-game draft in the ledger |
 
 `GET /api/publishing/health` returns only safe information and never exposes
 credentials, hostnames, SQL, stack traces, or file paths:
@@ -269,3 +275,54 @@ unhealthy, unless the selected repository cannot be safely initialised at startu
 
 All request bodies are validated; validation failures return `400` with an
 `errors` array, illegal transitions return `409`.
+
+---
+
+## 12. Amendment 001 — Sunday Long Game Intelligence Engine
+
+The Sunday Long Game workflow is a **Weekly Intelligence Brief**, not a manual
+financial summary. Module: `src/publishing/long-game/`.
+
+Process for every weekly edition:
+
+1. Collect relevant macro developments across weekly source categories
+2. Identify recurring themes / remove noise
+3. Determine the week's dominant pattern
+4. Translate that pattern into practical family decision making
+5. Generate the Long Game post (family text + X text) with sources
+
+**Post format (required):** Title, Body, One practical family lesson, Macro
+Signal, Dominant Pattern, Sources.
+
+**Sources (mandatory for Sunday Long Game only):** every edition finishes with a
+`Sources` section containing **2–5 clickable** primary links (RBA, ABS, ASIC,
+Treasury, company reports, government announcements, official research).
+Reputable financial journalism is acceptable when primary sources are
+unavailable.
+
+**Do not** attach sources to Motivation Monday, Words of Wisdom, Masters of
+Today, Masters of Yesterday, or Coffee Break Build.
+
+**Ledger fields:** `macroSignal`, `dominantPattern`, `familyLesson`, and
+`sources[]` (`title`, `url`, `publisher`, `publicationDate`, `accessDate`,
+optional `topic`/`category`). Historical editions retain source references.
+Editions are searchable by topic, pattern, publisher, year, and source.
+---
+
+## 13. Masters of Yesterday Cultural Series (Thursday)
+
+Module: `src/publishing/masters-of-yesterday/`.
+
+**Country rotation (exactly one per Thursday):** Indigenous Australia → Cook Islands → Aotearoa New Zealand → Peru → repeat.
+
+**Anchor date:** `2026-01-01` (Thursday). Elapsed calendar Thursdays from this anchor (modulo 4) select the country. Missed or unpublished weeks do **not** delay or corrupt the sequence.
+
+**Cultural catalogue:** approved seed entries with distinct subjectType values. Only `reviewStatus: approved` entries are used for automatic prep. Anti-repetition avoids premature subject reuse; after exhaustion uses least-recently-used.
+
+**Editorial style:** family greeting + subject-first observation + grounded facts + modern significance + farewell + exactly three hashtags.
+
+**Heritage Lens:** image brief via the existing `/generate-image` system — documentary realism, behaviour-driven, no mixed-culture or fake-ceremony imagery.
+
+**Thursday Lingo:** every Thursday recommends one Learn Cook Islands Māori episode (Junior Charlie & Tom Harrison) with a verified Apple Podcasts episode URL (`?i=`). Seed catalogue with optional iTunes refresh; missing data marks Requires Review without inventing episode facts.
+
+**Persistence:** `series_meta` JSONB (migration `005`) stores rotation, cultural subject, Heritage Lens signatures, and podcast metadata.
