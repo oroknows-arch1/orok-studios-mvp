@@ -211,64 +211,40 @@ function buildImagePrompt(post, category, idea, weeklyPosts) {
   let prompt = "";
 
   if (category === "Motivation Monday") {
-    prompt = `Create a realistic 4-panel family collage with warm natural lighting and no text.
+    prompt = `Create a realistic 4-panel family collage. Documentary photography. No text.
 
-STRUCTURE:
-- Use a 5-member Polynesian / Pasifika family system:
-  - two parents
-  - 22-year-old
-  - 18-year-old
-  - 12–13-year-old daughter (dance-focused)
-
-IDENTITY RULES:
-- the family must look Polynesian / Pasifika
+FAMILY (the subject — consistent across all panels):
+- one Polynesian / Pasifika family: mother, father, 22-year-old son, 18-year-old son, 12–13-year-old daughter
 - realistic brown skin tones
-- Polynesian facial features
+- Polynesian / Pasifika facial features
 - dark hair
-- clear family resemblance across all panels
-- do not default to white European-looking subjects
+- clear family resemblance
+- ordinary, believable behaviour
+- understated facial expressions
 
-STORYTELLING RULES (MANDATORY):
-- Do not illustrate the post literally. Do not depict slogans, captions, metaphors, or on-the-nose symbols from the text.
-- Extract the underlying human observation from the post (the lived experience behind the words).
-- Show one connected visual story across all four panels — the same underlying theme continuing through the family.
-- Each panel must be a different moment of that same theme, not four unrelated stock-photo activities.
-- Show internal experience through behaviour and body language, not exaggerated facial expressions.
-- Prefer ordinary moments such as: repetition, correction, restarting, unfinished work, waiting, checking, cleaning up, comparing progress, quiet guidance.
-- Avoid posed achievement scenes.
-- Avoid generic “hard work” images.
-- Avoid motivational-advertising composition.
-- The image must feel like a real family was observed during normal life.
-
-PANEL RULES (same theme, different moments — adapt to the extracted observation):
-- Panel 1: 22-year-old in one ordinary behavioural moment of the theme
-- Panel 2: 18-year-old in a different moment of the same theme
-- Panel 3: 12–13-year-old daughter in another moment of the same theme (dance practice when relevant)
-- Panel 4: parents quietly helping review progress or guide the next attempt — same theme, quiet guidance
-
-EXAMPLE (when the observation is unfinished progress / the messy middle):
-- Panel 1: 22-year-old working through crossed-out or unfinished plans
-- Panel 2: 18-year-old resetting after a mistake in training
-- Panel 3: 12–13-year-old daughter repeating the same dance movement
-- Panel 4: parents quietly helping review progress or guide the next attempt
-
-EMOTIONAL TONE (from behaviour, not performance):
-- steady, imperfect, unfinished, trying again
-- calm documentary observation — not drama, not triumph
+STORYTELLING:
+- Extract the underlying human observation from the post.
+- Do not illustrate the wording literally.
+- Do not depict slogans, metaphors, or symbolic visual shortcuts.
+- The four panels must be four connected moments of one family story.
+- Possible observations include: discomfort, uncertainty, persistence, awkward learning, rebuilding habits, patience, discipline, restarting, unfinished progress.
+- Emotion must come from behaviour such as: repeating, correcting, pausing, checking, restarting, cleaning up, trying again, quiet guidance.
+- Nobody poses. Nobody celebrates. Nobody has already succeeded.
 
 SOURCE POST (for observation only — do not illustrate literally):
 "${bodyOnly}"
 
 GLOBAL RULES:
-- documentary realism only
-- no text overlays
-- no fantasy or cinematic exaggeration
-- no uniforms or harsh institutional settings
-- natural everyday settings: home, park, beach, backyard, study space, practice space
-- clear family resemblance across all panels
-- avoid generic stock-photo feel, staged poses, and motivational advertising aesthetics`;
+- documentary realism
+- realistic photography
+- no text or captions
+- no fantasy
+- no cinematic exaggeration
+- no generic stock-photo appearance
+- no motivational-advertising composition
+- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
   } else if (category === "Masters of Today") {
-    prompt = `Create a realistic 4-panel editorial-style collage with warm natural lighting and no text.
+    prompt = `Create a realistic 4-panel editorial-style collage. Documentary / editorial realism. No text.
 
 SUBJECT TYPE:
 - a modern professional in entertainment or performance
@@ -300,100 +276,126 @@ VISUAL GOAL:
 - no portrait
 - no text overlays
 - no fake labels
-- grounded documentary/editorial realism only`;
+- grounded documentary/editorial realism only
+- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
   } else if (category === "Wisdom Wednesday") {
-    prompt = `Create a realistic 4-panel family collage with warm natural lighting and no text.
+    prompt = `Create a realistic 4-panel family collage. Documentary photography. No text.
 
-STRUCTURE:
-- Use a 5-member Polynesian / Pasifika family system:
-  - two parents
-  - 22-year-old
-  - 18-year-old
-  - 12–13-year-old daughter
-
-IDENTITY RULES:
-- the family must look Polynesian / Pasifika
+FAMILY (the subject — consistent across all panels):
+- one Polynesian / Pasifika family: mother, father, 22-year-old son, 18-year-old son, 12–13-year-old daughter
 - realistic brown skin tones
-- Polynesian facial features
+- Polynesian / Pasifika facial features
 - dark hair
-- clear family resemblance across all panels
-- do not default to white European-looking subjects
+- clear family resemblance
+- ordinary, believable behaviour
+- understated facial expressions
 
-STORYTELLING RULES (MANDATORY):
-- Do not illustrate the post literally. Do not depict slogans, captions, metaphors, or on-the-nose symbols from the text.
-- Extract the underlying human observation from the post (the lived experience behind the words).
-- Show one connected visual story across all four panels — the same underlying theme continuing through the family.
-- Each panel must be a different moment of that same theme, not four unrelated stock-photo activities.
-- Show internal experience through behaviour and body language, not exaggerated facial expressions.
-- Prefer ordinary quiet moments such as: pausing, checking, waiting, listening, repeating a small action, unfinished work set aside, quiet guidance.
-- Avoid posed achievement scenes, generic “hard work” images, and motivational-advertising composition.
-- The image must feel like a real family was observed during normal life.
-
-PANEL RULES (same reflective theme, different moments):
-- Panel 1: 22-year-old in one ordinary behavioural moment of the theme
-- Panel 2: 18-year-old in a different moment of the same theme
-- Panel 3: 12–13-year-old daughter in another moment of the same theme
-- Panel 4: parents quietly present — listening, reviewing, or gently guiding within the same theme
-
-EMOTIONAL TONE (from behaviour, not performance):
-- reflective, steady, imperfect, unfinished
-- calm documentary observation — not drama, not triumph
+STORYTELLING:
+- Create a quieter, reflective family story based on the underlying observation in the post.
+- Do not illustrate the post literally.
+- Avoid motivational poses, dramatic emotion, and literal illustration of the post.
+- The four panels must remain connected by one theme.
+- Use ordinary moments involving: listening, observing, conversation, patience, helping, remembering, considering, quiet reflection.
+- The image should feel thoughtful and naturally observed.
 
 SOURCE POST (for observation only — do not illustrate literally):
 "${bodyOnly}"
 
 GLOBAL RULES:
-- documentary realism only
-- no text overlays
-- no fantasy or surreal effects
-- natural everyday settings: home, nature, beach, yard, quiet room
-- clear family resemblance across all panels
-- avoid generic stock-photo feel, staged poses, and motivational advertising aesthetics`;
-  } else if (category === "Masters of Yesterday") {
-    prompt = `Create a realistic 4-panel documentary collage with warm natural lighting and no text.
-
-The tribute is:
-"${bodyOnly}"
-
-Subject:
-${idea}
-
-STRICT 4-PANEL RULES:
-- Panel 1: culturally or historically grounded visual linked directly to the subject
-- Panel 2: another historically or culturally relevant real-world visual linked to the subject
-- Panel 3: a dedicated geographic context panel showing the real-world location tied to the subject
-- Panel 4: a final panel showing living legacy, continuity, descendants, cultural continuation, tools, environment, or community relevance
-
-MAP / LOCATION PANEL RULES:
-- the map/location panel must be tied to the real subject location
-- no fake labels, no gibberish, no invented cartography
-- if labels are unreliable, remove them entirely rather than guessing
-- no text overlays
-
-GLOBAL RULES:
-- factual, respectful, grounded
+- documentary realism
+- realistic photography
+- no text or captions
 - no fantasy
 - no cinematic exaggeration
-- no costumes unrelated to the actual culture or time
-- image should feel like real-world historical/cultural tribute`;
-  } else if (category === "Friday Recap") {
-    prompt = `Create a realistic 4-panel family collage with warm natural lighting and no text.
+- no generic stock-photo appearance
+- no motivational-advertising composition
+- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
+  } else if (category === "Masters of Yesterday") {
+    prompt = `Create a realistic 4-panel documentary collage. Documentary photography. No text.
 
-The reflection post is:
+FAMILY (visual thread across all panels):
+- one Polynesian / Pasifika family: mother, father, 22-year-old son, 18-year-old son, 12–13-year-old daughter
+- realistic brown skin tones
+- Polynesian / Pasifika facial features
+- dark hair
+- clear family resemblance
+- ordinary, believable behaviour
+- understated facial expressions
+
+CULTURAL SUBJECT (source of truth):
+Thursday post:
 "${bodyOnly}"
 
-Weekly source material:
+Selected cultural subject:
+${idea}
+
+PANEL FLOW:
+- Panel 1: The family entering, arriving at, or moving through the featured place, Country, or cultural environment.
+- Panel 2: The family respectfully observing, listening, or learning.
+- Panel 3: The strongest cultural panel. Show a close and authentic connection to the people, place, practice, knowledge, or living culture featured in the post. Place the family close to the featured tribal, Indigenous, iwi, island, national, or cultural community while keeping the cultural subject central and respected.
+- Panel 4: The family quietly reflecting, continuing their journey, or carrying the learning forward.
+
+CULTURAL RULES:
+- The featured culture must be authentically and respectfully integrated into the family’s journey.
+- The family experiences and learns from the culture.
+- The family does not replace or dominate it.
+- culturally grounded, respectful representation
+- authentic people, authentic environment, authentic material culture where relevant
+- no stereotypes
+- no costume-like treatment
+- no fake ceremonies
+- no invented cultural details
+- no generic tourism advertisement
+- no movie-poster imagery
+
+GLOBAL RULES:
+- documentary realism
+- realistic photography
+- no text or captions
+- no fantasy
+- no cinematic exaggeration
+- no generic stock-photo appearance
+- no motivational-advertising composition
+- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
+  } else if (category === "Friday Recap") {
+    prompt = `Create a realistic 4-panel family collage. Documentary photography. No text.
+
+FAMILY (the subject — consistent across all panels):
+- one Polynesian / Pasifika family: mother, father, 22-year-old son, 18-year-old son, 12–13-year-old daughter
+- realistic brown skin tones
+- Polynesian / Pasifika facial features
+- dark hair
+- clear family resemblance
+- ordinary, believable behaviour
+- understated facial expressions
+
+STORYTELLING:
+- Create a visual recap of the week.
+- The four panels may draw from different parts of the week, but they must feel like one connected family journey rather than four unrelated activities.
+- The recap may mix: effort, learning, reflection, heritage, family routine, quiet progress.
+- Use the actual weekly posts supplied below.
+- Do not create generic Friday celebration scenes.
+- No trophies. No victory poses. No staged group celebration.
+- The result should feel like a family looking back on a real week they lived through together.
+- Do not illustrate captions literally.
+
+RECAP POST:
+"${bodyOnly}"
+
+WEEKLY SOURCE MATERIAL:
 "${weeklyPosts}"
 
-RULES:
-- show reflection, completion, weekly learning, connection, continuity
-- different panels should hint at different parts of the week without literal text
+GLOBAL RULES:
 - documentary realism
+- realistic photography
+- no text or captions
 - no fantasy
-- no text overlays
-- family-safe and emotionally believable`;
+- no cinematic exaggeration
+- no generic stock-photo appearance
+- no motivational-advertising composition
+- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
   } else if (category === "Friday Freestyle") {
-    prompt = `Create a realistic 4-panel collage with warm natural lighting and no text.
+    prompt = `Create a realistic 4-panel collage. Documentary photography. No text.
 
 The post is:
 "${bodyOnly}"
@@ -402,12 +404,25 @@ RULES:
 - lighter, relaxed, human feeling
 - grounded and believable
 - documentary realism
+- realistic photography
 - no fantasy
-- no text overlays
-- everyday life, humour, ease, end-of-week release`;
+- no cinematic exaggeration
+- no text or captions
+- no generic stock-photo appearance
+- everyday life, humour, ease, end-of-week release
+- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
   } else {
-    prompt = `Create a realistic 4-panel collage with warm natural lighting and no text, aligned with this post:
-"${bodyOnly}"`;
+    prompt = `Create a realistic 4-panel collage. Documentary photography. No text. Aligned with this post:
+"${bodyOnly}"
+
+GLOBAL RULES:
+- documentary realism
+- realistic photography
+- no text or captions
+- no fantasy
+- no cinematic exaggeration
+- no generic stock-photo appearance
+- Lighting, weather and environment must be determined naturally by the scene — do not force a global lighting style.`;
   }
 
   return prompt;
