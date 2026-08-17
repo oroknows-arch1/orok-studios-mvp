@@ -150,17 +150,15 @@ async function generatePosts() {
       div.innerText = post;
 
       const counter = document.createElement("div");
-      counter.style.fontSize = "12px";
-      counter.style.color = "#666";
-      counter.style.marginTop = "8px";
+      counter.className = "charcount";
       counter.innerText = `Characters: ${post.length}`;
       div.appendChild(counter);
 
       div.onclick = () => {
         document.querySelectorAll(".post").forEach((p) => {
-          p.style.background = "white";
+          p.classList.remove("selected");
         });
-        div.style.background = "#e8f0fe";
+        div.classList.add("selected");
 
         selectedPost = post;
         selectedCategory = category;
@@ -603,7 +601,7 @@ prepareLongGameBtn.addEventListener("click", async () => {
     generateImageBtn.style.display = "none";
     saveToLedgerBtn.style.display = "none";
     postsDiv.innerHTML =
-      '<div class="post" style="background:#e8f0fe;">' +
+      '<div class="post selected">' +
       esc(selectedPost) +
       "</div><p class=\"hint\">Saved to ledger with " +
       (res.item.sources || []).length +
@@ -672,7 +670,8 @@ function toast(msg, isError) {
   const el = document.getElementById("toast");
   el.hidden = false;
   el.textContent = msg;
-  el.style.background = isError ? "#7a2e2e" : "#1c3a4a";
+  el.classList.toggle("error", !!isError);
+  el.classList.toggle("ok", !isError);
   clearTimeout(toast._t);
   toast._t = setTimeout(() => {
     el.hidden = true;
@@ -680,7 +679,8 @@ function toast(msg, isError) {
 }
 
 function badge(status) {
-  return '<span class="badge">' + esc(status) + "</span>";
+  const safe = esc(status);
+  return '<span class="badge st-' + safe + '">' + safe + "</span>";
 }
 
 /* ---------- Today ---------- */
@@ -946,7 +946,7 @@ function moyMetaHtml(item) {
 function lingoHtml(item) {
   const lingo = item.seriesMeta && item.seriesMeta.thursdayLingo;
   if (!lingo) return "";
-  let html = "<div style=\"margin-top:12px;\"><strong>Thursday Lingo</strong>";
+  let html = "<div class=\"lingo-block\"><strong>Thursday Lingo</strong>";
   html += "<div class=\"hint\">" + esc(lingo.podcastName || "Learn Cook Islands Māori") + "</div>";
   if (lingo.status === "Requires Review") {
     html += "<div class=\"hint\">Requires Review — select episode manually.</div></div>";
