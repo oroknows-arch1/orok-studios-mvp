@@ -120,7 +120,7 @@ a:hover {
 .nav-btn.active {
   color: var(--text);
   background: var(--panel-2);
-  border-color: var(--border);
+  border-color: rgba(110, 168, 254, 0.55);
 }
 
 .nav-btn:focus-visible {
@@ -450,8 +450,8 @@ pre.selected-post {
 .queue-item {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
   align-items: center;
+  gap: 8px 16px;
   padding: 14px 16px;
   margin-top: 8px;
 }
@@ -462,11 +462,13 @@ pre.selected-post {
 
 .queue-item .hint {
   flex: 1 1 100%;
+  order: 5;
   margin: 0;
 }
 
 .queue-item button {
   margin-left: auto;
+  order: 4;
 }
 
 .empty {
@@ -545,6 +547,7 @@ pre.selected-post {
   border: none;
   border-radius: 0;
   background: transparent;
+  min-width: 720px;
 }
 
 table {
@@ -684,6 +687,7 @@ tbody tr:last-child td {
   }
 
   .queue-item button {
+    order: 6;
     margin-left: 0;
     width: 100%;
   }
@@ -699,8 +703,3 @@ tbody tr:last-child td {
   }
 }
 
-@media (max-width: 420px) {
-  .nav-btn {
-    flex-basis: 100%;
-  }
-}
