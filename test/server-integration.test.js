@@ -7,7 +7,19 @@ const assert = require("node:assert/strict");
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || "test-dummy-key";
 process.env.PUBLISHING_STORAGE = "memory";
 
+// Keep route tests offline: a dummy key must never trigger real provider calls.
+const openaiPath = require.resolve("openai");
+require(openaiPath);
+const originalOpenAI = require.cache[openaiPath].exports;
+require.cache[openaiPath].exports = class FakeOpenAI {
+  constructor() {
+    this.chat = { completions: { create: async () => ({ choices: [{ message: {
+      content: "A grounded first thought.---A grounded second thought.---A grounded third thought."
+    } }] }) } };
+  }
+};
 const app = require("../server");
+require.cache[openaiPath].exports = originalOpenAI;
 
 let server;
 let base;
@@ -35,21 +47,20 @@ test("existing static index page is still served at /", async () => {
 });
 
 test("existing generator routes are still registered (not 404)", async () => {
-  // These call OpenAI with a dummy key and will error (500), but the routes
-  // must still exist — a 404 would mean we broke the generator wiring.
+  // Exercise the real Express routes with an offline provider stub.
   const gen = await fetch(base + "/generate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ idea: "x", category: "Motivation Monday" }),
   });
-  assert.notEqual(gen.status, 404);
+  assert.equal(gen.status, 200);
 
   const img = await fetch(base + "/generate-image", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ imagePrompt: "x" }),
   });
-  assert.notEqual(img.status, 404);
+  assert.equal(img.status, 400); // Legacy prompt alone is no longer authoritative.
 });
 
 /* Publishing is a capability of the original app — not a separate SPA */
