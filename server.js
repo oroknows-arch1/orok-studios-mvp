@@ -4,6 +4,7 @@ const express = require("express");
 const cors = require("cors");
 const OpenAI = require("openai");
 const path = require("path");
+const { createImageHandler, POLICY_VERSION } = require("./src/image-generation");
 const { createPublishing } = require("./src/publishing");
 const { createGeneralHealthHandler } = require("./src/health");
 
@@ -427,7 +428,9 @@ app.post("/generate", async (req, res) => {
   if (category === "Motivation Monday") {
     extraCategoryRule = `
 - Tone should be direct, disciplined and action-based
-- Focus on effort, consistency, discipline, pressure, persistence, or doing the work
+- Let the user's idea determine the message; effort and persistence apply only when relevant
+- Category tone must preserve the user's meaning: rest and letting go must not automatically become working harder
+- Do not add hustle language, pressure or a harder push to a theme about release or recovery
 - The post must contain 3 layers:
   1. a clear opening truth
   2. a deeper explanation of what that truth means
@@ -659,42 +662,10 @@ ${extraCategoryRule}
   }
 });
 
-app.post("/generate-image", async (req, res) => {
-  const { imagePrompt } = req.body;
-
-  try {
-    console.log("GENERATE IMAGE HIT");
-    console.log("IMAGE PROMPT PREVIEW:", (imagePrompt || "").slice(0, 300));
-
-    const response = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt: imagePrompt,
-      size: "1024x1024",
-    });
-
-    const base64Image = response.data?.[0]?.b64_json;
-
-    if (!base64Image) {
-      console.log("NO IMAGE RETURNED FROM OPENAI");
-      return res.status(500).json({
-        error: "No image returned from OpenAI",
-      });
-    }
-
-    console.log("IMAGE GENERATED SUCCESSFULLY");
-
-    const imageUrl = `data:image/png;base64,${base64Image}`;
-    res.json({ imageUrl });
-  } catch (err) {
-    console.error("IMAGE GENERATION ERROR FULL:", err);
-    res.status(500).json({
-      error:
-        err?.response?.data?.error?.message ||
-        err?.message ||
-        "Unknown image generation error",
-    });
-  }
+app.get("/api/image-policy", (req, res) => {
+  res.json({ version: POLICY_VERSION, maxAttempts: 2, visualReviewRequired: true });
 });
+app.post("/generate-image", createImageHandler(openai));
 
 const PORT = process.env.PORT || 3000;
 
