@@ -9,8 +9,10 @@
 <body>
 
   <header class="app-header">
-    <h1>OROK Studios</h1>
-    <p class="tagline">Create posts · review drafts · publish with intention</p>
+    <div class="brand">
+      <h1>OROK Studios</h1>
+      <p class="tagline">Create posts · review drafts · publish with intention</p>
+    </div>
     <nav class="app-nav" aria-label="Primary">
       <button type="button" class="nav-btn active" data-panel="create">Create Post</button>
       <button type="button" class="nav-btn" data-panel="today">Today</button>
@@ -19,63 +21,83 @@
     </nav>
   </header>
 
+  <main class="app-main">
+
   <!-- ========== CREATE (original journey) ========== -->
   <section id="panel-create" class="panel active">
     <h2>Create Post</h2>
+    <p class="sub">Generate a draft, attach an image when the stream allows it, then send it into Today.</p>
 
-    <label for="category">Category:</label>
-    <select id="category">
-      <option>Motivation Monday</option>
-      <option>Masters of Today</option>
-      <option>Words of Wisdom</option>
-      <option>Masters of Yesterday</option>
-      <option>Weekly Reflection</option>
-      <option>Saturday Mixed</option>
-      <option>The Long Game</option>
-      <option>Coffee Break Build</option>
-      <option>Friday Freestyle</option>
-    </select>
+    <div class="card work-card">
+      <div class="row">
+        <div class="field">
+          <label for="category">Category:</label>
+          <select id="category">
+            <option>Motivation Monday</option>
+            <option>Masters of Today</option>
+            <option>Words of Wisdom</option>
+            <option>Masters of Yesterday</option>
+            <option>Weekly Reflection</option>
+            <option>Saturday Mixed</option>
+            <option>The Long Game</option>
+            <option>Coffee Break Build</option>
+            <option>Friday Freestyle</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="idea">Idea / Theme:</label>
+          <input id="idea" type="text" placeholder="e.g. creativity, Gout Gout, stillness, Malcolm X">
+        </div>
+      </div>
 
-    <label for="idea">Idea / Theme:</label>
-    <input id="idea" type="text" placeholder="e.g. creativity, Gout Gout, stillness, Malcolm X">
+      <div id="categoryHint" class="hint"></div>
 
-    <div id="categoryHint" class="hint"></div>
+      <div id="weeklyPostsWrap" class="hidden-block field">
+        <label for="weeklyPosts">Weekly Posts / Notes:</label>
+        <textarea id="weeklyPosts" rows="8" placeholder="Paste Monday–Thursday posts or week notes for Weekly Reflection..."></textarea>
+      </div>
 
-    <div id="weeklyPostsWrap" class="hidden-block">
-      <label for="weeklyPosts">Weekly Posts / Notes:</label><br>
-      <textarea id="weeklyPosts" rows="8" cols="120" placeholder="Paste Monday–Thursday posts or week notes for Weekly Reflection..."></textarea>
+      <div id="tributeUploadWrap" class="hidden-block field">
+        <label for="tributeImage">Tribute image (manual upload — no auto likeness):</label>
+        <input id="tributeImage" type="file" accept="image/*">
+        <div id="tributePreview" class="hint"></div>
+      </div>
+
+      <div class="actions">
+        <button type="button" class="primary" onclick="generatePosts()">Generate Posts</button>
+        <button type="button" id="prepareLongGameBtn" class="secondary hidden-block">Prepare Long Game Brief</button>
+      </div>
+
+      <div id="posts" class="posts-area"></div>
     </div>
 
-    <div id="tributeUploadWrap" class="hidden-block">
-      <label for="tributeImage">Tribute image (manual upload — no auto likeness):</label><br>
-      <input id="tributeImage" type="file" accept="image/*">
-      <div id="tributePreview" class="hint"></div>
-    </div>
-
-    <br>
-    <button type="button" onclick="generatePosts()">Generate Posts</button>
-    <button type="button" id="prepareLongGameBtn" class="secondary hidden-block">Prepare Long Game Brief</button>
-
-    <div id="posts" class="posts-area"></div>
-
-    <div id="selectedOutputSection">
+    <div id="selectedOutputSection" class="card work-card">
       <h3>Selected Post</h3>
       <div id="selectedPost" class="selected-post"></div>
 
-      <button type="button" id="saveToLedgerBtn" class="secondary" style="display:none;">Save to Today’s drafts</button>
-      <button type="button" id="generateImageBtn" style="display:none;">Generate Image</button>
+      <div class="actions">
+        <button type="button" id="saveToLedgerBtn" class="secondary" style="display:none;">Save to Today’s drafts</button>
+        <button type="button" id="generateImageBtn" class="primary" style="display:none;">Generate Image</button>
+      </div>
 
       <div id="imageStatus"></div>
-      <img id="generatedImage" alt="Generated image" style="display:none; width:100%; max-width:800px; border-radius:10px; margin-bottom:16px;">
+      <img id="generatedImage" alt="Generated image">
 
       <h3>Image Prompt</h3>
       <div id="imagePrompt" class="selected-post"></div>
     </div>
 
-    <h2>Analyze Brand Voice</h2>
-    <textarea id="voiceInput" placeholder="Paste website text here..." style="width:100%; height:120px;"></textarea>
-    <button type="button" onclick="analyzeVoice()">Analyze Voice</button>
-    <pre id="voiceResult" class="selected-post"></pre>
+    <div class="card work-card">
+      <h2>Analyze Brand Voice</h2>
+      <div class="field">
+        <label for="voiceInput">Website or sample text</label>
+        <textarea id="voiceInput" placeholder="Paste website text here..." rows="6"></textarea>
+      </div>
+      <div class="actions">
+        <button type="button" class="primary" onclick="analyzeVoice()">Analyze Voice</button>
+      </div>
+      <pre id="voiceResult" class="selected-post"></pre>
+    </div>
   </section>
 
   <!-- ========== TODAY ========== -->
@@ -86,7 +108,9 @@
       <button type="button" id="backfillBtn">Prepare missing drafts</button>
       <span id="todayStatus" class="hint"></span>
     </div>
-    <div id="todayCards" class="card-row"></div>
+    <div class="today-summary">
+      <div id="todayCards" class="card-row"></div>
+    </div>
     <h3>Queue</h3>
     <div id="todayQueue"></div>
   </section>
@@ -94,6 +118,7 @@
   <!-- ========== LEDGER ========== -->
   <section id="panel-ledger" class="panel" hidden>
     <h2>Ledger &amp; history</h2>
+    <p class="sub">Filter the production record. Open any row to continue review.</p>
     <div class="toolbar filters">
       <select id="ledgerStream"><option value="">All streams</option></select>
       <select id="ledgerStatus">
@@ -114,25 +139,31 @@
     <div id="reviewEmpty" class="empty">No draft selected.</div>
     <div id="reviewBody" class="hidden-block">
       <div id="reviewMeta" class="meta-grid"></div>
-      <label for="reviewText">Text</label>
-      <textarea id="reviewText" rows="14"></textarea>
-      <div id="reviewCharCount" class="hint"></div>
-      <label for="reviewImageBrief">Image brief</label>
-      <input id="reviewImageBrief" type="text">
+      <div class="field">
+        <label for="reviewText">Text</label>
+        <textarea id="reviewText" rows="14"></textarea>
+      </div>
+      <div id="reviewCharCount" class="hint charcount"></div>
+      <div class="field">
+        <label for="reviewImageBrief">Image brief</label>
+        <input id="reviewImageBrief" type="text">
+      </div>
       <div id="reviewSources" class="sources-block"></div>
       <div class="toolbar">
         <button type="button" id="btnSaveDraft">Save</button>
         <button type="button" id="btnSubmit">Submit review</button>
-        <button type="button" id="btnApprove">Approve</button>
-        <button type="button" id="btnReject">Reject</button>
-        <button type="button" id="btnPublish">Mark published</button>
+        <button type="button" id="btnApprove" class="btn-approve">Approve</button>
+        <button type="button" id="btnReject" class="btn-reject">Reject</button>
+        <button type="button" id="btnPublish" class="btn-publish">Mark published</button>
         <button type="button" id="btnArchive">Archive</button>
       </div>
       <div id="reviewMsg" class="hint"></div>
     </div>
   </section>
 
-  <div id="toast" class="toast" hidden></div>
+  </main>
+
+  <div id="toast" class="toast" hidden role="status" aria-live="polite"></div>
   <script src="app.js"></script>
 </body>
 </html>
