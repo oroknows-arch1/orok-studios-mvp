@@ -9,8 +9,10 @@ const { createPublishing } = require("./src/publishing");
 const { createGeneralHealthHandler } = require("./src/health");
 
 const app = express();
+const {createEmailRelay}=require('./src/emradar-email-relay');
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
+app.post('/emradar/email/:operation',createEmailRelay());
 // Serve the static generator UI. `dotfiles: "ignore"` prevents a local .env (or
 // any dotfile) from ever being served as a static asset.
 app.use(express.static(__dirname, { dotfiles: "ignore" }));
