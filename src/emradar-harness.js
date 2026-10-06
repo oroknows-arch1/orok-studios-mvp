@@ -42,7 +42,8 @@ function createHarnessRelay({openai,fetcher=fetch,env=process.env}={}){
    const task=(async()=>{
     const isCheck=op==='verify',payload=isCheck?{context:base(b.context),draft:b.result}:base(b.context);
     const user=JSON.stringify(payload);if(Buffer.byteLength(user)>90000)throw Error('HARNESS_INPUT_BOUND');
-    const response=await openai.chat.completions.create({model,response_format:{type:'json_object'},max_completion_tokens:isCheck?1500:5000,messages:[{role:'system',content:isCheck?verifier:writer},{role:'user',content:user}]},{maxRetries:0,timeout:60000});
+    const response_format=!isCheck&&b.context.response_schema?{type:'json_schema',json_schema:{name:'emradar_editorial_correspondence',strict:true,schema:b.context.response_schema}}:{type:'json_object'};
+    const response=await openai.chat.completions.create({model,response_format,max_completion_tokens:isCheck?1500:5000,messages:[{role:'system',content:isCheck?verifier:writer},{role:'user',content:user}]},{maxRetries:0,timeout:60000});
     const u=response.usage;if(!response.id||!Number.isInteger(u?.prompt_tokens)||!Number.isInteger(u?.completion_tokens))throw Error('PROVIDER_USAGE_RECEIPT_MISSING');
     const billing={actual:false,provider:'openai',service:op,model:response.model||model,request_id:response._request_id||response.id,receipt_id:response.id,currency:'USD',usage:{input_tokens:u.prompt_tokens,cached_input_tokens:u.prompt_tokens_details?.cached_tokens||0,output_tokens:u.completion_tokens},pricing:q.pricing};
     let result;try{result=JSON.parse(response.choices?.[0]?.message?.content||'null');}catch(e){e.billing=billing;throw e;}

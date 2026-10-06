@@ -14,4 +14,12 @@ test('authenticated quote bounds two provider calls; execute and independent ver
  const verified=await call(h,'verify',{...input,result:executed.output.result});assert.equal(verified.output.status,'VERIFIED');assert.equal(calls,2);
  const altered=structuredClone(input);altered.context.source.state='UNKNOWN';assert.equal((await call(h,'execute',altered)).status,409);assert.equal(calls,2);
 });
+test('source-bound producer schema is enforced at generation, independent verifier is unchanged',async()=>{
+ const formats=[],openai={chat:{completions:{create:async(input)=>{formats.push(input.response_format);return {id:'schema-'+formats.length,usage:{prompt_tokens:20,completion_tokens:10},choices:[{finish_reason:'stop',message:{content:JSON.stringify(formats.length===1?{body:'Draft',evidence_refs:['E1']}:{editorial_checks:{}})}}]};}}}};
+ const h=createHarnessRelay({openai,env,fetcher:rates}),unit={workUnitId:'EMRADAR:editorial_intelligence'},schema={type:'object',properties:{body:{type:'string'}},required:['body'],additionalProperties:false},context={source:{state:'CONFIRMED'},response_schema:schema};
+ const {output:quote}=await call(h,'quote',{unit,context}),input={unit,decision:{providerId:'openai',modelId:'terra'},context:{...context,input_hash:'bound',cost_reservation:{quote}}};
+ const execution=await call(h,'execute',input);assert.equal(execution.status,200);assert.deepEqual(formats[0],{type:'json_schema',json_schema:{name:'emradar_editorial_correspondence',strict:true,schema}});
+ await call(h,'verify',{...input,result:execution.output.result});assert.deepEqual(formats[1],{type:'json_object'});
+ const changed=structuredClone(input);changed.context.response_schema.required=[];assert.equal((await call(h,'execute',changed)).status,409);assert.equal(formats.length,2);
+});
 test('unknown exchange rate blocks before paid work',async()=>{await assert.rejects(exchange(async()=>({ok:true,text:async()=>'<html>unavailable</html>'})),/UNVERIFIED/);});
