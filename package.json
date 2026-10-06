@@ -20,6 +20,8 @@
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
+    "imapflow": "^2.2.5",
+    "mailparser": "^3.9.36",
     "nodemailer": "^8.0.3",
     "openai": "^6.33.0",
     "pg": "^8.22.0"

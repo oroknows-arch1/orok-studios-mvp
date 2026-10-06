@@ -1,17 +1,22 @@
 "use strict";
 const crypto=require('node:crypto');
 const nodemailer=require('nodemailer');
+const {createOutcomeCollector}=require('./emradar-outcome-collector');
 const expected='oroknows@gmail.com';
 const recipients=new Set(['breakingviews.guest@thomsonreuters.com','paul@im-mining.com','chloe@australianminingreview.com.au','editorial@redimin.cl']);
 // Durable approval, IN_FLIGHT and ambiguity locks remain in EMRADAR Redis.
 // This transport never retries; an uncertain response must be reconciled there.
-function createEmailRelay({createTransport=nodemailer.createTransport}={}){
+function createEmailRelay({createTransport=nodemailer.createTransport,collectOutcome=createOutcomeCollector()}={}){
  const requests=new Map();
  return async(req,res)=>{
   const expectedAuth='Bearer '+process.env.EMRADAR_EMAIL_RELAY_TOKEN,actual=req.headers.authorization||'';
   if(!process.env.EMRADAR_EMAIL_RELAY_TOKEN||actual.length!==expectedAuth.length||!crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(expectedAuth)))return res.status(403).json({reason:'EMAIL_RELAY_AUTH_REQUIRED'});
   const {user,password,mail,idempotency_key}=req.body||{};
   if(user!==expected||!password)return res.status(409).json({reason:'EDITORIAL_AUTHENTICATED_SENDER_MISMATCH'});
+  if(req.params.operation==='collect'){
+   try{return res.json(await collectOutcome({user,password,receipt:req.body.receipt}));}
+   catch(e){return res.status(409).json({reason:e.authenticationFailed?'GMAIL_READ_AUTHORIZATION_REQUIRED':'GMAIL_READ_COLLECTION_FAILED',code:e.code||null});}
+  }
   const transport=createTransport({service:'gmail',auth:{user,pass:password},connectionTimeout:10000,greetingTimeout:10000,socketTimeout:30000});
   try{
    if(req.params.operation==='verify'){await transport.verify();return res.json({status:'PASS',authenticated_user:user,transport:'EXISTING_STARTER_GMAIL_RELAY'});}
