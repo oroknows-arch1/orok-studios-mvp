@@ -20,6 +20,9 @@ app.use(express.static(__dirname, { dotfiles: "ignore" }));
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+// Existing approved model connection; no credentials or sending capability are exposed.
+const {createHarnessRelay}=require('./src/emradar-harness');
+app.post('/emradar/harness/:operation',createHarnessRelay({openai}));
 
 // Publishing capability — ledger, review, Long Game, draft preparation.
 // Mounted as API capability of this app (not a separate product).
