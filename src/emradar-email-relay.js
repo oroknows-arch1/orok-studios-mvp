@@ -7,6 +7,7 @@ const recipients=new Set(['breakingviews.guest@thomsonreuters.com','paul@im-mini
 // Durable approval, IN_FLIGHT and ambiguity locks remain in EMRADAR Redis.
 // This transport never retries; an uncertain response must be reconciled there.
 function createEmailRelay({createTransport=nodemailer.createTransport,collectOutcome=createOutcomeCollector()}={}){
+ console.log('EDITORIAL_CORRESPONDENT_RUNTIME '+JSON.stringify({version:'human-correspondence-v2',identity:'Sean Walker',authenticated_sender:expected,hidden_rewrite:false}));
  const requests=new Map();
  return async(req,res)=>{
   const expectedAuth='Bearer '+process.env.EMRADAR_EMAIL_RELAY_TOKEN,actual=req.headers.authorization||'';
@@ -21,7 +22,7 @@ function createEmailRelay({createTransport=nodemailer.createTransport,collectOut
   try{
    if(req.params.operation==='verify'){await transport.verify();return res.json({status:'PASS',authenticated_user:user,transport:'EXISTING_STARTER_GMAIL_RELAY'});}
    if(req.params.operation!=='submit')return res.status(404).json({reason:'UNKNOWN_RELAY_OPERATION'});
-   if(!mail||mail.from?.address!==expected||mail.from?.name!=='EMRADAR'||!recipients.has(mail.to)||!mail.subject||/[\r\n]/.test(mail.subject)||!mail.text||!/^[a-f0-9]{64}$/.test(idempotency_key||''))return res.status(409).json({reason:'REVIEWED_EMAIL_ENVELOPE_REQUIRED'});
+   if(!mail||mail.from?.address!==expected||mail.from?.name!=='Sean Walker'||!recipients.has(mail.to)||!mail.subject||/[\r\n]/.test(mail.subject)||!mail.text||!/^[a-f0-9]{64}$/.test(idempotency_key||''))return res.status(409).json({reason:'REVIEWED_EMAIL_ENVELOPE_REQUIRED'});
    const hash=crypto.createHash('sha256').update(JSON.stringify(mail)).digest('hex'),prior=requests.get(idempotency_key);
    if(prior){if(prior.hash!==hash)return res.status(409).json({reason:'IDEMPOTENCY_ARTIFACT_CHANGED'});if(prior.result)return res.json(prior.result);return res.status(409).json({reason:'AMBIGUOUS_PUBLICATION_RECOVERY_REQUIRED'});}
    requests.set(idempotency_key,{hash});
