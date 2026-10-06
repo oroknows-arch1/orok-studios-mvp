@@ -17,8 +17,8 @@ async function exchange(fetcher){
  return {verified:true,receipt_id:hash({url:response.url||'https://www.rba.gov.au/statistics/frequency/exchange-rates.html',date,rate}),source:'https://www.rba.gov.au/statistics/frequency/exchange-rates.html',date,usd_per_aud:rate,aud_per_unit:1/rate};
 }
 function createHarnessRelay({openai,fetcher=fetch,env=process.env}={}){
- const inflight=new Map();let fxPromise;
- const fx=()=>fxPromise||(fxPromise=exchange(fetcher).catch(e=>{fxPromise=null;throw e;}));
+ const inflight=new Map();let fxPromise,fxAt=0;
+ const fx=()=>{if(Date.now()-fxAt>6*3600000)fxPromise=null;if(!fxPromise){fxAt=Date.now();fxPromise=exchange(fetcher).catch(e=>{fxPromise=null;throw e;});}return fxPromise;};
  return async(req,res)=>{
   const secret=env.EMRADAR_EMAIL_RELAY_TOKEN,expected='Bearer '+secret,actual=String(req.headers.authorization||'');
   if(!secret||Buffer.byteLength(actual)!==Buffer.byteLength(expected)||!crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(expected)))return res.status(403).json({reason:'HARNESS_RELAY_AUTH_REQUIRED'});
