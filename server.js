@@ -677,6 +677,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
   });
 
   // Graceful shutdown: stop accepting connections, then close the publishing
