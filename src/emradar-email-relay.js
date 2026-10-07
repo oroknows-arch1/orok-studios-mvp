@@ -3,7 +3,17 @@ const crypto=require('node:crypto');
 const nodemailer=require('nodemailer');
 const {createOutcomeCollector}=require('./emradar-outcome-collector');
 const expected='oroknows@gmail.com';
-const recipients=new Set(['breakingviews.guest@thomsonreuters.com','paul@im-mining.com','chloe@australianminingreview.com.au','editorial@redimin.cl']);
+const digest=v=>crypto.createHash('sha256').update(JSON.stringify(v)).digest('hex');
+function validBinding(mail,idempotency_key,binding,signature,secret){
+ if(!binding||!secret||!/^[a-f0-9]{64}$/.test(signature||''))return false;
+ const signed=crypto.createHmac('sha256',secret).update('EMRADAR_OWNER_APPROVED_DELIVERY_V1\n'+JSON.stringify({mail,idempotency_key,binding})).digest('hex');
+ if(!crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(signed)))return false;
+ const {proposal:p,approval:a}=binding;
+ if(!p?.review_binding||p.product!=='EMRADAR'||a?.approved_by!=='OWNER'||a.status!=='OWNER_APPROVED'||a.proposal_id!==p.proposal_id||a.review_hash!==p.review_hash||a.asset_hash!==digest(p.asset)||p.publication_key!==idempotency_key)return false;
+ const hash=digest({product_truth:p.review_binding.product_truth,signal_revision:p.signal_revision,asset:p.asset,destination:p.review_binding.destination,source_receipt:p.source_receipt||null});
+ const e=p.asset?.email;
+ return hash===p.review_hash&&digest([p.publication_key,hash])===p.proposal_id&&e?.to===p.asset.delivery?.public_contact_point&&JSON.stringify(mail)===JSON.stringify({from:e.from,to:e.to,subject:e.subject,text:e.body})&&p.asset.copy===`Subject: ${e.subject}\n\n${e.body}`;
+}
 // Durable approval, IN_FLIGHT and ambiguity locks remain in EMRADAR Redis.
 // This transport never retries; an uncertain response must be reconciled there.
 function createEmailRelay({createTransport=nodemailer.createTransport,collectOutcome=createOutcomeCollector()}={}){
@@ -12,7 +22,7 @@ function createEmailRelay({createTransport=nodemailer.createTransport,collectOut
  return async(req,res)=>{
   const expectedAuth='Bearer '+process.env.EMRADAR_EMAIL_RELAY_TOKEN,actual=req.headers.authorization||'';
   if(!process.env.EMRADAR_EMAIL_RELAY_TOKEN||actual.length!==expectedAuth.length||!crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(expectedAuth)))return res.status(403).json({reason:'EMAIL_RELAY_AUTH_REQUIRED'});
-  const {user,password,mail,idempotency_key}=req.body||{};
+  const {user,password,mail,idempotency_key,binding,signature}=req.body||{};
   if(user!==expected||!password)return res.status(409).json({reason:'EDITORIAL_AUTHENTICATED_SENDER_MISMATCH'});
   if(req.params.operation==='collect'){
    try{return res.json(await collectOutcome({user,password,receipt:req.body.receipt}));}
@@ -22,7 +32,7 @@ function createEmailRelay({createTransport=nodemailer.createTransport,collectOut
   try{
    if(req.params.operation==='verify'){await transport.verify();return res.json({status:'PASS',authenticated_user:user,transport:'EXISTING_STARTER_GMAIL_RELAY'});}
    if(req.params.operation!=='submit')return res.status(404).json({reason:'UNKNOWN_RELAY_OPERATION'});
-   if(!mail||mail.from?.address!==expected||mail.from?.name!=='Sean Walker'||!recipients.has(mail.to)||!mail.subject||/[\r\n]/.test(mail.subject)||!mail.text||!/^[a-f0-9]{64}$/.test(idempotency_key||''))return res.status(409).json({reason:'REVIEWED_EMAIL_ENVELOPE_REQUIRED'});
+   if(!mail||mail.from?.address!==expected||mail.from?.name!=='Sean Walker'||!validBinding(mail,idempotency_key,binding,signature,process.env.EMRADAR_EMAIL_RELAY_TOKEN)||!mail.subject||/[\r\n]/.test(mail.subject)||!mail.text||!/^[a-f0-9]{64}$/.test(idempotency_key||''))return res.status(409).json({reason:'REVIEWED_EMAIL_ENVELOPE_REQUIRED'});
    const hash=crypto.createHash('sha256').update(JSON.stringify(mail)).digest('hex'),prior=requests.get(idempotency_key);
    if(prior){if(prior.hash!==hash)return res.status(409).json({reason:'IDEMPOTENCY_ARTIFACT_CHANGED'});if(prior.result)return res.json(prior.result);return res.status(409).json({reason:'AMBIGUOUS_PUBLICATION_RECOVERY_REQUIRED'});}
    requests.set(idempotency_key,{hash});
@@ -32,4 +42,4 @@ function createEmailRelay({createTransport=nodemailer.createTransport,collectOut
   finally{transport.close();}
  };
 }
-module.exports={createEmailRelay};
+module.exports={createEmailRelay,validBinding};
