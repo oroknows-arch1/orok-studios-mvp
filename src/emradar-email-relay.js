@@ -13,14 +13,19 @@ function validBinding(mail,idempotency_key,binding,signature,secret){
  const signed=crypto.createHmac('sha256',secret).update('EMRADAR_OWNER_APPROVED_DELIVERY_V1\n'+JSON.stringify({mail,idempotency_key,binding})).digest('hex');
  if(!crypto.timingSafeEqual(Buffer.from(signature),Buffer.from(signed)))return false;
  const {proposal:p,approval:a}=binding;
- if(!p?.review_binding||p.product!=='EMRADAR'||a?.approved_by!=='OWNER'||a.status!=='OWNER_APPROVED'||a.proposal_id!==p.proposal_id||a.review_hash!==p.review_hash||a.asset_hash!==digest(p.asset)||p.publication_key!==idempotency_key)return false;
- const hash=digest({product_truth:p.review_binding.product_truth,signal_revision:p.signal_revision,asset:p.asset,destination:p.review_binding.destination,source_receipt:p.source_receipt||null});
+ let hash,key;
+ if(binding.version==='EMRADAR_OWNER_APPROVED_DELIVERY_V2'){
+  if(!p?.binding||a?.authority!=='OWNER'||a.decision!=='APPROVE'||a.proposal_id!==p.proposal_id||a.review_hash!==p.review_hash||p.delivery_key!==idempotency_key||digest(p.asset)!==digest(p.binding.asset)||p.campaign_id!==p.binding.campaign_id||['REJECTED','SUPERSEDED'].includes(p.status))return false;
+  hash=digest(p.binding);key=p.delivery_key;
+ }else{
+  if(!p?.review_binding||p.product!=='EMRADAR'||a?.approved_by!=='OWNER'||a.status!=='OWNER_APPROVED'||a.proposal_id!==p.proposal_id||a.review_hash!==p.review_hash||a.asset_hash!==digest(p.asset)||p.publication_key!==idempotency_key)return false;
+  hash=digest({product_truth:p.review_binding.product_truth,signal_revision:p.signal_revision,asset:p.asset,destination:p.review_binding.destination,source_receipt:p.source_receipt||null});key=p.publication_key;
+ }
  const e=p.asset?.email;
  let reviewed;try{reviewed=e?.brand_version?brand.envelope(e):{from:e.from,to:e.to,subject:e.subject,text:e.body};}catch{return false;}
- return hash===p.review_hash&&digest([p.publication_key,hash])===p.proposal_id&&e?.to===p.asset.delivery?.public_contact_point&&JSON.stringify(mail)===JSON.stringify(reviewed)&&p.asset.copy===`Subject: ${e.subject}\n\n${e.body}`;
+ return hash===p.review_hash&&digest([key,hash])===p.proposal_id&&e?.to===p.asset.delivery?.public_contact_point&&JSON.stringify(mail)===JSON.stringify(reviewed)&&p.asset.copy===`Subject: ${e.subject}\n\n${e.body}`;
 }
-// Durable approval, IN_FLIGHT and ambiguity locks remain in EMRADAR Redis.
-// This transport never retries; an uncertain response must be reconciled there.
+// Identical concurrent requests share one send and retain its provider result.
 function createEmailRelay({createTransport=nodemailer.createTransport,collectOutcome=createOutcomeCollector()}={}){
  console.log('EDITORIAL_CORRESPONDENT_RUNTIME '+JSON.stringify({version:'human-correspondence-v2',identity:'Sean Walker',public_sender:brand.identity.address,reply_to:brand.identity.reply_to,brand_version:brand.version,configured_sender:canonicalConfigured()?brand.identity.address:null,hidden_rewrite:false}));
  const requests=new Map();
@@ -43,13 +48,17 @@ function createEmailRelay({createTransport=nodemailer.createTransport,collectOut
    if(req.params.operation!=='submit')return res.status(404).json({reason:'UNKNOWN_RELAY_OPERATION'});
    if(!mail||mail.from?.address!==brand.identity.address||mail.from?.name!=='Sean Walker'||!validBinding(mail,idempotency_key,binding,signature,process.env.EMRADAR_EMAIL_RELAY_TOKEN)||!mail.subject||/[\r\n]/.test(mail.subject)||!mail.text||!/^[a-f0-9]{64}$/.test(idempotency_key||''))return res.status(409).json({reason:'REVIEWED_EMAIL_ENVELOPE_REQUIRED'});
    const hash=crypto.createHash('sha256').update(JSON.stringify(mail)).digest('hex'),prior=requests.get(idempotency_key);
-   if(prior){if(prior.hash!==hash)return res.status(409).json({reason:'IDEMPOTENCY_ARTIFACT_CHANGED'});if(prior.result)return res.json(prior.result);return res.status(409).json({reason:'AMBIGUOUS_PUBLICATION_RECOVERY_REQUIRED'});}
-   requests.set(idempotency_key,{hash});
-   const info=await transport.sendMail({...mail,headers:{'X-EMRADAR-Idempotency-Key':idempotency_key}});
-   const result={messageId:info.messageId,accepted:info.accepted,rejected:info.rejected||[]};requests.set(idempotency_key,{hash,result});return res.json(result);
+   if(prior){if(prior.hash!==hash)return res.status(409).json({reason:'IDEMPOTENCY_ARTIFACT_CHANGED'});return res.json(await prior.promise);}
+   const promise=Promise.resolve().then(async()=>{
+    const info=await transport.sendMail({...mail,headers:{'X-EMRADAR-Idempotency-Key':idempotency_key}});
+    return {messageId:info.messageId,accepted:info.accepted,rejected:info.rejected||[]};
+   });
+   requests.set(idempotency_key,{hash,promise});
+   try{return res.json(await promise);}catch(e){requests.delete(idempotency_key);throw e;}
   }catch(e){return res.status(409).json({reason:e.message,code:e.code||null,command:e.command||null});}
   finally{transport.close();}
  };
 }
 module.exports={createEmailRelay,validBinding,brandStatus};
+
 
