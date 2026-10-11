@@ -25,6 +25,34 @@ function validBinding(mail,idempotency_key,binding,signature,secret){
  let reviewed;try{reviewed=e?.brand_version?brand.envelope(e):{from:e.from,to:e.to,subject:e.subject,text:e.body};}catch{return false;}
  return hash===p.review_hash&&digest([key,hash])===p.proposal_id&&e?.to===p.asset.delivery?.public_contact_point&&JSON.stringify(mail)===JSON.stringify(reviewed)&&p.asset.copy===`Subject: ${e.subject}\n\n${e.body}`;
 }
+// Administrative owner review mail has a fixed recipient, sender and body template.
+async function ownerNotification(req,res,createTransport,requests){
+ const {notification:n,idempotency_key}=req.body||{};
+ if(!n||!/^EMRADAR_\d{4}_\d{2}_\d{2}_LAUNCH$/.test(n.campaign_id||'')||!Number.isInteger(n.proposal_count)||n.proposal_count<1||n.proposal_count>10000||!Number.isInteger(n.email_group_count)||n.email_group_count<0||n.email_group_count>n.proposal_count||!/^https:\/\/emradar-x-executor\.onrender\.com\/OWNER_REVIEW#access=[a-f0-9]{64}$/.test(n.private_review_url||'')||idempotency_key!==crypto.createHash('sha256').update('owner-review-notification:'+n.campaign_id).digest('hex'))return res.status(409).json({reason:'OWNER_NOTIFICATION_CONTRACT_REQUIRED',definitely_unsent:true});
+ if(!canonicalConfigured())return res.status(409).json({reason:'CANONICAL_SMTP_CONFIGURATION_REQUIRED',definitely_unsent:true});
+ const date=n.campaign_id.slice(8,18).replaceAll('_','-');
+ const mail={from:{name:brand.identity.name,address:brand.identity.address},to:expected,replyTo:brand.identity.reply_to,subject:'EMRADAR private campaign review — '+date,text:'Campaign '+date+' ('+n.campaign_id+') is ready for owner review.\n'+n.proposal_count+' saved proposals; '+n.email_group_count+' distinct email groups.\n\nOpen your private, single-use review link and approve or reject the saved groups or individual assets:\n'+n.private_review_url+'\n\nThe link expires after seven days. No publication is authorised until you approve its exact saved asset.',messageId:'<owner-review-'+idempotency_key+'@emradar.net>',headers:{'X-EMRADAR-Idempotency-Key':idempotency_key}};
+ const requestKey='owner:'+idempotency_key,hash=digest(mail),prior=requests.get(requestKey);
+ if(prior&&prior.hash!==hash)return res.status(409).json({reason:'IDEMPOTENCY_ARTIFACT_CHANGED',definitely_unsent:true});
+ let promise=prior?.promise;
+ if(!promise){
+  promise=Promise.resolve().then(async()=>{
+   const transport=createTransport({...smtpConfig(),connectionTimeout:10000,greetingTimeout:10000,socketTimeout:30000});
+   try{
+    const info=await transport.sendMail(mail);
+    if(!info.messageId||!info.accepted?.includes(expected)){const e=Error('OWNER_NOTIFICATION_NOT_ACCEPTED');e.definitely_unsent=!info.accepted?.length;throw e;}
+    return {message_id:info.messageId,accepted:[expected],rejected:info.rejected||[],response:typeof info.response==='string'?info.response.replace(/[a-f0-9]{64}/g,'[redacted]'):null};
+   }catch(e){
+    if(['ECONNECTION','EDNS','EAUTH'].includes(e.code)||e.command==='CONN'||Number(e.responseCode)>=400&&Number(e.responseCode)<600)e.definitely_unsent=true;
+    throw e;
+   }finally{transport.close();}
+  });requests.set(requestKey,{hash,promise});
+ }
+ try{return res.json(await promise);}catch(e){
+  if(e.definitely_unsent===true)requests.delete(requestKey);
+  return res.status(409).json({reason:'OWNER_NOTIFICATION_SUBMISSION_FAILED',definitely_unsent:e.definitely_unsent===true});
+ }
+}
 // Identical concurrent requests share one send and retain its provider result.
 function createEmailRelay({createTransport=nodemailer.createTransport,collectOutcome=createOutcomeCollector()}={}){
  console.log('EDITORIAL_CORRESPONDENT_RUNTIME '+JSON.stringify({version:'human-correspondence-v2',identity:'Sean Walker',public_sender:brand.identity.address,reply_to:brand.identity.reply_to,brand_version:brand.version,configured_sender:canonicalConfigured()?brand.identity.address:null,hidden_rewrite:false}));
@@ -32,6 +60,7 @@ function createEmailRelay({createTransport=nodemailer.createTransport,collectOut
  return async(req,res)=>{
   const expectedAuth='Bearer '+process.env.EMRADAR_EMAIL_RELAY_TOKEN,actual=req.headers.authorization||'';
   if(!process.env.EMRADAR_EMAIL_RELAY_TOKEN||actual.length!==expectedAuth.length||!crypto.timingSafeEqual(Buffer.from(actual),Buffer.from(expectedAuth)))return res.status(403).json({reason:'EMAIL_RELAY_AUTH_REQUIRED'});
+  if(req.params.operation==='owner-notification')return ownerNotification(req,res,createTransport,requests);
   const {user,password,mail,idempotency_key,binding,signature}=req.body||{};
   if(req.params.operation==='status')return res.json(brandStatus());
   if(req.params.operation==='collect'){
