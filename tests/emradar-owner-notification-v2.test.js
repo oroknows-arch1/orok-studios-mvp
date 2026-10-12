@@ -19,6 +19,6 @@ test('owner notification accepts exact V2 replacement review URL but rejects mis
   assert.equal(external.code,409);assert.equal(sends.length,0);
   const valid=await call(notification);assert.equal(valid.code,200);assert.equal(valid.value.message_id,'fixture-message');
   assert.equal((await call(notification)).value.message_id,'fixture-message');assert.equal(sends.length,1);
-  assert.equal(sends[0].to,'oroknows@gmail.com');assert.match(sends[0].text,/V2\\/CAMPAIGN_REVIEW/);
+  assert.equal(sends[0].to,'oroknows@gmail.com');assert.ok(sends[0].text.includes('/V2/CAMPAIGN_REVIEW'));
  }finally{for(const [key,value] of Object.entries(old)){if(value===undefined)delete process.env[key];else process.env[key]=value;}}
 });
