@@ -4,6 +4,7 @@ on:
     paths:
       - 'src/emradar-email-relay.js'
       - 'tests/emradar-owner-notification-v2.test.js'
+      - 'tests/emradar-v2-editorial-submit.test.js'
       - '.github/workflows/emradar-relay-contract.yml'
   workflow_dispatch:
 jobs:
@@ -18,4 +19,4 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: node --test tests/emradar-owner-notification-v2.test.js
+      - run: node --test tests/emradar-owner-notification-v2.test.js tests/emradar-v2-editorial-submit.test.js
