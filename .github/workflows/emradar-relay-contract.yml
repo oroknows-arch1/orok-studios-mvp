@@ -1,0 +1,22 @@
+name: EMRADAR relay contract tests
+on:
+  pull_request:
+    paths:
+      - 'src/emradar-email-relay.js'
+      - 'tests/emradar-owner-notification-v2.test.js'
+      - 'tests/emradar-v2-editorial-submit.test.js'
+      - '.github/workflows/emradar-relay-contract.yml'
+  workflow_dispatch:
+jobs:
+  relay-contract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: node --test tests/emradar-owner-notification-v2.test.js tests/emradar-v2-editorial-submit.test.js
