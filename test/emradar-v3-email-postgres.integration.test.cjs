@@ -3,7 +3,8 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const {createV3PreparedIntegration}=require('../src/emradar-v3-integration.cjs');
-const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
+const hash=x=>crypto.createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
 function response(){return {statusCode:200,status(n){this.statusCode=n;return this;},json(x){this.body=x;return this;}};}
 test('V3 PostgreSQL prepared API: concurrent approved deliveries permit one simulated SMTP send',async t=>{
  if(!process.env.V3_TEST_DATABASE_URL){t.skip('Disposable V3_TEST_DATABASE_URL required');return;}
