@@ -7,7 +7,7 @@ const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex'
 test('paid API V3 verifier reads persisted approval and claimed delivery, never trusts request alone',async()=>{
  const asset={campaign_id:'v3-campaign',destination_id:'journal',kind:'EMAIL',body:'evidence'};
  const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
- const key='a'.repeat(64);
+ const key=hash([asset.campaign_id,asset.destination_id,approval.asset_sha256]);
  const state={phase:'PUBLICATION_REVIEW',assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
  const reads=[];
  const verify=createV3ApprovalVerifier({pool:{query:async(sql,args)=>{reads.push(args);return {rows:[{payload:state}]};}}});
