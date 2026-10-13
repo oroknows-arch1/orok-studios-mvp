@@ -8,7 +8,7 @@ function response(){return {statusCode:200,status(n){this.statusCode=n;return th
 test('V3 paid API prepared integration wires authenticated route, trusted persisted approval, reservation and simulated receipt',async()=>{
  const asset={campaign_id:'v3-integration',destination_id:'journal',kind:'EMAIL',body:'Evidence'};
  const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
- const key='a'.repeat(64),events=[];
+ const key=hash([asset.campaign_id,asset.destination_id,approval.asset_sha256]),events=[];
  const state={phase:'PUBLICATION_REVIEW',assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
  const reserved=new Set();
  const pool={query:async(sql,args)=>{
