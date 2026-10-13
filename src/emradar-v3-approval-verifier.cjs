@@ -14,7 +14,7 @@ function createV3ApprovalVerifier({pool}={}){
   const state=rows[0]?.payload;
   const saved=state?.assets?.[destination_id],decision=state?.decisions?.[destination_id],delivery=state?.deliveries?.[destination_id];
   if(state?.phase!=='PUBLICATION_REVIEW'||!saved||!decision||!delivery)throw Error('V3_DURABLE_APPROVAL_REQUIRED');
-  if(digest(saved.asset)!==digest(asset)||saved.fingerprint!==approval.asset_sha256||digest(decision)!==digest(approval))throw Error('V3_DURABLE_APPROVAL_MISMATCH');
+  if(digest(saved.asset)!==digest(asset)||saved.fingerprint!==approval.asset_sha256||digest(asset)!==approval.asset_sha256||digest(decision)!==digest(approval))throw Error('V3_DURABLE_APPROVAL_MISMATCH');
   if(digest([campaign_id,destination_id,approval.asset_sha256])!==idempotency_key||delivery.status!=='ATTEMPTING'||delivery.idempotency_key!==idempotency_key)throw Error('V3_DURABLE_CLAIM_REQUIRED');
   return true;
  };
