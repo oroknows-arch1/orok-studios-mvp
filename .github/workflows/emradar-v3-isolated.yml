@@ -1,0 +1,24 @@
+name: EMRADAR V3 isolated paid API tests
+on:
+  push:
+    paths:
+      - 'src/emradar-v3-*.cjs'
+      - 'test/emradar-v3-*.test.cjs'
+      - '.github/workflows/emradar-v3-isolated.yml'
+  pull_request:
+    paths:
+      - 'src/emradar-v3-*.cjs'
+      - 'test/emradar-v3-*.test.cjs'
+      - '.github/workflows/emradar-v3-isolated.yml'
+  workflow_dispatch:
+jobs:
+  v3-isolated:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test test/emradar-v3-*.test.cjs
