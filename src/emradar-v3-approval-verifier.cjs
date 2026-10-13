@@ -1,6 +1,8 @@
 'use strict';
 const crypto=require('node:crypto');
 const digest=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+const equivalent=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 
 // Read-only verification of V3 campaign state. No caller-supplied approval
 // can authorize SMTP without a matching persisted owner decision and claim.
@@ -14,7 +16,7 @@ function createV3ApprovalVerifier({pool}={}){
   const state=rows[0]?.payload;
   const saved=state?.assets?.[destination_id],decision=state?.decisions?.[destination_id],delivery=state?.deliveries?.[destination_id];
   if(state?.phase!=='PUBLICATION_REVIEW'||!saved||!decision||!delivery)throw Error('V3_DURABLE_APPROVAL_REQUIRED');
-  if(digest(saved.asset)!==digest(asset)||saved.fingerprint!==approval.asset_sha256||digest(asset)!==approval.asset_sha256||digest(decision)!==digest(approval))throw Error('V3_DURABLE_APPROVAL_MISMATCH');
+  if(!equivalent(saved.asset,asset)||saved.fingerprint!==approval.asset_sha256||digest(asset)!==approval.asset_sha256||!equivalent(decision,approval))throw Error('V3_DURABLE_APPROVAL_MISMATCH');
   if(digest([campaign_id,destination_id,approval.asset_sha256])!==idempotency_key||delivery.status!=='ATTEMPTING'||delivery.idempotency_key!==idempotency_key)throw Error('V3_DURABLE_CLAIM_REQUIRED');
   return true;
  };
