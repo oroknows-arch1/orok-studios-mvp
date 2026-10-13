@@ -18,7 +18,7 @@ test('V3 paid API prepared integration wires authenticated route, trusted persis
   return {rowCount:1};
  }};
  const token='integration-test-only'.padEnd(40,'x');
- const integration=createV3PreparedIntegration({pool,token,verifyNotification:async()=>true,sendOwnerReview:async()=>({accepted:true,provider_id:'review'}),sendApprovedEmail:async()=>{events.push('smtp');return {accepted:true,receipt_id:'smtp-receipt'};}});
+ const integration=createV3PreparedIntegration({pool,token,reviewOrigin:'https://example.org',verifyNotification:async()=>true,sendOwnerReview:async()=>({accepted:true,provider_id:'review'}),sendApprovedEmail:async()=>{events.push('smtp');return {accepted:true,receipt_id:'smtp-receipt'};}});
  assert.deepEqual(events,[]);
  const request={headers:{authorization:'Bearer '+token},params:{operation:'approved-delivery'},body:{version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:asset.campaign_id,destination_id:asset.destination_id,asset,approval,idempotency_key:key}};
  let res=response();
