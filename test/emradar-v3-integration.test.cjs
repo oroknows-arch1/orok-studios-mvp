@@ -3,7 +3,8 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const {createV3PreparedIntegration}=require('../src/emradar-v3-integration.cjs');
-const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
+const hash=x=>crypto.createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
 function response(){return {statusCode:200,status(n){this.statusCode=n;return this;},json(x){this.body=x;return this;}};}
 test('V3 paid API prepared integration wires authenticated route, trusted persisted approval, reservation and simulated receipt',async()=>{
  const asset={campaign_id:'v3-integration',destination_id:'journal',kind:'EMAIL',body:'Evidence'};
