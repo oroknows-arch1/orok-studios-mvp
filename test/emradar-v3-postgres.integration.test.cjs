@@ -4,7 +4,8 @@ const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const {V3Reservations}=require('../src/emradar-v3-reservations.cjs');
 const {createV3ApprovalVerifier}=require('../src/emradar-v3-approval-verifier.cjs');
-const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
+const hash=x=>crypto.createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
 test('V3 PostgreSQL: competing email and owner notification reservations permit only one winner',async t=>{
  if(!process.env.V3_TEST_DATABASE_URL){t.skip('Disposable V3_TEST_DATABASE_URL required');return;}
  const {Pool}=require('pg');
