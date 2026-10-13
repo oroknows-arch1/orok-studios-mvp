@@ -4,14 +4,18 @@ const digest=value=>crypto.createHash('sha256').update(value).digest('hex');
 
 // Verifies the owner link against V3's durable review record, not caller input.
 // The review record is stored under review:<campaignId> in v3_campaign_state.
-function createV3NotificationVerifier({pool,clock=()=>Date.now()}={}){
+function createV3NotificationVerifier({pool,reviewOrigin,clock=()=>Date.now()}={}){
+ if(typeof reviewOrigin!=='string')throw Error('V3_REVIEW_ORIGIN_REQUIRED');
+ let allowed;
+ try{allowed=new URL(reviewOrigin);}catch{throw Error('V3_REVIEW_ORIGIN_REQUIRED');}
+ if(allowed.protocol!=='https:'||allowed.username||allowed.password||allowed.search||allowed.hash||allowed.pathname!=='/')throw Error('V3_REVIEW_ORIGIN_REQUIRED');
  if(typeof pool?.query!=='function')throw Error('V3_POSTGRES_POOL_REQUIRED');
  return async request=>{
   const id=request?.campaign_id,raw=request?.private_review_url;
   if(typeof id!=='string'||!id.startsWith('v3-')||typeof raw!=='string')throw Error('V3_NOTIFICATION_INVALID');
   let url;
   try{url=new URL(raw);}catch{throw Error('V3_PRIVATE_LINK_REQUIRED');}
-  if(url.protocol!=='https:'||url.username||url.password||url.search||url.pathname!=='/review/access')throw Error('V3_PRIVATE_LINK_REQUIRED');
+  if(url.origin!==allowed.origin||url.protocol!=='https:'||url.username||url.password||url.search||url.pathname!=='/review/access')throw Error('V3_PRIVATE_LINK_REQUIRED');
   const params=new URLSearchParams(url.hash.slice(1));
   const token=params.get('token');
   if(params.size!==2||!token||params.get('campaign')!==id)throw Error('V3_PRIVATE_LINK_REQUIRED');
