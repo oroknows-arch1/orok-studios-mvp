@@ -3,7 +3,8 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const {createV3ApprovalVerifier}=require('../src/emradar-v3-approval-verifier.cjs');
-const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
+const hash=x=>crypto.createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
 test('paid API V3 verifier reads persisted approval and claimed delivery, never trusts request alone',async()=>{
  const asset={campaign_id:'v3-campaign',destination_id:'journal',kind:'EMAIL',body:'evidence'};
  const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
