@@ -1,7 +1,7 @@
 'use strict';
 const crypto=require('node:crypto');
-const digest=value=>crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const canonical=value=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
+const digest=value=>crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const equivalent=(a,b)=>JSON.stringify(canonical(a))===JSON.stringify(canonical(b));
 
 // Read-only verification of V3 campaign state. No caller-supplied approval
