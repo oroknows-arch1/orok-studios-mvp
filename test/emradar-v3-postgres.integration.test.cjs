@@ -1,0 +1,32 @@
+'use strict';
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const crypto=require('node:crypto');
+const {V3Reservations}=require('../src/emradar-v3-reservations.cjs');
+const {createV3ApprovalVerifier}=require('../src/emradar-v3-approval-verifier.cjs');
+const hash=x=>crypto.createHash('sha256').update(JSON.stringify(x)).digest('hex');
+test('V3 PostgreSQL: competing email and owner notification reservations permit only one winner',async t=>{
+ if(!process.env.V3_TEST_DATABASE_URL){t.skip('Disposable V3_TEST_DATABASE_URL required');return;}
+ const {Pool}=require('pg');
+ const pool=new Pool({connectionString:process.env.V3_TEST_DATABASE_URL});
+ t.after(async()=>pool.end());
+ const store=new V3Reservations(pool);
+ await store.initialize();
+ const id='v3-ci-'+crypto.randomUUID(),asset={campaign_id:id,destination_id:'journal',kind:'EMAIL',body:'verified evidence'};
+ const approval={campaign_id:id,destination_id:'journal',authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
+ const key=hash([id,'journal',approval.asset_sha256]);
+ const state={phase:'PUBLICATION_REVIEW',assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
+ await pool.query('CREATE TABLE IF NOT EXISTS v3_campaign_state (campaign_id TEXT PRIMARY KEY,version BIGINT NOT NULL,payload JSONB NOT NULL)');
+ await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb)',[id,JSON.stringify(state)]);
+ assert.equal(await createV3ApprovalVerifier({pool})({campaign_id:id,destination_id:'journal',asset,approval,idempotency_key:key}),true);
+ const send={idempotency_key:key,campaign_id:id,destination_id:'journal',asset_sha256:approval.asset_sha256};
+ const email=await Promise.allSettled([store.send.reserve(send),store.send.reserve(send)]);
+ assert.deepEqual(email.map(x=>x.status).sort(),['fulfilled','rejected']);
+ const notice={campaign_id:id,link_sha256:hash('owner-review-link')};
+ const owners=await Promise.allSettled([store.owner.reserve(notice),store.owner.reserve(notice)]);
+ assert.deepEqual(owners.map(x=>x.status).sort(),['fulfilled','rejected']);
+ await store.send.record({idempotency_key:key,provider_id:'test-smtp-receipt'});
+ await store.owner.record({campaign_id:id,provider_id:'test-owner-receipt'});
+ const result=await pool.query('SELECT status,provider_id FROM v3_send_reservations WHERE idempotency_key=$1',[key]);
+ assert.equal(result.rows[0].status,'ACCEPTED');assert.equal(result.rows[0].provider_id,'test-smtp-receipt');
+});
