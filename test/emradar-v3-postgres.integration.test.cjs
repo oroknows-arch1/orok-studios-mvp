@@ -12,12 +12,10 @@ test('V3 PostgreSQL: competing email and owner notification reservations permit 
  const pool=new Pool({connectionString:process.env.V3_TEST_DATABASE_URL});
  t.after(async()=>pool.end());
  const store=new V3Reservations(pool);
- await store.initialize();
  const id='v3-ci-'+crypto.randomUUID(),asset={campaign_id:id,destination_id:'journal',kind:'EMAIL',body:'verified evidence'};
  const approval={campaign_id:id,destination_id:'journal',authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
  const key=hash([id,'journal',approval.asset_sha256]);
  const state={phase:'PUBLICATION_REVIEW',assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
- await pool.query('CREATE TABLE IF NOT EXISTS v3_campaign_state (campaign_id TEXT PRIMARY KEY,version BIGINT NOT NULL,payload JSONB NOT NULL)');
  await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb)',[id,JSON.stringify(state)]);
  assert.equal(await createV3ApprovalVerifier({pool})({campaign_id:id,destination_id:'journal',asset,approval,idempotency_key:key}),true);
  const send={idempotency_key:key,campaign_id:id,destination_id:'journal',asset_sha256:approval.asset_sha256};
