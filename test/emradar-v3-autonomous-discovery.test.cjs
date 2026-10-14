@@ -35,3 +35,13 @@ test('rejects non-public DNS resolution',async()=>{
  h.resolver=async()=>[{address:'10.0.0.2'}];const {createAutonomousOutletDiscovery}=await load();
  assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);assert.equal(h.saved.length,0);
 });
+
+test('directory selection preserves individual scan evidence links',async()=>{
+ const {createDirectoryDiscovery}=await import(pathToFileURL(resolve(__dirname,'../vendor/emradar-v3/src/directory-discovery.js')).href);
+ const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
+ const {createAutonomousOutletDiscovery}=await load();
+ const directory={list:async()=>h.saved};
+ const discover=createDirectoryDiscovery({directory,linkEvidence:createAutonomousOutletDiscovery(h)});
+ const selected=await discover({scan:{},document,history:[]});
+ assert.ok(selected.some(d=>d.id===h.saved[0].id));
+});
