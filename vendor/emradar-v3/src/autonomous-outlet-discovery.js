@@ -58,8 +58,9 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,
    if(!html.toLowerCase().includes(email))continue;
    // A matching email is not itself evidence of editorial suitability.
    const editorialContext=html.toLowerCase();
-   if(!/(editorial|editor|newsroom|submissions|contributions|pitch|contact the news team)/i.test(editorialContext))continue;
-   if(!/(editor|news|journal|publication|magazine|press|contribut)/i.test(item.category+' '+item.name+' '+editorialContext.slice(Math.max(0,editorialContext.indexOf(email)-400),editorialContext.indexOf(email)+400)))continue;
+   const emailPosition=editorialContext.indexOf(email);
+   const nearContact=editorialContext.slice(Math.max(0,emailPosition-160),emailPosition+email.length+160);
+   if(!/(editorial|newsroom|submissions|contributions|pitch(?:es)?|contact the news team|editor\s*[:@])/i.test(nearContact))continue;
    const id='web-'+digest(website.hostname+':'+email).slice(0,20);
    const record={id,name:item.name.trim().slice(0,180),category:item.category.trim().slice(0,80),active:true,contact_verified:true,editorial_fit_verified:true,
     website:website.origin,contact:{email,source_url:contactUrl.href,checked_at:new Date().toISOString()},
