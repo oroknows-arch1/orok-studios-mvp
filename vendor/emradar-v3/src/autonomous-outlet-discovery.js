@@ -46,7 +46,7 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,
    if(!contactUrl||!website||contactUrl.hostname!==website.hostname||!await publiclyResolved(contactUrl.hostname,resolver))continue;
    const email=item.email.trim().toLowerCase();
    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||seen.has(email))continue;
-   const ids=(item.evidence_ids??[]).filter(id=>allowed.has(id));
+   const ids=(Array.isArray(item.evidence_ids)?item.evidence_ids:[]).filter(id=>allowed.has(id));
    if(!ids.length)continue;
    let html;
    try{
