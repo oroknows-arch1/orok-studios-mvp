@@ -118,6 +118,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const adapter=service.store.adapter;
    const original=(await adapter.read('v3-release:2026-10-14-one-live-campaign'))?.value;
    if(original?.status==='COMPLETE' && original?.result?.campaignId){
+    const drafts=(await adapter.read('v3-release:2026-10-14-editorial-drafts'))?.value;
+    if(drafts?.status==='COMPLETE')return runReleaseOnce({adapter,key:'v3-release:2026-10-14-intelligent-editorial-discovery',run:()=>service.resumeIntelligentDiscovery(original.result.campaignId)});
     return runReleaseOnce({adapter,key:'v3-release:2026-10-14-editorial-drafts',run:()=>service.resumeEditorialDrafts(original.result.campaignId)});
    }
    return runReleaseOnce({adapter,key:'v3-release:2026-10-14-one-live-campaign',run:()=>

@@ -30,7 +30,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-4.1-mini',im
  const complete=async (system,payload)=>{
   const response=await openai.chat.completions.create({
    model,response_format:{type:'json_object'},temperature:0,
-   messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}]
+   messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}],max_tokens:700
   },{maxRetries:0,timeout:90000});
   let parsed;
   try{parsed=JSON.parse(response.choices?.[0]?.message?.content);}catch{throw Error('V3_PROVIDER_JSON_INVALID');}

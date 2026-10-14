@@ -41,7 +41,7 @@ async function refresh(){
   const {asset,fingerprint,groupKey,decision,delivery}=item;
   const card=document.createElement('article');
   card.append(text('h2',asset.destination_id),text('small','Status: '+(decision?.decision||'Awaiting decision')+(delivery?' · Delivery: '+delivery.status:'')));
-  if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':'Editorial outreach')),text('p',asset.contact_status==='VERIFIED'?'Contact: verified for delivery':'Contact: unverified — draft only; delivery blocked'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
+  if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.contact_status==='VERIFIED'?'Contact: verified for delivery':'Contact: unverified — draft only; delivery blocked'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
   if(!delivery){

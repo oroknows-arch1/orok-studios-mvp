@@ -8,8 +8,13 @@ const evidence=[{id:'e1',verified:true,fact:'Verified fact',source_url:'https://
 const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
 
 test('reuses persisted evidence-linked publication as a clearly unverified draft destination',()=>{
- const selected=selectPersistedDraftDestinations({document:{evidence},existingIds:['x'],candidates:[{id:'journal',name:'Journal',category:'news',active:true,contact_verified:false,editorial_fit_verified:false,contact:{email:null},verification:{evidence_ids:['e1'],scan_evidence_digest:scanDigest}}]});
- assert.deepEqual(selected,[{id:'journal',name:'Journal',category:'news',contact:null,evidence:{ids:['e1']},contact_verified:false,editorial_fit_verified:false,delivery_eligible:false,contact_status:'UNVERIFIED',draft_only:true}]);
+ const selected=selectPersistedDraftDestinations({document:{evidence},existingIds:['x'],candidates:[{id:'journal',name:'Journal',category:'news',destination_class:'EDITORIAL_PUBLICATION',active:true,contact_verified:false,editorial_fit_verified:true,contact:{email:null},verification:{evidence_ids:['e1'],scan_evidence_digest:scanDigest}}]});
+ assert.deepEqual(selected,[{id:'journal',name:'Journal',category:'news',contact:null,evidence:{ids:['e1']},contact_verified:false,editorial_fit_verified:true,delivery_eligible:false,contact_status:'UNVERIFIED',draft_only:true}]);
+});
+
+test('does not turn a legacy source institution into an editorial draft destination',()=>{
+ const selected=selectPersistedDraftDestinations({document:{evidence},existingIds:['x'],candidates:[{id:'source',name:'Source',category:'research',active:true,verification:{evidence_ids:['e1'],scan_evidence_digest:scanDigest}}]});
+ assert.deepEqual(selected,[]);
 });
 
 test('adds draft to existing X review without changing X, decisions or delivery state',async()=>{

@@ -16,7 +16,7 @@ export function selectPersistedDraftDestinations({candidates,document,existingId
  const evidenceIds=new Set(evidence.map(item=>item.id));
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
  const existing=new Set(existingIds);
- return (candidates??[]).filter(candidate=>candidate?.active===true&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
+ return (candidates??[]).filter(candidate=>candidate?.destination_class==='EDITORIAL_PUBLICATION'&&candidate?.active===true&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
   const ids=(candidate.verification.evidence_ids??[]).filter(id=>evidenceIds.has(id));
   if(!ids.length)return null;
   const deliveryEligible=candidate.contact_verified===true&&candidate.editorial_fit_verified===true&&Boolean(candidate.contact?.email)&&Boolean(candidate.contact?.source_url);
@@ -58,7 +58,13 @@ export async function createPreparationReviewService({
   if(destinations.length)await store.extendReview(campaignId,destinations,assets);
   return {campaignId,status:'PUBLICATION_REVIEW',editorial_drafts:assets.length,notification:'EXISTING_REVIEW_SESSION'};
  };
- return {store,directory,workflow,prepare,discover,resumeEditorialDrafts,prepareAndNotify:createPublicationReviewHandoff({prepare,workflow})};
+ const resumeIntelligentDiscovery=async campaignId=>{
+  const state=(await adapter.read(campaignId))?.value;
+  if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
+  await discover({scan:state.scan,document:state.preparation_input.document,history:[]});
+  return resumeEditorialDrafts(campaignId);
+ };
+ return {store,directory,workflow,prepare,discover,resumeEditorialDrafts,resumeIntelligentDiscovery,prepareAndNotify:createPublicationReviewHandoff({prepare,workflow})};
 }
 
 // Convenience composition for the paid API's existing OpenAI connection.
