@@ -15,11 +15,9 @@ test('V3 PostgreSQL: uncertain SMTP outcome remains AMBIGUOUS and cannot be retr
  const fingerprint=hash(asset),approval={authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:id,destination_id:destination};
  const key=hash([id,destination,fingerprint]);
  const state={phase:'PUBLICATION_REVIEW',assets:{[destination]:{asset,fingerprint}},decisions:{[destination]:approval},deliveries:{[destination]:{status:'ATTEMPTING',idempotency_key:key}}};
- await pool.query('CREATE TABLE IF NOT EXISTS v3_campaign_state (campaign_id TEXT PRIMARY KEY,version BIGINT NOT NULL,payload JSONB NOT NULL)');
  await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb)',[id,JSON.stringify(state)]);
  let sends=0;const token='test-token'.padEnd(48,'x');
  const integration=createV3PreparedIntegration({pool,token,reviewOrigin:'https://review.example.org',sendOwnerReview:async()=>{throw Error('NOT_USED');},sendApprovedEmail:async()=>{sends++;throw Error('SMTP_CONNECTION_LOST_AFTER_HANDOFF');}});
- await integration.initialize();
  const req={headers:{authorization:'Bearer '+token},params:{operation:'approved-delivery'},body:{version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:id,destination_id:destination,asset,approval,idempotency_key:key}};
  const invoke=async()=>{const res=response();await integration.route(req,res);return res;};
  const first=await invoke(),second=await invoke();

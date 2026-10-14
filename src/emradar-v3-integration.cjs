@@ -17,6 +17,6 @@ function createV3PreparedIntegration({pool,token,reviewOrigin,sendOwnerReview,se
   notificationReservation:reservations.owner,
   sendReservation:reservations.send
  });
- return {route:createV3Route({handle:boundary,token}),initialize:()=>reservations.initialize()};
+ return {route:createV3Route({handle:boundary,token}),handle:boundary,initialize:()=>reservations.initialize()};
 }
 module.exports={createV3PreparedIntegration};

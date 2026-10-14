@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "product": "EMRADAR",
+  "snapshot_date": "2026-10-13",
+  "source_path": "data/checkpoints/discovery-2026-10-13.json",
+  "source_blob_sha": "73dee2ff7408ab19f304ca91eea78ba571e28d04",
+  "source_sha256": "49157d607f4f1a0db9437abe004fe81215afba653a5a416927786bbe0b8c59b8",
+  "publication_state": "PUBLISHED",
+  "downstream_release_allowed": true,
+  "native_gates": {
+    "evidence": "PASS",
+    "editorial": "PASS",
+    "brand": "PASS",
+    "risk": "PASS",
+    "publication": "PASS"
+  },
+  "gate_basis": {
+    "evidence": "2026-10-13: Native evidence generation PASS; all six records retain dated source facts, causal dependencies, contradictions, missing evidence and next checks, with primary and independent evidence preserved and source language labelled.",
+    "editorial": "2026-10-13: Report-first narrative and current-scene rebuild checked; CONFIRMED, FORMING and INVESTIGATE boundaries distinguish convergent structural evidence from active mechanisms that still depend on logistics, finance, public-health duration or disclosed commitments.",
+    "brand": "2026-10-13: EMRADAR world-change-first identity and original editorial voice preserved; the scan begins from physical and institutional changes and contains no external-destination marketing copy.",
+    "risk": "2026-10-13: No BUY/HOLD/SELL recommendations, guaranteed outcomes or unqualified returns; memory-supply response, tanker normalisation, LNG project economics, Tulu Kapi drawdown and safety, outbreak duration and private-debt allocations remain explicit uncertainties.",
+    "publication": "2026-10-13: Immutable checkpoint and archive index verified, exact publication commit ec315a5aba28cf769a7aa7c695d33bc00f4f52d0 reached Render deployment dep-db6ltvuq1p3s73an3i50 with LIVE status, and current plus dated public bytes match source blob 73dee2ff7408ab19f304ca91eea78ba571e28d04 and SHA-256 49157d607f4f1a0db9437abe004fe81215afba653a5a416927786bbe0b8c59b8."
+  },
+  "attested_by": "AUTHORIZED_SOURCE_RELEASE_REVIEW",
+  "attested_at": "2026-10-12T22:30:10Z",
+  "campaign_authority": {
+    "campaign_id": "EMRADAR_2026_10_13_LAUNCH",
+    "resume_allowed": true,
+    "external_publication_allowed": false,
+    "required_stop": "PUBLICATION_REVIEW"
+  }
+}

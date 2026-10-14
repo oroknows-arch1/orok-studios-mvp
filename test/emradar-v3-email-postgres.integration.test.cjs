@@ -17,12 +17,10 @@ test('V3 PostgreSQL prepared API: concurrent approved deliveries permit one simu
  const approval={authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:id,destination_id:destination};
  const key=hash([id,destination,fingerprint]);
  const state={phase:'PUBLICATION_REVIEW',assets:{[destination]:{asset,fingerprint}},decisions:{[destination]:approval},deliveries:{[destination]:{status:'ATTEMPTING',idempotency_key:key}}};
- await pool.query('CREATE TABLE IF NOT EXISTS v3_campaign_state (campaign_id TEXT PRIMARY KEY,version BIGINT NOT NULL,payload JSONB NOT NULL)');
  await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb)',[id,JSON.stringify(state)]);
  let sends=0;
  const auth='test-only-token'.padEnd(48,'x');
  const integration=createV3PreparedIntegration({pool,token:auth,reviewOrigin:'https://review.example.org',sendOwnerReview:async()=>{throw Error('MUST_NOT_NOTIFY');},sendApprovedEmail:async()=>{sends++;return {accepted:true,receipt_id:'simulated-smtp-receipt'};}});
- await integration.initialize();
  const req={headers:{authorization:'Bearer '+auth},params:{operation:'approved-delivery'},body:{version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:id,destination_id:destination,asset,approval,idempotency_key:key}};
  const run=async()=>{const res=response();await integration.route(req,res);return res;};
  const results=await Promise.all([run(),run()]);

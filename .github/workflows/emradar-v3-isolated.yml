@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - 'src/emradar-v3-*.cjs'
+      - 'server.js'
+      - 'package.json'
+      - 'vendor/emradar-v3/**'
       - 'test/emradar-v3-*.test.cjs'
       - '.github/workflows/emradar-v3-isolated.yml'
   pull_request:
@@ -38,4 +41,5 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci
+      - run: node test/setup-v3-postgres.cjs
       - run: node --test test/emradar-v3-*.test.cjs
