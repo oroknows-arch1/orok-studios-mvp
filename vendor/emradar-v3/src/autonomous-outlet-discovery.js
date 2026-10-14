@@ -1,4 +1,6 @@
 import {createHash} from 'node:crypto';
+import {lookup} from 'node:dns/promises';
+import {isIP} from 'node:net';
 const digest=value=>createHash('sha256').update(value).digest('hex');
 const blockedHosts=new Set(['localhost','127.0.0.1','0.0.0.0','::1']);
 function publicHttps(raw){
@@ -8,10 +10,22 @@ function publicHttps(raw){
   return u;
  }catch{return null;}
 }
+async function publiclyResolved(hostname,resolver){
+ if(isIP(hostname))return false;
+ try{
+  const addresses=await resolver(hostname,{all:true,verbatim:true});
+  if(!addresses.length)return false;
+  return addresses.every(({address})=>{
+   if(isIP(address)===4){const p=address.split('.').map(Number);return !(p[0]===0||p[0]===10||p[0]===127||p[0]>=224||(p[0]===169&&p[1]===254)||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&p[1]===168)||(p[0]===100&&p[1]>=64&&p[1]<=127)||(p[0]===192&&p[1]===0)||(p[0]===198&&p[1]===18)||(p[0]===198&&p[1]===19));}
+   if(isIP(address)===6)return !/^(::|fc|fd|fe8|fe9|fea|feb|2001:db8)/i.test(address);
+   return false;
+  });
+ }catch{return false;}
+}
 function plainText(response){
  return (response.output??[]).flatMap(item=>item.content??[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
 }
-export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,model='gpt-4.1-mini',limit=29}={}){
+export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,resolver=lookup,model='gpt-4.1-mini',limit=29}={}){
  if(typeof openai?.responses?.create!=='function'||typeof directory?.upsert!=='function'||typeof fetcher!=='function')throw Error('AUTONOMOUS_DISCOVERY_DEPENDENCIES_REQUIRED');
  return async ({document})=>{
   const evidence=(document?.evidence??[]).filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url);
@@ -29,7 +43,7 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,
   for(const item of parsed.candidates.slice(0,limit)){
    if(!item||typeof item.name!=='string'||typeof item.email!=='string'||typeof item.category!=='string')continue;
    const contactUrl=publicHttps(item.contact_url),website=publicHttps(item.website);
-   if(!contactUrl||!website||contactUrl.hostname!==website.hostname)continue;
+   if(!contactUrl||!website||contactUrl.hostname!==website.hostname||!await publiclyResolved(contactUrl.hostname,resolver))continue;
    const email=item.email.trim().toLowerCase();
    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||seen.has(email))continue;
    const ids=(item.evidence_ids??[]).filter(id=>allowed.has(id));
@@ -42,6 +56,10 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,
    }catch{continue;}
    // A model suggestion alone is never proof of a usable editorial address.
    if(!html.toLowerCase().includes(email))continue;
+   // A matching email is not itself evidence of editorial suitability.
+   const editorialContext=html.toLowerCase();
+   if(!/(editorial|editor|newsroom|submissions|contributions|pitch|contact the news team)/i.test(editorialContext))continue;
+   if(!/(editor|news|journal|publication|magazine|press|contribut)/i.test(item.category+' '+item.name+' '+editorialContext.slice(Math.max(0,editorialContext.indexOf(email)-400),editorialContext.indexOf(email)+400)))continue;
    const id='web-'+digest(website.hostname+':'+email).slice(0,20);
    const record={id,name:item.name.trim().slice(0,180),category:item.category.trim().slice(0,80),active:true,contact_verified:true,editorial_fit_verified:true,
     website:website.origin,contact:{email,source_url:contactUrl.href,checked_at:new Date().toISOString()},
