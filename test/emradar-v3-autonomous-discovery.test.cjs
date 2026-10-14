@@ -10,7 +10,7 @@ function harness(candidates,html='Contact our editorial newsroom at editor@journ
  const openai={responses:{create:async()=>({output:[{content:[{type:'output_text',text:JSON.stringify({candidates})}]}]})}};
  const fetcher=async()=>({ok:true,headers:{get:()=> 'text/html'},text:async()=>html});
  const resolver=async()=>[{address:'8.8.8.8'}];
- return {saved,openai,fetcher,resolver,directory:{upsert:async r=>saved.push(r)}};
+ return {saved,openai,fetcher,resolver,contactReader:async()=>html,directory:{upsert:async r=>saved.push(r)}};
 }
 test('evidence-backed publication contact is persisted and linked',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
