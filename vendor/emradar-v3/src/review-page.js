@@ -44,6 +44,9 @@ async function refresh(){
   if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.contact_status==='VERIFIED'?'Contact: verified for delivery':'Contact: unverified — draft only; delivery blocked'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
+  if(asset.kind==='EMAIL' && asset.brand_version==='connected-earth-v1' && asset.html){
+   const preview=document.createElement('iframe');preview.title='Reviewed email with EMRADAR letterhead';preview.setAttribute('sandbox','');preview.style='width:100%;height:900px;border:1px solid #d9e2e7';preview.srcdoc=asset.html;card.append(preview);
+  }
   if(!delivery){
    const edit=text('button','Edit draft');
    edit.addEventListener('click',async()=>{

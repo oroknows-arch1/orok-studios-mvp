@@ -89,6 +89,11 @@ test('requires provider-enforced structured discovery output',async()=>{
  assert.equal(request.text.format.strict,true);
  assert.deepEqual(request.text.format.schema.required,['candidates']);
  assert.equal(request.text.format.schema.properties.candidates.maxItems,10);
+ assert.equal(request.max_tool_calls,1);
+ const brief=JSON.parse(request.input[1].content);
+ assert.match(brief.search_brief,/Copper mining.*trade magazine/);
+ assert.equal(brief.evidence[0].source_url,undefined);
+ assert.equal(brief.connected_ecosystems[0].formation_id,'r1');
 });
 test('rejects unverified editorial email even when search suggests a matching address',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],'Editorial enquiries to another@journal.example');

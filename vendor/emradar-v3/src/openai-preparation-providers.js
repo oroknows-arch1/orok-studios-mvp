@@ -5,7 +5,7 @@ const require=createRequire(import.meta.url);
 const brand=require('../../../src/email-brand.cjs');
 const draftOffer='If useful, I can send a concise finished draft with sources for review.';
 const editorialCategory=/\b(?:news|journal|publication|media|magazine|review|editorial|research)\b/i;
-export const correspondenceType=destination=>editorialCategory.test(String(destination?.category??''))?'EDITORIAL_OUTREACH':'SOURCE_ENQUIRY';
+export const correspondenceType=destination=>destination?.destination_class==='EDITORIAL_PUBLICATION'||editorialCategory.test(String(destination?.category??''))?'EDITORIAL_OUTREACH':'SOURCE_ENQUIRY';
 const words=value=>String(value??'').trim().split(/\s+/).filter(Boolean).length;
 function approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible}){
  const fields=['introduction','observation','significance','contribution','question','limitations'];
@@ -32,6 +32,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-4.1-mini',im
    model,response_format:{type:'json_object'},temperature:0,
    messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}],max_tokens:700
   },{maxRetries:0,timeout:90000});
+  console.info('V3_WRITER_USAGE '+JSON.stringify({model,usage:response.usage}));
   let parsed;
   try{parsed=JSON.parse(response.choices?.[0]?.message?.content);}catch{throw Error('V3_PROVIDER_JSON_INVALID');}
   if(!parsed || typeof parsed!=='object'||Array.isArray(parsed))throw Error('V3_PROVIDER_JSON_INVALID');
@@ -54,7 +55,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-4.1-mini',im
    const type=isX?'X':correspondenceType(destination);
    const draft=await complete(
     type==='EDITORIAL_OUTREACH'?'Use the approved EMRADAR human-correspondence model. Return JSON strings: subject, introduction, observation, significance, contribution, question, limitations. Write natural publication-specific correspondence: introduce Sean Walker and EMRADAR; describe one evidence-supported development; explain why it matters; offer a specific research/article contribution; ask naturally whether it would suit the named publication; state material uncertainty. Do not add greeting, signature, URLs, generic marketing language, invented readership/expertise/relationships, repeated mechanical templates, unsupported conclusions, or announcement-style enquiry copy. Keep the six content fields together within 135 words.':type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write a standalone factual EMRADAR X post grounded only in supplied facts. Preserve uncertainty. Return JSON with nonempty strings body and subject. No claims beyond supplied evidence.',
-    {channel:type,destination:{id:destination.id,category:destination.category,name:destination.name??destination.id},evidence:evidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
+    {channel:type,destination:{id:destination.id,category:destination.category,name:destination.name??destination.id,relationship:destination.relationship},evidence:evidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
    );
    const deliveryEligible=destination.contact_verified===true && destination.delivery_eligible!==false && Boolean(destination.contact?.email);
    if(type==='EDITORIAL_OUTREACH')return approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible});

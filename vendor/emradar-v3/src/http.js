@@ -27,7 +27,7 @@ export function createReviewServer({workflow,health=()=>({ok:true})}) {
    const url=new URL(req.url,'http://localhost');
    if(req.method==='GET' && url.pathname==='/health') return json(res,200,health());
    if(req.method==='GET' && url.pathname==='/review/access') {
-    res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});
+    res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src https://emerging-markets-radar.onrender.com; frame-src 'self' about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});
     return res.end(reviewPage);
    }
    if(req.method!=='POST') return json(res,404,{error:'NOT_FOUND'});

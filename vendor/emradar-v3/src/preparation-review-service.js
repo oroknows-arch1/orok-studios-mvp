@@ -20,7 +20,7 @@ export function selectPersistedDraftDestinations({candidates,document,existingId
   const ids=(candidate.verification.evidence_ids??[]).filter(id=>evidenceIds.has(id));
   if(!ids.length)return null;
   const deliveryEligible=candidate.contact_verified===true&&candidate.editorial_fit_verified===true&&Boolean(candidate.contact?.email)&&Boolean(candidate.contact?.source_url);
-  return {id:candidate.id,name:candidate.name,category:candidate.category,contact:deliveryEligible?candidate.contact:null,evidence:{ids},contact_verified:deliveryEligible,editorial_fit_verified:candidate.editorial_fit_verified===true,delivery_eligible:deliveryEligible,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',draft_only:!deliveryEligible};
+  return {id:candidate.id,name:candidate.name,category:candidate.category,destination_class:candidate.destination_class,relationship:candidate.relationship,contact:deliveryEligible?candidate.contact:null,evidence:{ids},contact_verified:deliveryEligible,editorial_fit_verified:candidate.editorial_fit_verified===true,delivery_eligible:deliveryEligible,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',draft_only:!deliveryEligible};
  }).filter(Boolean).slice(0,Math.max(0,MAX_DESTINATIONS-existing.size));
 }
 
@@ -44,25 +44,25 @@ export async function createPreparationReviewService({
  });
  const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin});
- const resumeEditorialDrafts=async campaignId=>{
+ const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
   const destinations=selectPersistedDraftDestinations({candidates:await directory.list(),document:state.preparation_input.document,existingIds:state.destinations.map(item=>item.id)});
   const evidenceIds=new Set(state.preparation_input.document.evidence.filter(item=>item.verified===true).map(item=>item.id));
   const assets=[];
-  for(const destination of destinations){
+  for(const destination of destinations.slice(0,limit)){
    const asset=await write({campaignId,destination,document:state.preparation_input.document,scan:state.scan});
    verifyEditorialAsset(asset,{evidenceIds});
    assets.push(asset);
   }
-  if(destinations.length)await store.extendReview(campaignId,destinations,assets);
+  if(assets.length)await store.extendReview(campaignId,destinations.slice(0,limit),assets);
   return {campaignId,status:'PUBLICATION_REVIEW',editorial_drafts:assets.length,notification:'EXISTING_REVIEW_SESSION'};
  };
  const resumeIntelligentDiscovery=async campaignId=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
   await discover({scan:state.scan,document:state.preparation_input.document,history:[]});
-  return resumeEditorialDrafts(campaignId);
+  return resumeEditorialDrafts(campaignId,{limit:1});
  };
  return {store,directory,workflow,prepare,discover,resumeEditorialDrafts,resumeIntelligentDiscovery,prepareAndNotify:createPublicationReviewHandoff({prepare,workflow})};
 }
