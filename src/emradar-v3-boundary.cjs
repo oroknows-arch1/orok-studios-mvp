@@ -13,11 +13,13 @@ function createV3Boundary({verifyNotification,verifyApprovedDelivery,sendOwnerRe
    if(link.protocol!=='https:'||!link.hash.startsWith('#token='))throw Error('V3_PRIVATE_LINK_REQUIRED');
    await verifyNotification(payload);
    const crypto=require('node:crypto');
-   await notificationReservation.reserve({campaign_id:payload.campaign_id,link_sha256:crypto.createHash('sha256').update(payload.private_review_url).digest('hex')});
+   const link_sha256=crypto.createHash('sha256').update(payload.private_review_url).digest('hex');
+   const reservation_id=payload.campaign_id+':review:'+link_sha256;
+   await notificationReservation.reserve({campaign_id:reservation_id,link_sha256});
    let result;
    try{result=await sendOwnerReview(payload);}
-   catch(error){await notificationReservation.record({campaign_id:payload.campaign_id});throw error;}
-   await notificationReservation.record({campaign_id:payload.campaign_id,provider_id:result?.accepted===true?result?.provider_id:undefined});
+   catch(error){await notificationReservation.record({campaign_id:reservation_id});throw error;}
+   await notificationReservation.record({campaign_id:reservation_id,provider_id:result?.accepted===true?result?.provider_id:undefined});
    if(result?.accepted!==true||!result.provider_id)throw Error('V3_OWNER_SMTP_OUTCOME_UNCONFIRMED');
    return {accepted:true,provider_id:result.provider_id,recipient:payload.to,campaign_id:payload.campaign_id};
   }

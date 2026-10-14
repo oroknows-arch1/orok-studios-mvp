@@ -25,11 +25,11 @@ export class ReviewWorkflow {
   const key='review:'+campaignId;
   const now=this.clock();
   const existing=(await this.adapter.read(key))?.value;
-  if(existing && existing.status!=='EXPIRED' && existing.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
+  if(existing && !['EXPIRED','CONSUMED'].includes(existing.status) && existing.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
   const {token,record}=issueReviewAccess({campaignId,now});
   await this.update(key,old=>{
-   if(old && old.status!=='EXPIRED' && old.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
-   return {...record,status:'ISSUED',notification_id:randomUUID()};
+   if(old && !['EXPIRED','CONSUMED'].includes(old.status) && old.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
+   return {...record,status:'ISSUED',notification_id:randomUUID(),previous_reviews:old?[...(old.previous_reviews??[]),Object.fromEntries(Object.entries(old).filter(([key])=>key!=='previous_reviews'))]:[]};
   });
   const link=this.baseUrl+'/review/access#token='+encodeURIComponent(token)+'&campaign='+encodeURIComponent(campaignId);
   // Notification failure is recorded as AMBIGUOUS; never silently reissue a second live link.
