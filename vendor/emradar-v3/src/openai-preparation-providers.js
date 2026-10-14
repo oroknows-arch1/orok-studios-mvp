@@ -1,5 +1,29 @@
 // Reuse the OpenAI client already configured by the existing paid API.
 // No model calls occur at import or assembly time.
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
+const brand=require('../../../src/email-brand.cjs');
+const draftOffer='If useful, I can send a concise finished draft with sources for review.';
+const editorialCategory=/\b(?:news|journal|publication|media|magazine|review|editorial|research)\b/i;
+export const correspondenceType=destination=>editorialCategory.test(String(destination?.category??''))?'EDITORIAL_OUTREACH':'SOURCE_ENQUIRY';
+const words=value=>String(value??'').trim().split(/\s+/).filter(Boolean).length;
+function approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible}){
+ const fields=['introduction','observation','significance','contribution','question','limitations'];
+ if(fields.some(key=>typeof draft[key]!=='string'||!draft[key].trim())||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
+ const name=destination.name??destination.id;
+ if(!draft.introduction.includes('Sean Walker')||!draft.introduction.includes('EMRADAR')||(!draft.contribution.includes(name)&&!draft.question.includes(name))||!/[?？]\s*$/.test(draft.question)||!/(?:article|research|contribution|note|analysis)/i.test(draft.question))throw Error('V3_HUMAN_CORRESPONDENCE_REQUIRED');
+ const core=[draft.introduction,draft.observation,draft.significance,draft.contribution,draft.question,draftOffer].join('\n\n');
+ if(/(?:relevant to your audience|marketing opportunity|exciting opportunity|game[- ]changer|revolutionary)/i.test(core)||words(core)>135)throw Error('V3_HUMAN_CORRESPONDENCE_REQUIRED');
+ const asset={campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',subject:draft.subject,body:['Hello,',core,'Regards,','Sean Walker\nEMRADAR'].join('\n\n'),from:brand.identity.address,to:deliveryEligible?destination.contact.email:null,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',delivery_eligible:deliveryEligible,evidence_ids:evidence.map(item=>item.id),evidence_limitations:draft.limitations};
+ brand.brand(asset);
+ return asset;
+}
+function sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible}){
+ if(typeof draft.subject!=='string'||!draft.subject.trim()||typeof draft.body!=='string'||!draft.body.trim()||!/[?？]/.test(draft.body))throw Error('V3_SOURCE_ENQUIRY_INVALID');
+ const asset={campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'SOURCE_ENQUIRY',subject:draft.subject,body:['Hello,',"I'm Sean Walker, working on EMRADAR research.",draft.body,'Regards,','Sean Walker\nEMRADAR'].join('\n\n'),from:brand.identity.address,to:deliveryEligible?destination.contact.email:null,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',delivery_eligible:deliveryEligible,evidence_ids:evidence.map(item=>item.id)};
+ brand.brand(asset);
+ return asset;
+}
 export function createOpenAiPreparationProviders({openai,model='gpt-4.1-mini',imageModel='gpt-image-1'}={}) {
  if(typeof openai?.chat?.completions?.create!=='function'||typeof openai?.images?.generate!=='function')
   throw Error('V3_OPENAI_PROVIDER_REQUIRED');
@@ -27,13 +51,16 @@ export function createOpenAiPreparationProviders({openai,model='gpt-4.1-mini',im
    const evidence=(document?.evidence??[]).filter(e=>e.verified===true && allowed.includes(e.id));
    if(!evidence.length)throw Error('V3_DESTINATION_EVIDENCE_REQUIRED');
    const isX=destination.id==='x';
+   const type=isX?'X':correspondenceType(destination);
    const draft=await complete(
-    'Write concise, original, human EMRADAR correspondence grounded ONLY in supplied facts. Never invent developments, sources, contact names or editorial capabilities. Preserve uncertainty. For EMAIL include greeting, why relevant to the specific outlet, an explicit article/research contribution question, and Sean Walker / EMRADAR signature. For X write a standalone factual post. Return JSON with nonempty strings body and subject. No claims beyond supplied evidence.',
-    {channel:isX?'X':'EMAIL',destination:{id:destination.id,category:destination.category,name:destination.name??destination.id},evidence:evidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
+    type==='EDITORIAL_OUTREACH'?'Use the approved EMRADAR human-correspondence model. Return JSON strings: subject, introduction, observation, significance, contribution, question, limitations. Write natural publication-specific correspondence: introduce Sean Walker and EMRADAR; describe one evidence-supported development; explain why it matters; offer a specific research/article contribution; ask naturally whether it would suit the named publication; state material uncertainty. Do not add greeting, signature, URLs, generic marketing language, invented readership/expertise/relationships, repeated mechanical templates, unsupported conclusions, or announcement-style enquiry copy. Keep the six content fields together within 135 words.':type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write a standalone factual EMRADAR X post grounded only in supplied facts. Preserve uncertainty. Return JSON with nonempty strings body and subject. No claims beyond supplied evidence.',
+    {channel:type,destination:{id:destination.id,category:destination.category,name:destination.name??destination.id},evidence:evidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
    );
-   if(typeof draft.body!=='string'||!draft.body.trim()||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
    const deliveryEligible=destination.contact_verified===true && destination.delivery_eligible!==false && Boolean(destination.contact?.email);
-   return {campaign_id:campaignId,destination_id:destination.id,kind:isX?'X':'EMAIL',body:draft.body,subject:draft.subject,from:'sean@emradar.net',...(isX?{}:{to:deliveryEligible?destination.contact.email:null,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',delivery_eligible:deliveryEligible}),evidence_ids:evidence.map(e=>e.id)};
+   if(type==='EDITORIAL_OUTREACH')return approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible});
+   if(type==='SOURCE_ENQUIRY')return sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible});
+   if(typeof draft.body!=='string'||!draft.body.trim()||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
+   return {campaign_id:campaignId,destination_id:destination.id,kind:'X',body:draft.body,subject:draft.subject,from:brand.identity.address,evidence_ids:evidence.map(e=>e.id)};
   },
   renderVisual:async({asset,document})=>{
    const evidence=(document?.evidence??[]).filter(e=>asset.evidence_ids?.includes(e.id));

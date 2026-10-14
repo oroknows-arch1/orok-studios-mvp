@@ -29,10 +29,9 @@ function createV3Smtp({env=process.env,createTransport=nodemailer.createTranspor
   },
   sendApprovedEmail:async payload=>{
    const asset=payload?.asset;
-   if(asset?.kind!=='EMAIL'||!asset.to||!asset.subject||!asset.body||asset.from!==brand.identity.address)throw Error('V3_EMAIL_ASSET_INVALID');
-   const receipt_id=await send({from:{name:brand.identity.name,address:brand.identity.address},to:asset.to,
-    replyTo:brand.identity.reply_to,subject:asset.subject,text:asset.body,
-    headers:{'X-EMRADAR-Idempotency-Key':payload.idempotency_key}});
+   if(asset?.kind!=='EMAIL'||!asset.to||!asset.subject||!asset.body||(asset.from!==brand.identity.address&&asset.from?.address!==brand.identity.address))throw Error('V3_EMAIL_ASSET_INVALID');
+   const envelope=asset.brand_version?brand.envelope(asset):{from:{name:brand.identity.name,address:brand.identity.address},to:asset.to,replyTo:brand.identity.reply_to,subject:asset.subject,text:asset.body};
+   const receipt_id=await send({...envelope,headers:{'X-EMRADAR-Idempotency-Key':payload.idempotency_key}});
    return {accepted:true,receipt_id};
   }
  };
