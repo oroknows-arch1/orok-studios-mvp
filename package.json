@@ -24,7 +24,6 @@
     "mailparser": "^3.9.36",
     "nodemailer": "^8.0.3",
     "openai": "^6.33.0",
-    "pg": "^8.22.0",
-    "emradar-marketing-engine-v3": "github:oroknows-arch1/emradar-marketing-engine-v3#2d28ebd95789820f2182e4be6c3f1b676f1529ca"
+    "pg": "^8.22.0"
   }
 }
