@@ -28,6 +28,24 @@ test('rejects private IP hosts and non-editorial contacts',async()=>{
  const h=harness(candidates,'News and analysis. Sales team editor@journal.example');const {createAutonomousOutletDiscovery}=await load();
  assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,1);assert.equal(h.saved.length,1);assert.equal(h.saved[0].contact_verified,false);assert.equal(h.saved[0].editorial_fit_verified,true);
 });
+test('pinned HTTPS lookup satisfies Node all-address requests',async()=>{
+ const {pinnedLookup}=await load();
+ const all=await new Promise((resolve,reject)=>pinnedLookup('8.8.8.8')('journal.example',{all:true},(error,value)=>error?reject(error):resolve(value)));
+ assert.deepEqual(all,[{address:'8.8.8.8',family:4}]);
+ const one=await new Promise((resolve,reject)=>pinnedLookup('8.8.8.8')('journal.example',{},(error,address,family)=>error?reject(error):resolve({address,family})));
+ assert.deepEqual(one,{address:'8.8.8.8',family:4});
+});
+test('preserves a proof-fetch failure as explicitly unverified without linking it',async()=>{
+ const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'',email:'',evidence_ids:['e1']}]);
+ h.contactReader=async()=>{throw Error('CONTACT_RESPONSE_INVALID')};
+ const {createAutonomousOutletDiscovery}=await load();
+ assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);
+ assert.equal(h.saved.length,1);
+ assert.equal(h.saved[0].discovery_status,'UNVERIFIED');
+ assert.equal(h.saved[0].editorial_fit_verified,false);
+ assert.equal(h.saved[0].verification.status,'UNVERIFIED');
+ assert.equal(h.saved[0].verification.failure_code,'CONTACT_RESPONSE_INVALID');
+});
 test('does not trust model-invented evidence IDs',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/contact',email:'editor@journal.example',evidence_ids:['not-in-scan']}]);
  const {createAutonomousOutletDiscovery}=await load();assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);
