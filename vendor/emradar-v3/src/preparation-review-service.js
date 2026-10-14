@@ -4,6 +4,7 @@ import {CampaignStore} from './state.js';
 import {OutletDirectory} from './outlet-directory.js';
 import {createDirectoryDiscovery} from './directory-discovery.js';
 import {createReviewedEvidenceLinker} from './reviewed-evidence-links.js';
+import {createAutonomousOutletDiscovery} from './autonomous-outlet-discovery.js';
 import {createPreparationRun} from './preparation-run.js';
 import {ReviewWorkflow} from './review-workflow.js';
 import {createPublicationReviewHandoff} from './publication-review-handoff.js';
@@ -12,7 +13,7 @@ import {createPublicationReviewHandoff} from './publication-review-handoff.js';
 // owner-notification transports have been configured and independently tested.
 // Does not mount HTTP routes, deploy, distribute or trigger a campaign at import.
 export async function createPreparationReviewService({
- pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher
+ pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks
 }) {
  if(typeof pool?.query!=='function'||typeof notify!=='function'||
     typeof researchEvidence!=='function'||typeof write!=='function'||
@@ -24,7 +25,7 @@ export async function createPreparationReviewService({
  await directory.initialize();
  const store=new CampaignStore(adapter);
  const discover=createDirectoryDiscovery({
-  directory,linkEvidence:createReviewedEvidenceLinker({reviewedLinks})
+  directory,linkEvidence:discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
  });
  const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin});
@@ -35,5 +36,9 @@ export async function createPreparationReviewService({
 // Caller still controls activation, review notification and all external effects.
 export async function createOpenAiPreparationReviewService({openai,...options}) {
  const providers=createOpenAiPreparationProviders({openai});
- return createPreparationReviewService({...options,...providers});
+ const discoverLinks=options.autonomousDiscovery===true ? async({document})=>{
+  const discover=createAutonomousOutletDiscovery({openai,directory:options.directory??{upsert:async()=>{throw Error('DISCOVERY_DIRECTORY_NOT_BOUND');}},fetcher:options.fetcher});
+  return discover({document});
+ }:undefined;
+ return createPreparationReviewService({...options,...providers,discoverLinks});
 }
