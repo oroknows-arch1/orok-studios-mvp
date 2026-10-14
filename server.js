@@ -675,6 +675,9 @@ app.post("/generate-image", createImageHandler(openai));
 const PORT = process.env.PORT || 3000;
 
 if (require.main === module) {
+  // Fail closed before listening if explicitly enabled V3 cannot initialise.
+  const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
+  mountV3PreparationReview({app}).then(({pool}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
@@ -700,6 +703,10 @@ if (require.main === module) {
   };
   process.on("SIGTERM", () => shutdown("SIGTERM"));
   process.on("SIGINT", () => shutdown("SIGINT"));
+  }).catch(error=>{
+    console.error('V3_PREPARATION_STARTUP_FAILED:',error.message);
+    process.exitCode=1;
+  });
 }
 
 module.exports = app;
