@@ -52,6 +52,20 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    req.params={...req.params,operation:'owner-notification'};
    return integration.route(req,res);
   });
+  const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
+  const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
+  const loadPublished=()=>({
+   publicationRecord:JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'publication-'+SCAN_DATE+'.json'),'utf8')),
+   releaseAttestation:JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'downstream-release-attestation-'+SCAN_DATE+'.json'),'utf8'))
+  });
+  const refreshDirectory=async()=>{
+   if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY!=='true')throw Error('V3_AUTONOMOUS_DISCOVERY_DISABLED');
+   const attestation=loadPublished();
+   const verified=await verifyPublishedScan({snapshotDate:SCAN_DATE,expectedSha256:SHA,liveUrl:ARCHIVE,archiveUrl:ARCHIVE,...attestation,fetcher});
+   const document=normalizePublishedEvidence(verified.document);
+   const destinations=await service.discover({scan:verified.scan,document});
+   return {status:'DISCOVERY_COMPLETE',destination_count:destinations.length,editorial_count:destinations.filter(d=>d.id!=='x').length};
+  };
   // Fixed published-scan preparation; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async()=>{
@@ -62,6 +76,11 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
      publicationRecord,releaseAttestation
     });
   };
+  app.post('/emradar/v3/discover',async(req,res)=>{
+   if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
+   try{return res.status(200).json(await refreshDirectory());}
+   catch(error){return res.status(409).json({reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_DISCOVERY_FAILED'});}
+  });
   // Owner-triggered preparation: bearer-authenticated, fixed verified 13 Oct
   // artifact. No endpoint for external email delivery or X posting.
   app.post('/emradar/v3/prepare',async(req,res)=>{
@@ -74,7 +93,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     return res.status(409).json({reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'});
    }
   });
-  return {enabled:true,pool,service,runCampaign};
+  return {enabled:true,pool,service,runCampaign,refreshDirectory};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={mountV3PreparationReview};
