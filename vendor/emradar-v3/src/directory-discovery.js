@@ -11,10 +11,16 @@ export function createDirectoryDiscovery({directory,linkEvidence,limit=29}) {
    const links=await linkEvidence({scan,document,outlets:existing});
    const outlets=await directory.list();
    if(!Array.isArray(links)) throw Error('DIRECTORY_EVIDENCE_LINKS_REQUIRED');
-   const byId=new Map(links.map(link=>[link.outlet_id,link.evidence_ids]));
+   const byId=new Map();
+   for(const link of links){
+    if(!link?.outlet_id)continue;
+    const ids=Array.isArray(link.evidence_ids)?link.evidence_ids:link.evidence_id?[link.evidence_id]:[];
+    if(!byId.has(link.outlet_id))byId.set(link.outlet_id,new Set());
+    for(const id of ids)byId.get(link.outlet_id).add(id);
+   }
    return outlets.map(outlet=>({
     ...outlet,
-    evidence_ids:Array.isArray(byId.get(outlet.id))?byId.get(outlet.id):[]
+    evidence_ids:[...(byId.get(outlet.id)??[])]
    }));
   }
  });
