@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign,refreshDirectory}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -691,6 +691,11 @@ if (require.main === module) {
       smtp_password_configured:Boolean(process.env.EDITORIAL_SMTP_PASSWORD),
       v3_enabled:process.env.EMRADAR_V3_PREPARATION_ENABLED==='true'
     }));
+    if(process.env.EMRADAR_V3_AUTO_DISCOVER_ONCE==='true' && typeof refreshDirectory==='function'){
+      // One scan-bound discovery only. No external delivery or X posting.
+      refreshDirectory().then(result=>console.log('V3_DISCOVERY_RESULT',JSON.stringify(result)))
+       .catch(error=>console.error('V3_DISCOVERY_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_DISCOVERY_FAILED'));
+    }
     if(process.env.EMRADAR_V3_AUTO_PREPARE==='true' && typeof runCampaign==='function'){
       runCampaign().then(result=>console.log('V3_PREPARATION_RESULT',JSON.stringify(result)))
        .catch(error=>console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'));
