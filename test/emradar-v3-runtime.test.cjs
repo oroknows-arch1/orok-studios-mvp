@@ -25,6 +25,7 @@ test('activation initializes V3 tables and exposes preparation plus owner-notifi
   setReviewHandler:handler=>handlers.push(handler)
  });
  assert.equal(result.enabled,true);
+ assert.equal(typeof result.runCampaign,'function');
  assert.deepEqual(routes.map(r=>r[0]),['/emradar/v3/owner-notification','/emradar/v3/prepare']);
  assert.equal(sql.length,4);
  assert.equal(handlers.length,1);
