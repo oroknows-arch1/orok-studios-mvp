@@ -11,7 +11,7 @@ function harness(candidates,html='Contact our editorial newsroom at editor@journ
  const openai={responses:{create:async()=>({output:[{content:[{type:'output_text',text:JSON.stringify({candidates})}]}]})}};
  const fetcher=async()=>({ok:true,headers:{get:()=> 'text/html'},text:async()=>html});
  const resolver=async()=>[{address:'8.8.8.8'}];
- return {saved,openai,fetcher,resolver,contactReader:async()=>html,directory:{upsert:async r=>saved.push(r)}};
+ return {saved,openai,fetcher,resolver,contactReader:async()=>html,directory:{upsert:async r=>{const index=saved.findIndex(item=>item.id===r.id);if(index===-1)saved.push(r);else saved[index]=r;}}};
 }
 test('evidence-backed publication contact is persisted and linked',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
@@ -25,7 +25,7 @@ test('rejects private IP hosts and non-editorial contacts',async()=>{
  {name:'Private',category:'mining journal',website:'https://127.0.0.1',contact_url:'https://127.0.0.1/contact',email:'editor@journal.example',evidence_ids:['e1']},
  {name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/contact',email:'editor@journal.example',evidence_ids:['e1']}];
  const h=harness(candidates,'Sales team editor@journal.example');const {createAutonomousOutletDiscovery}=await load();
- assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);assert.equal(h.saved.length,0);
+ assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);assert.equal(h.saved.length,1);assert.equal(h.saved[0].contact_verified,false);assert.equal(h.saved[0].editorial_fit_verified,false);
 });
 test('does not trust model-invented evidence IDs',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/contact',email:'editor@journal.example',evidence_ids:['not-in-scan']}]);
@@ -93,12 +93,12 @@ test('rejects unverified editorial email even when search suggests a matching ad
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],'Editorial enquiries to another@journal.example');
  const {createAutonomousOutletDiscovery}=await load();
  assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);
- assert.equal(h.saved.length,0);
+ assert.equal(h.saved.length,1);assert.equal(h.saved[0].contact_verified,false);assert.equal(h.saved[0].editorial_fit_verified,false);
 });
 test('rejects contact pages that redirect or return non-HTML in real reader',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
  h.contactReader=async()=>{throw Error('CONTACT_RESPONSE_INVALID')};
  const {createAutonomousOutletDiscovery}=await load();
  assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);
- assert.equal(h.saved.length,0);
+ assert.equal(h.saved.length,1);assert.equal(h.saved[0].contact_verified,false);assert.equal(h.saved[0].editorial_fit_verified,false);
 });
