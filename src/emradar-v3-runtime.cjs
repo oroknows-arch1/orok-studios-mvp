@@ -16,6 +16,9 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
  createPool=options=>new Pool(options),createTransport,setReviewHandler}={}){
  if(env.EMRADAR_V3_PREPARATION_ENABLED!=='true')return {enabled:false};
  if(typeof app?.post!=='function')throw Error('V3_APP_REQUIRED');
+ // Autonomous discovery must never silently inherit the production database.
+ if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'&&!env.EMRADAR_V3_DATABASE_URL)
+  throw Error('V3_DISCOVERY_ISOLATED_DATABASE_REQUIRED');
  const databaseUrl=env.EMRADAR_V3_DATABASE_URL||env.DATABASE_URL;
  if(!databaseUrl||!env.EMRADAR_V3_API_TOKEN||!env.EMRADAR_V3_REVIEW_ORIGIN)
   throw Error('V3_ACTIVATION_CONFIG_REQUIRED');
