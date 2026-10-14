@@ -54,7 +54,7 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolv
  return async ({document,outlets=[]})=>{
   const evidence=(document?.evidence??[]).filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url);
   if(!evidence.length)throw Error('DISCOVERY_VERIFIED_EVIDENCE_REQUIRED');
-  const reusable=Array.isArray(outlets)?outlets.filter(o=>o?.active===true&&o?.contact_verified===true&&o?.editorial_fit_verified===true&&o?.contact?.email&&o?.contact?.source_url&&o?.verification?.evidence_ids?.length):[];
+  const reusable=Array.isArray(outlets)?outlets.filter(o=>o?.active===true&&o?.contact_verified===true&&o?.editorial_fit_verified===true&&o?.contact?.email&&o?.contact?.source_url&&Array.isArray(o?.verification?.evidence_ids)&&o?.verification?.scan_evidence_digest===digest(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))):[];
   const reusableIds=new Set(reusable.flatMap(o=>o.verification.evidence_ids));
   const remaining=evidence.filter(e=>!reusableIds.has(e.id));
   const reused=[];
@@ -90,7 +90,7 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolv
    const id='web-'+digest(website.hostname+':'+email).slice(0,20);
    const record={id,name:item.name.trim().slice(0,180),category:item.category.trim().slice(0,80),active:true,contact_verified:true,editorial_fit_verified:true,
     website:website.origin,contact:{email,source_url:contactUrl.href,checked_at:new Date().toISOString()},
-    verification:{method:'live_editorial_contact_page',source_url:contactUrl.href,evidence_ids:ids}};
+    verification:{method:'live_editorial_contact_page',source_url:contactUrl.href,evidence_ids:ids,scan_evidence_digest:digest(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))}};
    await directory.upsert(record);
    seen.add(email);
    for(const evidence_id of ids){
