@@ -9,6 +9,9 @@ const { createPublishing } = require("./src/publishing");
 const { createGeneralHealthHandler } = require("./src/health");
 
 const app = express();
+// Preserve the raw request stream for V3's signed private review handler.
+let v3ReviewHandler=null;
+app.use((req,res,next)=>v3ReviewHandler?v3ReviewHandler(req,res,next):next());
 const {createEmailRelay}=require('./src/emradar-email-relay');
 app.use(cors());
 app.use(express.json({ limit: "1mb" }));
@@ -677,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app}).then(({pool}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
