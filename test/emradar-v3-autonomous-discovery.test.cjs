@@ -3,6 +3,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {pathToFileURL}=require('node:url');
 const {resolve}=require('node:path');
+const {createHash}=require('node:crypto');
 const load=()=>import(pathToFileURL(resolve(__dirname,'../vendor/emradar-v3/src/autonomous-outlet-discovery.js')).href);
 const document={evidence:[{id:'e1',record_id:'r1',verified:true,fact:'Verified copper supply change',source_url:'https://source.example/fact'}]};
 function harness(candidates,html='Contact our editorial newsroom at editor@journal.example'){
@@ -49,8 +50,17 @@ test('directory selection preserves individual scan evidence links',async()=>{
 test('reuses already verified evidence-linked outlet without paid search',async()=>{
  const h=harness([]);
  h.openai.responses.create=async()=>{throw Error('SEARCH_MUST_NOT_RUN')};
- const existing={id:'existing-1',active:true,contact_verified:true,editorial_fit_verified:true,contact:{email:'editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13'},verification:{evidence_ids:['e1']}};
+ const existing={id:'existing-1',active:true,contact_verified:true,editorial_fit_verified:true,contact:{email:'editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13'},verification:{evidence_ids:['e1'],scan_evidence_digest:createHash('sha256').update(JSON.stringify(document.evidence.map(e=>[e.id,e.fact,e.source_url]))).digest('hex')}};
  const {createAutonomousOutletDiscovery}=await load();
  const links=await createAutonomousOutletDiscovery(h)({document,outlets:[existing]});
  assert.equal(links.length,1);assert.equal(links[0].outlet_id,'existing-1');assert.equal(h.saved.length,0);
+});
+
+test('same evidence ID with changed facts cannot reuse prior scan links',async()=>{
+ const h=harness([]);let searches=0;
+ h.openai.responses.create=async()=>{searches++;return {output:[{content:[{type:'output_text',text:'{"candidates":[]}'}]}]}};
+ const existing={id:'old',active:true,contact_verified:true,editorial_fit_verified:true,contact:{email:'editor@journal.example',source_url:'https://journal.example/editorial'},verification:{evidence_ids:['e1'],scan_evidence_digest:'outdated'}};
+ const {createAutonomousOutletDiscovery}=await load();
+ const links=await createAutonomousOutletDiscovery(h)({document,outlets:[existing]});
+ assert.equal(searches,1);assert.deepEqual(links,[]);
 });
