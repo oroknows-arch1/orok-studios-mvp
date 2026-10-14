@@ -7,8 +7,9 @@ export function createDirectoryDiscovery({directory,linkEvidence,limit=29}) {
  return createDiscovery({
   limit,
   loadCandidates:async ({scan,document})=>{
+   const existing=await directory.list();
+   const links=await linkEvidence({scan,document,outlets:existing});
    const outlets=await directory.list();
-   const links=await linkEvidence({scan,document,outlets});
    if(!Array.isArray(links)) throw Error('DIRECTORY_EVIDENCE_LINKS_REQUIRED');
    const byId=new Map(links.map(link=>[link.outlet_id,link.evidence_ids]));
    return outlets.map(outlet=>({
