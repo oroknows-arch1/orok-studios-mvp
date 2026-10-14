@@ -1,17 +1,14 @@
 'use strict';
 const {Pool}=require('pg');
+const {readFileSync}=require('node:fs');
+const path=require('node:path');
 const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 
 const SCAN_DATE='2026-10-13';
 const SHA='49157d607f4f1a0db9437abe004fe81215afba653a5a416927786bbe0b8c59b8';
 const ARCHIVE='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+SCAN_DATE+'.json';
-const SCANNER_RAW='https://raw.githubusercontent.com/oroknows-arch1/emerging-markets-radar/main/verification/';
+const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
 const REVIEW_PATHS=new Set(['/review/access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise']);
-const safeJson=async (url,fetcher)=>{
- const response=await fetcher(url,{method:'GET',redirect:'error',signal:AbortSignal.timeout(15000)});
- if(!response.ok)throw Error('V3_RELEASE_ATTESTATION_UNAVAILABLE');
- return response.json();
-};
 
 // Activation is opt-in and fails before mounting any routes if required
 // configuration is missing. The only outbound SMTP operation is owner review.
@@ -59,10 +56,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)
     return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
    try{
-    const [publicationRecord,releaseAttestation]=await Promise.all([
-     safeJson(SCANNER_RAW+'publication-'+SCAN_DATE+'.json',fetcher),
-     safeJson(SCANNER_RAW+'downstream-release-attestation-'+SCAN_DATE+'.json',fetcher)
-    ]);
+    const publicationRecord=JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'publication-'+SCAN_DATE+'.json'),'utf8'));
+    const releaseAttestation=JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'downstream-release-attestation-'+SCAN_DATE+'.json'),'utf8'));
     const result=await service.prepareAndNotify({
      snapshotDate:SCAN_DATE,expectedSha256:SHA,liveUrl:ARCHIVE,archiveUrl:ARCHIVE,
      publicationRecord,releaseAttestation
