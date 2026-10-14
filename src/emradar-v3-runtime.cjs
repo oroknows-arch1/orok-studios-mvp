@@ -51,24 +51,29 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    req.params={...req.params,operation:'owner-notification'};
    return integration.route(req,res);
   });
+  // Fixed published-scan preparation; review invitation is issued only
+  // after durable PUBLICATION_REVIEW. Never delivers to destinations.
+  const runCampaign=async()=>{
+    const publicationRecord=JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'publication-'+SCAN_DATE+'.json'),'utf8'));
+    const releaseAttestation=JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'downstream-release-attestation-'+SCAN_DATE+'.json'),'utf8'));
+    return service.prepareAndNotify({
+     snapshotDate:SCAN_DATE,expectedSha256:SHA,liveUrl:ARCHIVE,archiveUrl:ARCHIVE,
+     publicationRecord,releaseAttestation
+    });
+  };
   // Owner-triggered preparation: bearer-authenticated, fixed verified 13 Oct
   // artifact. No endpoint for external email delivery or X posting.
   app.post('/emradar/v3/prepare',async(req,res)=>{
    if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)
     return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
    try{
-    const publicationRecord=JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'publication-'+SCAN_DATE+'.json'),'utf8'));
-    const releaseAttestation=JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'downstream-release-attestation-'+SCAN_DATE+'.json'),'utf8'));
-    const result=await service.prepareAndNotify({
-     snapshotDate:SCAN_DATE,expectedSha256:SHA,liveUrl:ARCHIVE,archiveUrl:ARCHIVE,
-     publicationRecord,releaseAttestation
-    });
+    const result=await runCampaign();
     return res.status(200).json(result);
    }catch(error){
     return res.status(409).json({reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'});
    }
   });
-  return {enabled:true,pool,service};
+  return {enabled:true,pool,service,runCampaign};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={mountV3PreparationReview};

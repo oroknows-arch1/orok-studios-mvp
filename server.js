@@ -680,9 +680,21 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
+      database_configured:Boolean(process.env.EMRADAR_V3_DATABASE_URL||process.env.DATABASE_URL),
+      openai_configured:Boolean(process.env.OPENAI_API_KEY),
+      smtp_host_configured:Boolean(process.env.EDITORIAL_SMTP_HOST),
+      smtp_user_canonical:process.env.EDITORIAL_SMTP_USER==='sean@emradar.net',
+      smtp_password_configured:Boolean(process.env.EDITORIAL_SMTP_PASSWORD),
+      v3_enabled:process.env.EMRADAR_V3_PREPARATION_ENABLED==='true'
+    }));
+    if(process.env.EMRADAR_V3_AUTO_PREPARE==='true' && typeof runCampaign==='function'){
+      runCampaign().then(result=>console.log('V3_PREPARATION_RESULT',JSON.stringify(result)))
+       .catch(error=>console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'));
+    }
     require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
   });
 
