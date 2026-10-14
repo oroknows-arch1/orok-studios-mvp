@@ -29,7 +29,7 @@ export async function createPreparationReviewService({
  });
  const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin});
- return {store,directory,workflow,prepare,prepareAndNotify:createPublicationReviewHandoff({prepare,workflow})};
+ return {store,directory,workflow,prepare,discover,prepareAndNotify:createPublicationReviewHandoff({prepare,workflow})};
 }
 
 // Convenience composition for the paid API's existing OpenAI connection.
