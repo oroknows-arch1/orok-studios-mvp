@@ -69,8 +69,15 @@ test('rejects web-search responses without valid structured candidates and never
  const h=harness([]);
  h.openai.responses.create=async()=>({output:[{content:[{type:'output_text',text:'not JSON'}]}]});
  const {createAutonomousOutletDiscovery}=await load();
- await assert.rejects(createAutonomousOutletDiscovery(h)({document}),/DISCOVERY_SEARCH_JSON_INVALID/);
+ const messages=[];const original=console.error;console.error=message=>messages.push(message);
+ try{await assert.rejects(createAutonomousOutletDiscovery(h)({document}),/DISCOVERY_SEARCH_JSON_INVALID/);}
+ finally{console.error=original;}
  assert.equal(h.saved.length,0);
+ assert.equal(messages.length,1);
+ assert.match(messages[0],/^V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC /);
+ assert.deepEqual(JSON.parse(messages[0].slice(messages[0].indexOf('{'))),{
+  response_type:'object',top_level_keys:['output'],output_count:1,output_types:[null],content_counts:[1],content_types:[['output_text']],output_text_lengths:[[8]],parse_error_name:'SyntaxError',parse_error_message:'Unexpected token \'o\', "not JSON" is not valid JSON'
+ });
 });
 test('rejects unverified editorial email even when search suggests a matching address',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],'Editorial enquiries to another@journal.example');

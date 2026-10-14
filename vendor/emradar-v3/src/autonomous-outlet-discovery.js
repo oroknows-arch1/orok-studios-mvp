@@ -49,6 +49,18 @@ function publicAddress(address){
 function plainText(response){
  return (response.output??[]).flatMap(item=>item.content??[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
 }
+function safeResponseShape(response){
+ const output=Array.isArray(response?.output)?response.output:[];
+ return {
+  response_type:Array.isArray(response)?'array':response===null?'null':typeof response,
+  top_level_keys:response&&typeof response==='object'&&!Array.isArray(response)?Object.keys(response).sort():[],
+  output_count:output.length,
+  output_types:output.map(item=>typeof item?.type==='string'?item.type:null),
+  content_counts:output.map(item=>Array.isArray(item?.content)?item.content.length:0),
+  content_types:output.map(item=>(Array.isArray(item?.content)?item.content:[]).map(content=>typeof content?.type==='string'?content.type:null)),
+  output_text_lengths:output.map(item=>(Array.isArray(item?.content)?item.content:[]).filter(content=>content?.type==='output_text').map(content=>typeof content?.text==='string'?content.text.length:null))
+ };
+}
 export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolver=lookup,contactReader=pinnedContactHtml,model='gpt-4.1-mini',limit=29}={}){
  if(typeof openai?.responses?.create!=='function'||typeof directory?.upsert!=='function'||typeof contactReader!=='function')throw Error('AUTONOMOUS_DISCOVERY_DEPENDENCIES_REQUIRED');
  return async ({document,outlets=[]})=>{
@@ -67,7 +79,10 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolv
    max_output_tokens:3200
   },{maxRetries:0,timeout:90000});
   let parsed;
-  try{parsed=JSON.parse(plainText(answer));}catch{throw Error('DISCOVERY_SEARCH_JSON_INVALID');}
+  try{parsed=JSON.parse(plainText(answer));}catch(error){
+   console.error('V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC '+JSON.stringify({...safeResponseShape(answer),parse_error_name:error?.name??null,parse_error_message:typeof error?.message==='string'?error.message.slice(0,160):null}));
+   throw Error('DISCOVERY_SEARCH_JSON_INVALID');
+  }
   if(!Array.isArray(parsed?.candidates))throw Error('DISCOVERY_SEARCH_CANDIDATES_REQUIRED');
   const allowed=new Set(remaining.map(e=>e.id)),seen=new Set(),links=[...reused];
   for(const item of parsed.candidates.slice(0,limit)){
