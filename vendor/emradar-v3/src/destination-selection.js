@@ -46,7 +46,9 @@ export function verifyEditorialAsset(asset,{evidenceIds,requiredXVisual=true}={}
  if(!asset || !asset.destination_id || !asset.campaign_id || typeof asset.body!=='string' || !asset.body.trim()) throw Error('EDITORIAL_ASSET_INVALID');
  if(!['EMAIL','X'].includes(asset.kind)) throw Error('UNSUPPORTED_ASSET_KIND');
  if(!Array.isArray(asset.evidence_ids) || !asset.evidence_ids.length || !asset.evidence_ids.every(id=>evidenceIds.has(id))) throw Error('EDITORIAL_EVIDENCE_UNVERIFIED');
- if(asset.kind==='EMAIL' && (!asset.subject?.trim() || !asset.from || !asset.to)) throw Error('EDITORIAL_EMAIL_INCOMPLETE');
+ if(asset.kind==='EMAIL' && (!asset.subject?.trim() || !asset.from)) throw Error('EDITORIAL_EMAIL_INCOMPLETE');
+ if(asset.kind==='EMAIL' && asset.delivery_eligible===true && (!asset.to || asset.contact_status!=='VERIFIED')) throw Error('EDITORIAL_EMAIL_INCOMPLETE');
+ if(asset.kind==='EMAIL' && asset.delivery_eligible!==true && (asset.to || asset.contact_status!=='UNVERIFIED')) throw Error('EDITORIAL_DRAFT_CONTACT_STATUS_INVALID');
  if(asset.kind==='X' && requiredXVisual && (!asset.visual_sha256 || !/^[a-f0-9]{64}$/.test(asset.visual_sha256))) throw Error('X_VISUAL_REQUIRED');
  return {fingerprint:sha256(asset),evidence_ids:asset.evidence_ids};
 }

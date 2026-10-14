@@ -41,6 +41,7 @@ async function refresh(){
   const {asset,fingerprint,groupKey,decision,delivery}=item;
   const card=document.createElement('article');
   card.append(text('h2',asset.destination_id),text('small','Status: '+(decision?.decision||'Awaiting decision')+(delivery?' · Delivery: '+delivery.status:'')));
+  if(asset.kind==='EMAIL')card.append(text('p',asset.contact_status==='VERIFIED'?'Contact: verified for delivery':'Contact: unverified — draft only; delivery blocked'));
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
   if(!delivery){

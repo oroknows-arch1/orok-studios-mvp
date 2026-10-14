@@ -27,12 +27,15 @@ async function selectNextPublishedScan({published,readCampaign}){
  }
  return null;
 }
-async function runNextPublishedCampaign({published,readCampaign,startCampaign,verify,discover,prepareAndNotify}){
+async function runNextPublishedCampaign({published,readCampaign,startCampaign,verify,discover,persistDestinations,prepareAndNotify}){
  const selected=await selectNextPublishedScan({published,readCampaign});
  if(!selected)return {status:'NO_UNPROCESSED_SCAN'};
  const verified=await verify(selected);
  const campaignId=await startCampaign(verified.scan);
- if(!selected.resume)await discover({scan:verified.scan,document:verified.document});
+ if(!selected.resume){
+  const destinations=await discover({scan:verified.scan,document:verified.document});
+  await persistDestinations(campaignId,destinations);
+ }
  const result=await prepareAndNotify(selected);
  return {...result,campaignId,snapshotDate:selected.snapshotDate,discovery:selected.resume?'RESUMED':'COMPLETE'};
 }
@@ -111,14 +114,22 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
-  const runCampaign=async()=>runReleaseOnce({adapter:service.store.adapter,key:'v3-release:2026-10-14-one-live-campaign',run:()=>
-   runNextPublishedCampaign({
-    published,readCampaign:async id=>(await service.store.adapter.read(id))?.value,
-    startCampaign:scan=>service.store.start(scan),verify,
-    discover:({scan,document})=>service.discover({scan,document}),
-    prepareAndNotify:selected=>service.prepareAndNotify(selected)
-   })
-  });
+  const runCampaign=async()=>{
+   const adapter=service.store.adapter;
+   const original=(await adapter.read('v3-release:2026-10-14-one-live-campaign'))?.value;
+   if(original?.status==='COMPLETE' && original?.result?.campaignId){
+    return runReleaseOnce({adapter,key:'v3-release:2026-10-14-editorial-drafts',run:()=>service.resumeEditorialDrafts(original.result.campaignId)});
+   }
+   return runReleaseOnce({adapter,key:'v3-release:2026-10-14-one-live-campaign',run:()=>
+    runNextPublishedCampaign({
+     published,readCampaign:async id=>(await adapter.read(id))?.value,
+     startCampaign:scan=>service.store.start(scan),verify,
+     discover:({scan,document})=>service.discover({scan,document}),
+     persistDestinations:(campaignId,destinations)=>service.store.select(campaignId,destinations),
+     prepareAndNotify:selected=>service.prepareAndNotify(selected)
+    })
+   });
+  };
   app.post('/emradar/v3/discover',async(req,res)=>{
    if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
    try{return res.status(200).json(await refreshDirectory());}

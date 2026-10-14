@@ -32,7 +32,8 @@ export function createOpenAiPreparationProviders({openai,model='gpt-4.1-mini',im
     {channel:isX?'X':'EMAIL',destination:{id:destination.id,category:destination.category,name:destination.name??destination.id},evidence:evidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
    );
    if(typeof draft.body!=='string'||!draft.body.trim()||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
-   return {campaign_id:campaignId,destination_id:destination.id,kind:isX?'X':'EMAIL',body:draft.body,subject:draft.subject,from:'sean@emradar.net',...(isX?{}:{to:destination.contact?.email}),evidence_ids:evidence.map(e=>e.id)};
+   const deliveryEligible=destination.contact_verified===true && destination.delivery_eligible!==false && Boolean(destination.contact?.email);
+   return {campaign_id:campaignId,destination_id:destination.id,kind:isX?'X':'EMAIL',body:draft.body,subject:draft.subject,from:'sean@emradar.net',...(isX?{}:{to:deliveryEligible?destination.contact.email:null,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',delivery_eligible:deliveryEligible}),evidence_ids:evidence.map(e=>e.id)};
   },
   renderVisual:async({asset,document})=>{
    const evidence=(document?.evidence??[]).filter(e=>asset.evidence_ids?.includes(e.id));

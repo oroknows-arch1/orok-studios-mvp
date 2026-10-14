@@ -40,10 +40,11 @@ test('selects newest unprocessed published scan and runs discovery before prepar
   readCampaign:async id=>id.includes('ceed5baef2b572435917a9cdfab7b864')?{phase:'PUBLICATION_REVIEW'}:null,
   verify:async selected=>({scan:{snapshot_date:selected.snapshotDate},document:{evidence:[]}}),
   startCampaign:async scan=>{events.push('start:'+scan.snapshot_date);return 'campaign-12';},
-  discover:async({scan})=>events.push('discover:'+scan.snapshot_date),
+  discover:async({scan})=>{events.push('discover:'+scan.snapshot_date);return [{id:'x'}];},
+  persistDestinations:async(_campaignId,destinations)=>events.push('persist:'+destinations.length),
   prepareAndNotify:async selected=>{events.push('prepare:'+selected.snapshotDate);return {campaignId:'campaign-12',status:'PUBLICATION_REVIEW',notification:'NOTIFIED'};}
  });
- assert.deepEqual(events,['start:2026-10-12','discover:2026-10-12','prepare:2026-10-12']);
+ assert.deepEqual(events,['start:2026-10-12','discover:2026-10-12','persist:1','prepare:2026-10-12']);
  assert.deepEqual(result,{campaignId:'campaign-12',status:'PUBLICATION_REVIEW',notification:'NOTIFIED',snapshotDate:'2026-10-12',discovery:'COMPLETE'});
 });
 test('release execution is durably claimed and cannot advance on restart',async()=>{

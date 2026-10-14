@@ -10,7 +10,7 @@ function createV3ApprovalVerifier({pool}={}){
  if(typeof pool?.query!=='function')throw Error('V3_POSTGRES_POOL_REQUIRED');
  return async request=>{
   const {asset,approval,idempotency_key,campaign_id,destination_id}=request||{};
-  if(!asset||!approval||approval.authority!=='OWNER'||approval.decision!=='APPROVE'||asset.kind!=='EMAIL'||asset.campaign_id!==campaign_id||asset.destination_id!==destination_id||approval.campaign_id!==campaign_id||approval.destination_id!==destination_id)throw Error('V3_OWNER_APPROVAL_REQUIRED');
+  if(!asset||!approval||approval.authority!=='OWNER'||approval.decision!=='APPROVE'||asset.kind!=='EMAIL'||asset.delivery_eligible===false||asset.contact_status==='UNVERIFIED'||asset.campaign_id!==campaign_id||asset.destination_id!==destination_id||approval.campaign_id!==campaign_id||approval.destination_id!==destination_id)throw Error('V3_OWNER_APPROVAL_REQUIRED');
   if(!/^[a-f0-9]{64}$/.test(idempotency_key||'')||!/^[a-f0-9]{64}$/.test(approval.asset_sha256||''))throw Error('V3_DELIVERY_CLAIM_INVALID');
   const {rows}=await pool.query('SELECT payload FROM v3_campaign_state WHERE campaign_id=$1',[campaign_id]);
   const state=rows[0]?.payload;

@@ -16,7 +16,9 @@ export function assertDestinations(destinations) {
   if (!Array.isArray(destinations) || destinations.length > MAX_DESTINATIONS) throw new Error('DESTINATION_LIMIT');
   const ids = new Set();
   for (const d of destinations) {
-    if (!d || typeof d.id !== 'string' || !d.id.trim() || ids.has(d.id) || !d.evidence || !d.contact_verified) throw new Error('INVALID_DESTINATION');
+    const verified=d?.contact_verified===true && d?.delivery_eligible!==false;
+    const draftOnly=d?.draft_only===true && d?.contact_verified===false && d?.delivery_eligible===false && d?.contact_status==='UNVERIFIED';
+    if (!d || typeof d.id !== 'string' || !d.id.trim() || ids.has(d.id) || !d.evidence || (!verified && !draftOnly)) throw new Error('INVALID_DESTINATION');
     ids.add(d.id);
   }
   return destinations;
@@ -31,6 +33,7 @@ export function assertApproval(asset, approval) {
   return fingerprint;
 }
 export function assertSendable({asset,approval,receipt}) {
+  if(asset?.kind==='EMAIL' && (asset.delivery_eligible===false || asset.contact_status==='UNVERIFIED' || !asset.to)) throw new Error('VERIFIED_DELIVERY_DETAILS_REQUIRED');
   const fingerprint = assertApproval(asset,approval);
   if (receipt && receipt.status !== 'FAILED_DEFINITELY_UNSENT' && receipt.status !== 'NOT_ATTEMPTED') throw new Error('DELIVERY_ALREADY_ATTEMPTED_OR_AMBIGUOUS');
   return sha256([asset.campaign_id,asset.destination_id,fingerprint]);

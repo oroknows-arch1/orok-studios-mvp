@@ -54,6 +54,22 @@ export class CampaignStore {
       return state;
     });
   }
+  async extendReview(id,destinations,assets) {
+    assertDestinations(destinations);
+    return this.mutate(id,state=>{
+      if(!state || state.phase!=='PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
+      const existing=new Set(state.destinations.map(destination=>destination.id));
+      const additions=new Map(destinations.filter(destination=>!existing.has(destination.id)).map(destination=>[destination.id,destination]));
+      if(assets.length!==additions.size) throw Error('MISSING_DESTINATION_ASSET');
+      for(const asset of assets){
+        if(!additions.has(asset.destination_id)||asset.campaign_id!==id||state.assets[asset.destination_id]) throw Error('INVALID_ASSET_DESTINATION');
+        state.assets[asset.destination_id]={asset:structuredClone(asset),fingerprint:assetFingerprint(asset)};
+      }
+      state.destinations.push(...[...additions.values()].map(destination=>structuredClone(destination)));
+      state.events.push({type:'EDITORIAL_DRAFTS_ADDED',count:additions.size,id:randomUUID()});
+      return state;
+    });
+  }
   async decide(id, destinationId, decision, fingerprint) {
     return this.mutate(id, state => {
       if (!state || state.phase !== 'PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
