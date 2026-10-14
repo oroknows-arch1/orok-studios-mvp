@@ -86,34 +86,38 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolv
   }
   if(!Array.isArray(parsed?.candidates))throw Error('DISCOVERY_SEARCH_CANDIDATES_REQUIRED');
   const allowed=new Set(remaining.map(e=>e.id)),seen=new Set(),links=[...reused];
+  const counts={proposed:parsed.candidates.length,considered:0,missing_fields:0,invalid_url_or_dns:0,invalid_email_or_duplicate:0,no_verified_evidence_link:0,contact_fetch_failed:0,email_not_on_page:0,no_editorial_context:0,persisted:0};
   for(const item of parsed.candidates.slice(0,limit)){
-   if(!item||typeof item.name!=='string'||typeof item.email!=='string'||typeof item.category!=='string')continue;
+   counts.considered++;
+   if(!item||typeof item.name!=='string'||typeof item.email!=='string'||typeof item.category!=='string'){counts.missing_fields++;continue;}
    const contactUrl=publicHttps(item.contact_url),website=publicHttps(item.website);
-   if(!contactUrl||!website||contactUrl.hostname!==website.hostname||!await publiclyResolved(contactUrl.hostname,resolver))continue;
+   if(!contactUrl||!website||contactUrl.hostname!==website.hostname||!await publiclyResolved(contactUrl.hostname,resolver)){counts.invalid_url_or_dns++;continue;}
    const email=item.email.trim().toLowerCase();
-   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||seen.has(email))continue;
+   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||seen.has(email)){counts.invalid_email_or_duplicate++;continue;}
    const ids=(Array.isArray(item.evidence_ids)?item.evidence_ids:[]).filter(id=>allowed.has(id));
-   if(!ids.length)continue;
+   if(!ids.length){counts.no_verified_evidence_link++;continue;}
    let html;
-   try{html=await contactReader(contactUrl,resolver);}catch{continue;}
+   try{html=await contactReader(contactUrl,resolver);}catch{counts.contact_fetch_failed++;continue;}
    // A model suggestion alone is never proof of a usable editorial address.
-   if(!html.toLowerCase().includes(email))continue;
+   if(!html.toLowerCase().includes(email)){counts.email_not_on_page++;continue;}
    // A matching email is not itself evidence of editorial suitability.
    const editorialContext=html.toLowerCase();
    const emailPosition=editorialContext.indexOf(email);
    const nearContact=editorialContext.slice(Math.max(0,emailPosition-160),emailPosition+email.length+160);
-   if(!/(editorial|newsroom|submissions|contributions|pitch(?:es)?|contact the news team|editor\s*:)/i.test(nearContact))continue;
+   if(!/(editorial|newsroom|submissions|contributions|pitch(?:es)?|contact the news team|editor\s*:)/i.test(nearContact)){counts.no_editorial_context++;continue;}
    const id='web-'+digest(website.hostname+':'+email).slice(0,20);
    const record={id,name:item.name.trim().slice(0,180),category:item.category.trim().slice(0,80),active:true,contact_verified:true,editorial_fit_verified:true,
     website:website.origin,contact:{email,source_url:contactUrl.href,checked_at:new Date().toISOString()},
     verification:{method:'live_editorial_contact_page',source_url:contactUrl.href,evidence_ids:ids,scan_evidence_digest:digest(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))}};
    await directory.upsert(record);
+   counts.persisted++;
    seen.add(email);
    for(const evidence_id of ids){
     const source=evidence.find(e=>e.id===evidence_id);
     links.push({approved:true,outlet_id:id,evidence_id,record_id:source.record_id,source_url:source.source_url});
    }
   }
+  console.info('V3_DISCOVERY_CANDIDATE_COUNTS '+JSON.stringify(counts));
   return links;
  };
 }
