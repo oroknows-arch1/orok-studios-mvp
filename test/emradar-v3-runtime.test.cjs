@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {mountV3PreparationReview,loadPublishedScans,runNextPublishedCampaign,runReleaseOnce}=require('../src/emradar-v3-runtime.cjs');
+const {mountV3PreparationReview,loadPublishedScans,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery}=require('../src/emradar-v3-runtime.cjs');
 test('disabled runtime is inert and registers no sending routes',async()=>{
  const routes=[];
  assert.deepEqual(await mountV3PreparationReview({app:{post:(...args)=>routes.push(args)},env:{}}),{enabled:false});
@@ -59,4 +59,21 @@ test('release execution is durably claimed and cannot advance on restart',async(
  assert.equal(second.status,'RELEASE_ALREADY_EXECUTED');
  assert.equal(runs,1);
  assert.equal(record.value.status,'COMPLETE');
+});
+test('complete historical checkpoint recovers incomplete persisted campaign exactly once',async()=>{
+ let checkpoint=null,resumes=0,notifications=0,complete=false;
+ const adapter={compareAndSwap:async(_key,version,value)=>{if(version===null){if(checkpoint)return false;checkpoint={version:1,value};return true;}if(checkpoint?.version!==version)return false;checkpoint={version:version+1,value};return true;}};
+ const service={reviewCompletion:async()=>complete?{complete:true,verified_publications:2,editorial_emails:2,x_ready:true,missing_destination_ids:[]}:{complete:false,verified_publications:0,editorial_emails:0,x_ready:true,missing_destination_ids:[]},resumeIntelligentDiscovery:async()=>{resumes++;complete=true;return {campaignId:'campaign',status:'PUBLICATION_REVIEW',editorial_drafts:2};},workflow:{issue:async()=>{notifications++;return {status:'NOTIFIED'};}}};
+ const first=await runIncompleteCampaignRecovery({adapter,service,campaignId:'campaign',key:'recovery'});
+ const second=await runIncompleteCampaignRecovery({adapter,service,campaignId:'campaign',key:'recovery'});
+ assert.equal(first.complete,true);assert.equal(first.recovery,'COMPLETE');assert.equal(checkpoint.value.status,'COMPLETE');
+ assert.equal(second.recovery,'ALREADY_COMPLETE');assert.equal(resumes,1);assert.equal(notifications,1);
+});
+test('incomplete persisted recovery never records a false COMPLETE checkpoint',async()=>{
+ let checkpoint=null;
+ const adapter={compareAndSwap:async(_key,version,value)=>{if(version===null){checkpoint={version:1,value};return true;}checkpoint={version:version+1,value};return true;}};
+ const incomplete={complete:false,verified_publications:1,editorial_emails:0,x_ready:true,missing_destination_ids:['missing']};
+ const service={reviewCompletion:async()=>incomplete,resumeIntelligentDiscovery:async()=>({status:'PUBLICATION_REVIEW'}),workflow:{issue:async()=>{throw Error('MUST_NOT_NOTIFY');}}};
+ await assert.rejects(runIncompleteCampaignRecovery({adapter,service,campaignId:'campaign',key:'recovery'}),/V3_PUBLICATION_REVIEW_INCOMPLETE/);
+ assert.equal(checkpoint.value.status,'STARTED');
 });

@@ -24,6 +24,20 @@ export function selectPersistedDraftDestinations({candidates,document,existingId
  }).filter(Boolean).slice(0,Math.max(0,MAX_DESTINATIONS-existing.size));
 }
 
+export function assessPublicationReview({state,candidates}) {
+ if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)return {complete:false,verified_publications:0,editorial_emails:0,x_ready:false,missing_destination_ids:[]};
+ const evidence=state.preparation_input.document.evidence.filter(item=>item?.verified===true&&item?.id);
+ const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
+ const publications=(candidates??[]).filter(candidate=>candidate?.destination_class==='EDITORIAL_PUBLICATION'&&candidate?.active===true&&candidate?.editorial_fit_verified===true&&candidate?.verification?.status==='VERIFIED'&&candidate?.verification?.scan_evidence_digest===scanDigest);
+ const destinationIds=new Set(state.destinations.map(item=>item.id));
+ const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
+ const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL').map(asset=>asset.destination_id));
+ const missing=publications.map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
+ const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
+ const xReady=Boolean(x?.body&&(x.visual_url||x.visual_base64));
+ return {complete:publications.length>0&&missing.length===0&&xReady,verified_publications:publications.length,editorial_emails:publications.length-missing.length,x_ready:xReady,missing_destination_ids:missing};
+}
+
 // Explicit assembly of existing V3 workers. Call only after provider and
 // owner-notification transports have been configured and independently tested.
 // Does not mount HTTP routes, deploy, distribute or trigger a campaign at import.
@@ -62,9 +76,11 @@ export async function createPreparationReviewService({
   const state=(await adapter.read(campaignId))?.value;
   if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
   await discover({scan:state.scan,document:state.preparation_input.document,history:[]});
-  return resumeEditorialDrafts(campaignId,{limit:1});
+  const resumed=await resumeEditorialDrafts(campaignId);
+  return {...resumed,...await reviewCompletion(campaignId)};
  };
- return {store,directory,workflow,prepare,discover,resumeEditorialDrafts,resumeIntelligentDiscovery,prepareAndNotify:createPublicationReviewHandoff({prepare,workflow})};
+ const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
+ return {store,directory,workflow,prepare,discover,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare,workflow})};
 }
 
 // Convenience composition for the paid API's existing OpenAI connection.

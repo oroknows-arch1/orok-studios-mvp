@@ -48,6 +48,17 @@ async function runReleaseOnce({adapter,key,run}){
   return result;
  }catch(error){throw error;}
 }
+async function runIncompleteCampaignRecovery({adapter,service,campaignId,key='v3-recovery:2026-10-15-complete-publication-review-v1'}){
+ const current=await service.reviewCompletion(campaignId);
+ if(current.complete)return {campaignId,status:'PUBLICATION_REVIEW',...current,recovery:'ALREADY_COMPLETE'};
+ return runReleaseOnce({adapter,key,run:async()=>{
+  const resumed=await service.resumeIntelligentDiscovery(campaignId);
+  const completion=await service.reviewCompletion(campaignId);
+  if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
+  const notification=(await service.workflow.issue(campaignId)).status;
+  return {...resumed,...completion,notification,recovery:'COMPLETE'};
+ }});
+}
 
 // Activation is opt-in and fails before mounting any routes if required
 // configuration is missing. The only outbound SMTP operation is owner review.
@@ -119,11 +130,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const original=(await adapter.read('v3-release:2026-10-14-one-live-campaign'))?.value;
    if(original?.status==='COMPLETE' && original?.result?.campaignId){
     const drafts=(await adapter.read('v3-release:2026-10-14-editorial-drafts'))?.value;
-    if(drafts?.status==='COMPLETE')return runReleaseOnce({adapter,key:'v3-release:2026-10-15-formation-publication-review',run:async()=>{
-     const result=await service.resumeIntelligentDiscovery(original.result.campaignId);
-     if(result.editorial_drafts>0)result.notification=(await service.workflow.issue(original.result.campaignId)).status;
-     return result;
-    }});
+    if(drafts?.status==='COMPLETE')return runIncompleteCampaignRecovery({adapter,service,campaignId:original.result.campaignId});
     return runReleaseOnce({adapter,key:'v3-release:2026-10-14-editorial-drafts',run:()=>service.resumeEditorialDrafts(original.result.campaignId)});
    }
    return runReleaseOnce({adapter,key:'v3-release:2026-10-14-one-live-campaign',run:()=>
@@ -156,4 +163,4 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   return {enabled:true,pool,service,runCampaign,refreshDirectory};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={mountV3PreparationReview,loadPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce};
+module.exports={mountV3PreparationReview,loadPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
