@@ -40,7 +40,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    return {accepted:result.accepted,provider_id:result.provider_id,recipient,campaign_id:campaignId};
   };
   const service=await createOpenAiPreparationReviewService({
-   pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher
+   pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
+   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
   });
   const reviewServer=createReviewServer({workflow:service.workflow});
   setReviewHandler((req,res,next)=>{
