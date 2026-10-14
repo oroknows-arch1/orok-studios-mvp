@@ -25,7 +25,7 @@ export async function createPreparationReviewService({
  await directory.initialize();
  const store=new CampaignStore(adapter);
  const discover=createDirectoryDiscovery({
-  directory,linkEvidence:autonomousDiscovery?async({document})=>createAutonomousOutletDiscovery({openai,directory,fetcher})({document}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
+  directory,linkEvidence:autonomousDiscovery?async({document,outlets})=>createAutonomousOutletDiscovery({openai,directory,fetcher})({document,outlets}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
  });
  const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin});
