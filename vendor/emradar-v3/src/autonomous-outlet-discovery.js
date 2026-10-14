@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {lookup} from 'node:dns/promises';
 import {isIP} from 'node:net';
+import {request as httpsRequest} from 'node:https';
 const digest=value=>createHash('sha256').update(value).digest('hex');
 const blockedHosts=new Set(['localhost','127.0.0.1','0.0.0.0','::1']);
 function publicHttps(raw){
@@ -22,11 +23,34 @@ async function publiclyResolved(hostname,resolver){
   });
  }catch{return false;}
 }
+function pinnedContactHtml(url,resolver,timeoutMs=12000,maxBytes=250000){
+ return new Promise(async(resolve,reject)=>{
+  let addresses;
+  try{addresses=await resolver(url.hostname,{all:true,verbatim:true});}
+  catch{return reject(Error('CONTACT_DNS_FAILED'));}
+  if(!Array.isArray(addresses)||!addresses.length||!addresses.every(a=>publicAddress(a.address)))return reject(Error('CONTACT_ADDRESS_UNSAFE'));
+  const address=addresses[0].address;
+  const req=httpsRequest(url,{method:'GET',timeout:timeoutMs,maxRedirects:0,lookup:(_host,_opts,cb)=>cb(null,address,isIP(address)),headers:{accept:'text/html'},rejectUnauthorized:true},res=>{
+   if(res.statusCode!==200||!String(res.headers['content-type']??'').toLowerCase().includes('text/html')){res.destroy();return reject(Error('CONTACT_RESPONSE_INVALID'));}
+   let size=0;const chunks=[];
+   res.on('data',chunk=>{size+=chunk.length;if(size>maxBytes){res.destroy();reject(Error('CONTACT_TOO_LARGE'));}else chunks.push(chunk);});
+   res.on('end',()=>resolve(Buffer.concat(chunks).toString('utf8')));
+   res.on('error',reject);
+  });
+  req.on('timeout',()=>req.destroy(Error('CONTACT_TIMEOUT')));
+  req.on('error',reject);req.end();
+ });
+}
+function publicAddress(address){
+ if(isIP(address)===4){const p=address.split('.').map(Number);return !(p[0]===0||p[0]===10||p[0]===127||p[0]>=224||(p[0]===169&&p[1]===254)||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&p[1]===168)||(p[0]===100&&p[1]>=64&&p[1]<=127)||(p[0]===192&&p[1]===0)||(p[0]===198&&p[1]>=18&&p[1]<=19));}
+ if(isIP(address)===6)return !/^(::|fc|fd|fe8|fe9|fea|feb|2001:db8)/i.test(address);
+ return false;
+}
 function plainText(response){
  return (response.output??[]).flatMap(item=>item.content??[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
 }
-export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,resolver=lookup,model='gpt-4.1-mini',limit=29}={}){
- if(typeof openai?.responses?.create!=='function'||typeof directory?.upsert!=='function'||typeof fetcher!=='function')throw Error('AUTONOMOUS_DISCOVERY_DEPENDENCIES_REQUIRED');
+export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolver=lookup,contactReader=pinnedContactHtml,model='gpt-4.1-mini',limit=29}={}){
+ if(typeof openai?.responses?.create!=='function'||typeof directory?.upsert!=='function'||typeof contactReader!=='function')throw Error('AUTONOMOUS_DISCOVERY_DEPENDENCIES_REQUIRED');
  return async ({document})=>{
   const evidence=(document?.evidence??[]).filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url);
   if(!evidence.length)throw Error('DISCOVERY_VERIFIED_EVIDENCE_REQUIRED');
@@ -49,11 +73,7 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,
    const ids=(Array.isArray(item.evidence_ids)?item.evidence_ids:[]).filter(id=>allowed.has(id));
    if(!ids.length)continue;
    let html;
-   try{
-    const response=await fetcher(contactUrl.href,{method:'GET',redirect:'error',signal:AbortSignal.timeout(12000),headers:{accept:'text/html'}});
-    if(!response.ok||!(response.headers.get('content-type')??'').includes('text/html'))continue;
-    html=(await response.text()).slice(0,250000);
-   }catch{continue;}
+   try{html=await contactReader(contactUrl,resolver);}catch{continue;}
    // A model suggestion alone is never proof of a usable editorial address.
    if(!html.toLowerCase().includes(email))continue;
    // A matching email is not itself evidence of editorial suitability.
