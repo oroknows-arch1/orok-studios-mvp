@@ -16,10 +16,15 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
  createPool=options=>new Pool(options),createTransport,setReviewHandler}={}){
  if(env.EMRADAR_V3_PREPARATION_ENABLED!=='true')return {enabled:false};
  if(typeof app?.post!=='function')throw Error('V3_APP_REQUIRED');
+ // Autonomous discovery must never silently inherit the production database.
+ if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'&&!env.EMRADAR_V3_DATABASE_URL)
+  throw Error('V3_DISCOVERY_ISOLATED_DATABASE_REQUIRED');
  const databaseUrl=env.EMRADAR_V3_DATABASE_URL||env.DATABASE_URL;
  if(!databaseUrl||!env.EMRADAR_V3_API_TOKEN||!env.EMRADAR_V3_REVIEW_ORIGIN)
   throw Error('V3_ACTIVATION_CONFIG_REQUIRED');
  if(!openai?.chat?.completions?.create||!openai?.images?.generate)throw Error('V3_OPENAI_PROVIDER_REQUIRED');
+ if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'&&typeof openai?.responses?.create!=='function')
+  throw Error('V3_DISCOVERY_SEARCH_PROVIDER_REQUIRED');
  if(typeof setReviewHandler!=='function')throw Error('V3_REVIEW_HTTP_REQUIRED');
  let reviewedLinks;
  try{reviewedLinks=JSON.parse(env.EMRADAR_V3_APPROVED_LINKS_JSON||'[]');}
@@ -40,7 +45,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    return {accepted:result.accepted,provider_id:result.provider_id,recipient,campaign_id:campaignId};
   };
   const service=await createOpenAiPreparationReviewService({
-   pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher
+   pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
+   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
   });
   const reviewServer=createReviewServer({workflow:service.workflow});
   setReviewHandler((req,res,next)=>{
@@ -51,6 +57,20 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    req.params={...req.params,operation:'owner-notification'};
    return integration.route(req,res);
   });
+  const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
+  const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
+  const loadPublished=()=>({
+   publicationRecord:JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'publication-'+SCAN_DATE+'.json'),'utf8')),
+   releaseAttestation:JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'downstream-release-attestation-'+SCAN_DATE+'.json'),'utf8'))
+  });
+  const refreshDirectory=async()=>{
+   if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY!=='true')throw Error('V3_AUTONOMOUS_DISCOVERY_DISABLED');
+   const attestation=loadPublished();
+   const verified=await verifyPublishedScan({snapshotDate:SCAN_DATE,expectedSha256:SHA,liveUrl:ARCHIVE,archiveUrl:ARCHIVE,...attestation,fetcher});
+   const document=normalizePublishedEvidence(verified.document);
+   const destinations=await service.discover({scan:verified.scan,document});
+   return {status:'DISCOVERY_COMPLETE',destination_count:destinations.length,editorial_count:destinations.filter(d=>d.id!=='x').length};
+  };
   // Fixed published-scan preparation; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async()=>{
@@ -61,6 +81,11 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
      publicationRecord,releaseAttestation
     });
   };
+  app.post('/emradar/v3/discover',async(req,res)=>{
+   if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
+   try{return res.status(200).json(await refreshDirectory());}
+   catch(error){return res.status(409).json({reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_DISCOVERY_FAILED'});}
+  });
   // Owner-triggered preparation: bearer-authenticated, fixed verified 13 Oct
   // artifact. No endpoint for external email delivery or X posting.
   app.post('/emradar/v3/prepare',async(req,res)=>{
@@ -73,7 +98,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     return res.status(409).json({reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'});
    }
   });
-  return {enabled:true,pool,service,runCampaign};
+  return {enabled:true,pool,service,runCampaign,refreshDirectory};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={mountV3PreparationReview};
