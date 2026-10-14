@@ -76,8 +76,18 @@ test('rejects web-search responses without valid structured candidates and never
  assert.equal(messages.length,1);
  assert.match(messages[0],/^V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC /);
  assert.deepEqual(JSON.parse(messages[0].slice(messages[0].indexOf('{'))),{
-  response_type:'object',top_level_keys:['output'],output_count:1,output_types:[null],content_counts:[1],content_types:[['output_text']],output_text_lengths:[[8]],parse_error_name:'SyntaxError',parse_error_message:'Unexpected token \'o\', "not JSON" is not valid JSON'
+  response_type:'object',top_level_keys:['output'],output_count:1,output_types:[null],content_counts:[1],content_types:[['output_text']],output_text_lengths:[[8]],parse_error_name:'SyntaxError'
  });
+});
+test('requires provider-enforced structured discovery output',async()=>{
+ const h=harness([]);let request;
+ h.openai.responses.create=async value=>{request=value;return {output:[{type:'message',content:[{type:'output_text',text:'{"candidates":[]}'}]}]}};
+ const {createAutonomousOutletDiscovery}=await load();
+ assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);
+ assert.equal(request.text.format.type,'json_schema');
+ assert.equal(request.text.format.strict,true);
+ assert.deepEqual(request.text.format.schema.required,['candidates']);
+ assert.equal(request.text.format.schema.properties.candidates.maxItems,29);
 });
 test('rejects unverified editorial email even when search suggests a matching address',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],'Editorial enquiries to another@journal.example');

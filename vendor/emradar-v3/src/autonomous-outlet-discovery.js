@@ -76,11 +76,12 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolv
    model,tools:[{type:'web_search'}],tool_choice:'required',
    input:[{role:'system',content:'Search the public web for credible editorial publications relevant to the supplied verified scan facts. Find real editorial contact pages with an explicitly displayed public editorial email address. Never invent addresses, outlet names, relevance or evidence. Return ONLY a JSON object with candidates array; each item has name, category, website, contact_url, email, evidence_ids. At most 29 candidates. Exclude social accounts, press release aggregators, advertising/sales contacts.'},
     {role:'user',content:JSON.stringify({evidence:remaining.map(e=>({id:e.id,fact:e.fact,source_url:e.source_url})),limit})}],
+   text:{format:{type:'json_schema',name:'editorial_outlet_candidates',strict:true,schema:{type:'object',additionalProperties:false,properties:{candidates:{type:'array',maxItems:29,items:{type:'object',additionalProperties:false,properties:{name:{type:'string'},category:{type:'string'},website:{type:'string'},contact_url:{type:'string'},email:{type:'string'},evidence_ids:{type:'array',items:{type:'string'}}},required:['name','category','website','contact_url','email','evidence_ids']}}},required:['candidates']}}},
    max_output_tokens:3200
   },{maxRetries:0,timeout:90000});
   let parsed;
   try{parsed=JSON.parse(plainText(answer));}catch(error){
-   console.error('V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC '+JSON.stringify({...safeResponseShape(answer),parse_error_name:error?.name??null,parse_error_message:typeof error?.message==='string'?error.message.slice(0,160):null}));
+   console.error('V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC '+JSON.stringify({...safeResponseShape(answer),parse_error_name:error?.name??null}));
    throw Error('DISCOVERY_SEARCH_JSON_INVALID');
   }
   if(!Array.isArray(parsed?.candidates))throw Error('DISCOVERY_SEARCH_CANDIDATES_REQUIRED');
