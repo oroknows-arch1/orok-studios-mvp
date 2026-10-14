@@ -60,7 +60,7 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher=fetch,
    const editorialContext=html.toLowerCase();
    const emailPosition=editorialContext.indexOf(email);
    const nearContact=editorialContext.slice(Math.max(0,emailPosition-160),emailPosition+email.length+160);
-   if(!/(editorial|newsroom|submissions|contributions|pitch(?:es)?|contact the news team|editor\s*[:@])/i.test(nearContact))continue;
+   if(!/(editorial|newsroom|submissions|contributions|pitch(?:es)?|contact the news team|editor\s*:)/i.test(nearContact))continue;
    const id='web-'+digest(website.hostname+':'+email).slice(0,20);
    const record={id,name:item.name.trim().slice(0,180),category:item.category.trim().slice(0,80),active:true,contact_verified:true,editorial_fit_verified:true,
     website:website.origin,contact:{email,source_url:contactUrl.href,checked_at:new Date().toISOString()},
