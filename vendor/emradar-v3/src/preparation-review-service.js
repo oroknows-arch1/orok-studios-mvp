@@ -13,7 +13,7 @@ import {createPublicationReviewHandoff} from './publication-review-handoff.js';
 // owner-notification transports have been configured and independently tested.
 // Does not mount HTTP routes, deploy, distribute or trigger a campaign at import.
 export async function createPreparationReviewService({
- pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks
+ pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,autonomousDiscovery=false
 }) {
  if(typeof pool?.query!=='function'||typeof notify!=='function'||
     typeof researchEvidence!=='function'||typeof write!=='function'||
@@ -25,7 +25,7 @@ export async function createPreparationReviewService({
  await directory.initialize();
  const store=new CampaignStore(adapter);
  const discover=createDirectoryDiscovery({
-  directory,linkEvidence:discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
+  directory,linkEvidence:autonomousDiscovery?async({document})=>createAutonomousOutletDiscovery({openai,directory,fetcher})({document}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
  });
  const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin});
@@ -36,9 +36,5 @@ export async function createPreparationReviewService({
 // Caller still controls activation, review notification and all external effects.
 export async function createOpenAiPreparationReviewService({openai,...options}) {
  const providers=createOpenAiPreparationProviders({openai});
- const discoverLinks=options.autonomousDiscovery===true ? async({document})=>{
-  const discover=createAutonomousOutletDiscovery({openai,directory:options.directory??{upsert:async()=>{throw Error('DISCOVERY_DIRECTORY_NOT_BOUND');}},fetcher:options.fetcher});
-  return discover({document});
- }:undefined;
- return createPreparationReviewService({...options,...providers,discoverLinks});
+ return createPreparationReviewService({...options,...providers,openai});
 }
