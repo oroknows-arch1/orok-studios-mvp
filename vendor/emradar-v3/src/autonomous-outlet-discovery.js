@@ -87,6 +87,28 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolv
   if(!Array.isArray(parsed?.candidates))throw Error('DISCOVERY_SEARCH_CANDIDATES_REQUIRED');
   const allowed=new Set(remaining.map(e=>e.id)),seen=new Set(),links=[...reused];
   const counts={proposed:parsed.candidates.length,considered:0,missing_fields:0,invalid_url_or_dns:0,invalid_email_or_duplicate:0,no_verified_evidence_link:0,contact_fetch_failed:0,email_not_on_page:0,no_editorial_context:0,persisted:0};
+  // Preserve discovered publications without downgrading previously verified records.
+  // Read persistent records because callers may provide only scan-reusable outlets.
+  const existing=typeof directory.list==='function'?await directory.list():outlets;
+  const known=new Map((Array.isArray(existing)?existing:[]).filter(o=>o?.id).map(o=>[o.id,o]));
+  for(const item of parsed.candidates.slice(0,limit)){
+   if(!item||typeof item.name!=='string'||!item.name.trim())continue;
+   const website=publicHttps(item.website);
+   if(!website||!await publiclyResolved(website.hostname,resolver))continue;
+   const ids=(Array.isArray(item.evidence_ids)?item.evidence_ids:[]).filter(id=>allowed.has(id));
+   const id='web-'+digest(website.hostname).slice(0,20);
+   const prior=known.get(id);
+   if(prior?.contact_verified===true&&prior?.editorial_fit_verified===true)continue;
+   const discovered={
+    id,name:item.name.trim().slice(0,180),
+    category:typeof item.category==='string'?item.category.trim().slice(0,80):'',
+    website:website.origin,active:true,contact_verified:false,editorial_fit_verified:false,
+    discovery_status:'DISCOVERED',contact:{email:null,source_url:null,checked_at:null},
+    verification:{method:'discovery_only',evidence_ids:ids,scan_evidence_digest:digest(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))}
+   };
+   await directory.upsert(discovered);
+   known.set(id,discovered);
+  }
   for(const item of parsed.candidates.slice(0,limit)){
    counts.considered++;
    if(!item||typeof item.name!=='string'||typeof item.email!=='string'||typeof item.category!=='string'){counts.missing_fields++;continue;}
@@ -105,11 +127,12 @@ export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolv
    const emailPosition=editorialContext.indexOf(email);
    const nearContact=editorialContext.slice(Math.max(0,emailPosition-160),emailPosition+email.length+160);
    if(!/(editorial|newsroom|submissions|contributions|pitch(?:es)?|contact the news team|editor\s*:)/i.test(nearContact)){counts.no_editorial_context++;continue;}
-   const id='web-'+digest(website.hostname+':'+email).slice(0,20);
+   const id='web-'+digest(website.hostname).slice(0,20);
    const record={id,name:item.name.trim().slice(0,180),category:item.category.trim().slice(0,80),active:true,contact_verified:true,editorial_fit_verified:true,
     website:website.origin,contact:{email,source_url:contactUrl.href,checked_at:new Date().toISOString()},
     verification:{method:'live_editorial_contact_page',source_url:contactUrl.href,evidence_ids:ids,scan_evidence_digest:digest(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))}};
    await directory.upsert(record);
+   known.set(id,record);
    counts.persisted++;
    seen.add(email);
    for(const evidence_id of ids){
