@@ -27,8 +27,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
  try{reviewedLinks=JSON.parse(env.EMRADAR_V3_APPROVED_LINKS_JSON||'[]');}
  catch{throw Error('V3_APPROVED_LINKS_INVALID');}
  if(!Array.isArray(reviewedLinks))throw Error('V3_APPROVED_LINKS_INVALID');
- const {createOpenAiPreparationReviewService}=await import('emradar-marketing-engine-v3/src/preparation-review-service.js');
- const {createReviewServer}=await import('emradar-marketing-engine-v3/src/http.js');
+ const {createOpenAiPreparationReviewService}=await import('../vendor/emradar-v3/src/preparation-review-service.js');
+ const {createReviewServer}=await import('../vendor/emradar-v3/src/http.js');
  const pool=createPool({connectionString:env.EMRADAR_V3_DATABASE_URL});
  try{
   const integration=createV3IsolatedWiring({
