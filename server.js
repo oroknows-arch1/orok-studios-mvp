@@ -691,15 +691,19 @@ if (require.main === module) {
       smtp_password_configured:Boolean(process.env.EDITORIAL_SMTP_PASSWORD),
       v3_enabled:process.env.EMRADAR_V3_PREPARATION_ENABLED==='true'
     }));
-    if(process.env.EMRADAR_V3_AUTO_DISCOVER_ONCE==='true' && typeof refreshDirectory==='function'){
-      // One scan-bound discovery only. No external delivery or X posting.
-      refreshDirectory().then(result=>console.log('V3_DISCOVERY_RESULT',JSON.stringify(result)))
-       .catch(error=>console.error('V3_DISCOVERY_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_DISCOVERY_FAILED'));
-    }
-    if(process.env.EMRADAR_V3_AUTO_PREPARE==='true' && typeof runCampaign==='function'){
-      runCampaign().then(result=>console.log('V3_PREPARATION_RESULT',JSON.stringify(result)))
-       .catch(error=>console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'));
-    }
+    // Run discovery before preparation, never concurrently. Each stage is optional.
+    const discoverEnabled=process.env.EMRADAR_V3_AUTO_DISCOVER_ONCE==='true' && typeof refreshDirectory==='function';
+    const prepareEnabled=process.env.EMRADAR_V3_AUTO_PREPARE==='true' && typeof runCampaign==='function';
+    (async()=>{
+      if(discoverEnabled){
+        try{console.log('V3_DISCOVERY_RESULT',JSON.stringify(await refreshDirectory()));}
+        catch(error){console.error('V3_DISCOVERY_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_DISCOVERY_FAILED');}
+      }
+      if(prepareEnabled){
+        try{console.log('V3_PREPARATION_RESULT',JSON.stringify(await runCampaign()));}
+        catch(error){console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED');}
+      }
+    })();
     require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
   });
 
