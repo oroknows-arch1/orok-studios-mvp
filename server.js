@@ -683,6 +683,14 @@ if (require.main === module) {
   mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
+      database_configured:Boolean(process.env.EMRADAR_V3_DATABASE_URL||process.env.DATABASE_URL),
+      openai_configured:Boolean(process.env.OPENAI_API_KEY),
+      smtp_host_configured:Boolean(process.env.EDITORIAL_SMTP_HOST),
+      smtp_user_canonical:process.env.EDITORIAL_SMTP_USER==='sean@emradar.net',
+      smtp_password_configured:Boolean(process.env.EDITORIAL_SMTP_PASSWORD),
+      v3_enabled:process.env.EMRADAR_V3_PREPARATION_ENABLED==='true'
+    }));
     if(process.env.EMRADAR_V3_AUTO_PREPARE==='true' && typeof runCampaign==='function'){
       runCampaign().then(result=>console.log('V3_PREPARATION_RESULT',JSON.stringify(result)))
        .catch(error=>console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'));
