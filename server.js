@@ -695,7 +695,11 @@ if (require.main === module) {
     const discoverEnabled=process.env.EMRADAR_V3_AUTO_DISCOVER_ONCE==='true' && typeof refreshDirectory==='function';
     const prepareEnabled=process.env.EMRADAR_V3_AUTO_PREPARE==='true' && typeof runCampaign==='function';
     (async()=>{
-      if(discoverEnabled){
+      if(!discoverEnabled && !prepareEnabled && typeof runCampaign==='function'){
+        // Persistent campaign identity makes this release action one-shot across restarts.
+        try{console.log('V3_PREPARATION_RESULT',JSON.stringify(await runCampaign()));}
+        catch(error){console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED');}
+      } else if(discoverEnabled){
         try{console.log('V3_DISCOVERY_RESULT',JSON.stringify(await refreshDirectory()));}
         catch(error){console.error('V3_DISCOVERY_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_DISCOVERY_FAILED');}
       }

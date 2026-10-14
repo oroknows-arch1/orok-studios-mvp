@@ -1,14 +1,50 @@
 'use strict';
 const {Pool}=require('pg');
-const {readFileSync}=require('node:fs');
+const {createHash}=require('node:crypto');
+const {readFileSync,readdirSync}=require('node:fs');
 const path=require('node:path');
 const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 
-const SCAN_DATE='2026-10-13';
-const SHA='49157d607f4f1a0db9437abe004fe81215afba653a5a416927786bbe0b8c59b8';
-const ARCHIVE='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+SCAN_DATE+'.json';
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
 const REVIEW_PATHS=new Set(['/review/access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise']);
+
+function loadPublishedScans(attestationDir=ATTESTATION_DIR){
+ return readdirSync(attestationDir).filter(name=>/^publication-\d{4}-\d{2}-\d{2}\.json$/.test(name)).map(name=>name.slice(12,-5)).filter(date=>{
+  try{readFileSync(path.join(attestationDir,'downstream-release-attestation-'+date+'.json'));return true;}catch{return false;}
+ }).sort().reverse().map(snapshotDate=>{
+  const publicationRecord=JSON.parse(readFileSync(path.join(attestationDir,'publication-'+snapshotDate+'.json'),'utf8'));
+  const releaseAttestation=JSON.parse(readFileSync(path.join(attestationDir,'downstream-release-attestation-'+snapshotDate+'.json'),'utf8'));
+  const expectedSha256=publicationRecord?.public_verification?.artifact_sha256;
+  const archiveUrl='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+snapshotDate+'.json';
+  return {snapshotDate,expectedSha256,liveUrl:archiveUrl,archiveUrl,publicationRecord,releaseAttestation};
+ });
+}
+const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snapshotDate+':'+published.expectedSha256).digest('hex').slice(0,32);
+async function selectNextPublishedScan({published,readCampaign}){
+ for(const candidate of published){
+  const existing=await readCampaign(campaignIdFor(candidate));
+  if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
+ }
+ return null;
+}
+async function runNextPublishedCampaign({published,readCampaign,startCampaign,verify,discover,prepareAndNotify}){
+ const selected=await selectNextPublishedScan({published,readCampaign});
+ if(!selected)return {status:'NO_UNPROCESSED_SCAN'};
+ const verified=await verify(selected);
+ const campaignId=await startCampaign(verified.scan);
+ if(!selected.resume)await discover({scan:verified.scan,document:verified.document});
+ const result=await prepareAndNotify(selected);
+ return {...result,campaignId,snapshotDate:selected.snapshotDate,discovery:selected.resume?'RESUMED':'COMPLETE'};
+}
+async function runReleaseOnce({adapter,key,run}){
+ const claimed=await adapter.compareAndSwap(key,null,{status:'STARTED',started_at:new Date().toISOString()});
+ if(!claimed)return {status:'RELEASE_ALREADY_EXECUTED'};
+ try{
+  const result=await run();
+  await adapter.compareAndSwap(key,1,{status:'COMPLETE',completed_at:new Date().toISOString(),result});
+  return result;
+ }catch(error){throw error;}
+}
 
 // Activation is opt-in and fails before mounting any routes if required
 // configuration is missing. The only outbound SMTP operation is owner review.
@@ -59,28 +95,30 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   });
   const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
   const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
-  const loadPublished=()=>({
-   publicationRecord:JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'publication-'+SCAN_DATE+'.json'),'utf8')),
-   releaseAttestation:JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'downstream-release-attestation-'+SCAN_DATE+'.json'),'utf8'))
-  });
-  const refreshDirectory=async()=>{
+  const published=loadPublishedScans();
+  const verify=async selected=>{
+   const verified=await verifyPublishedScan({...selected,fetcher});
+   return {...verified,document:normalizePublishedEvidence(verified.document)};
+  };
+  const choose=()=>selectNextPublishedScan({published,readCampaign:async id=>(await service.store.adapter.read(id))?.value});
+  const refreshDirectory=async(selected)=>{
    if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY!=='true')throw Error('V3_AUTONOMOUS_DISCOVERY_DISABLED');
-   const attestation=loadPublished();
-   const verified=await verifyPublishedScan({snapshotDate:SCAN_DATE,expectedSha256:SHA,liveUrl:ARCHIVE,archiveUrl:ARCHIVE,...attestation,fetcher});
-   const document=normalizePublishedEvidence(verified.document);
-   const destinations=await service.discover({scan:verified.scan,document});
-   return {status:'DISCOVERY_COMPLETE',destination_count:destinations.length,editorial_count:destinations.filter(d=>d.id!=='x').length};
+   selected=selected??await choose();
+   if(!selected)return {status:'NO_UNPROCESSED_SCAN',destination_count:0,editorial_count:0};
+   const verified=await verify(selected);
+   const destinations=await service.discover({scan:verified.scan,document:verified.document});
+   return {status:'DISCOVERY_COMPLETE',snapshotDate:selected.snapshotDate,destination_count:destinations.length,editorial_count:destinations.filter(d=>d.id!=='x').length};
   };
-  // Fixed published-scan preparation; review invitation is issued only
+  // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
-  const runCampaign=async()=>{
-    const publicationRecord=JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'publication-'+SCAN_DATE+'.json'),'utf8'));
-    const releaseAttestation=JSON.parse(readFileSync(path.join(ATTESTATION_DIR,'downstream-release-attestation-'+SCAN_DATE+'.json'),'utf8'));
-    return service.prepareAndNotify({
-     snapshotDate:SCAN_DATE,expectedSha256:SHA,liveUrl:ARCHIVE,archiveUrl:ARCHIVE,
-     publicationRecord,releaseAttestation
-    });
-  };
+  const runCampaign=async()=>runReleaseOnce({adapter:service.store.adapter,key:'v3-release:2026-10-14-one-live-campaign',run:()=>
+   runNextPublishedCampaign({
+    published,readCampaign:async id=>(await service.store.adapter.read(id))?.value,
+    startCampaign:scan=>service.store.start(scan),verify,
+    discover:({scan,document})=>service.discover({scan,document}),
+    prepareAndNotify:selected=>service.prepareAndNotify(selected)
+   })
+  });
   app.post('/emradar/v3/discover',async(req,res)=>{
    if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
    try{return res.status(200).json(await refreshDirectory());}
@@ -101,4 +139,4 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   return {enabled:true,pool,service,runCampaign,refreshDirectory};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={mountV3PreparationReview};
+module.exports={mountV3PreparationReview,loadPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce};

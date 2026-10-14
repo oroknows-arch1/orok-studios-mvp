@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "snapshot_date": "2026-10-12",
+  "publication_state": "PUBLISHED",
+  "verified_at": "2026-10-12T09:56:19+11:00",
+  "timezone": "Australia/Sydney",
+  "data_commit_sha": "b6df68a85cad72fca3c645709e39d1259aa6ccd0",
+  "render": {"workspace_id":"tea-d79k6muuk2gs73eesr2g","service_id":"srv-damqhauk1f9s738iteh0","deployment_id":"dep-db617n8ae00c73a6gju0","status":"LIVE"},
+  "public_verification": {
+    "dashboard_url":"https://emerging-markets-radar.onrender.com/","reader_url":"https://emerging-markets-radar.onrender.com/#history/scan/2026-10-12","current_data_url":"https://emerging-markets-radar.onrender.com/data/discovery.json","archive_data_url":"https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-2026-10-12.json","snapshot_date":"2026-10-12","artifact_sha256":"0a6c0110e40e65d70a957070cdde4ce53ce0fb7ea442c2fdbbded21c5a8ef2da","record_count":6,"status_counts":{"CONFIRMED":0,"FORMING":3,"INVESTIGATE":1,"UNKNOWN":2},"archive_visible_dates":["2026-10-12","2026-10-11","2026-10-10","2026-10-09","2026-10-08","2026-10-07","2026-10-06","2026-10-05","2026-10-03","2026-09-30","2026-09-23"],"homepage_http_status":200,"dataset_http_status":200,"verification_contract":"live-reader-exact-identity-v2"
+  },
+  "custom_domain":{"url":"https://emradar.com.au/","status":"INACTIVE_HTTP_502_AT_VERIFICATION"},
+  "gates":{"evidence_generation":"PASS","schema_and_contract_validation":"PASS","immutable_checkpoint":"PASS","exact_commit_render_deployment":"PASS","public_snapshot_verification":"PASS"},
+  "downstream_release_allowed": true
+}
