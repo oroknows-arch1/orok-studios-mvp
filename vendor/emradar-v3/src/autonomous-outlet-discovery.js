@@ -51,19 +51,25 @@ function plainText(response){
 }
 export function createAutonomousOutletDiscovery({openai,directory,fetcher,resolver=lookup,contactReader=pinnedContactHtml,model='gpt-4.1-mini',limit=29}={}){
  if(typeof openai?.responses?.create!=='function'||typeof directory?.upsert!=='function'||typeof contactReader!=='function')throw Error('AUTONOMOUS_DISCOVERY_DEPENDENCIES_REQUIRED');
- return async ({document})=>{
+ return async ({document,outlets=[]})=>{
   const evidence=(document?.evidence??[]).filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url);
   if(!evidence.length)throw Error('DISCOVERY_VERIFIED_EVIDENCE_REQUIRED');
+  const reusable=Array.isArray(outlets)?outlets.filter(o=>o?.active===true&&o?.contact_verified===true&&o?.editorial_fit_verified===true&&o?.contact?.email&&o?.contact?.source_url&&o?.verification?.evidence_ids?.length):[];
+  const reusableIds=new Set(reusable.flatMap(o=>o.verification.evidence_ids));
+  const remaining=evidence.filter(e=>!reusableIds.has(e.id));
+  const reused=[];
+  for(const outlet of reusable){for(const evidence_id of outlet.verification.evidence_ids){const source=evidence.find(e=>e.id===evidence_id);if(source)reused.push({approved:true,outlet_id:outlet.id,evidence_id,record_id:source.record_id,source_url:source.source_url});}}
+  if(!remaining.length)return reused;
   const answer=await openai.responses.create({
    model,tools:[{type:'web_search'}],tool_choice:'required',
    input:[{role:'system',content:'Search the public web for credible editorial publications relevant to the supplied verified scan facts. Find real editorial contact pages with an explicitly displayed public editorial email address. Never invent addresses, outlet names, relevance or evidence. Return ONLY a JSON object with candidates array; each item has name, category, website, contact_url, email, evidence_ids. At most 29 candidates. Exclude social accounts, press release aggregators, advertising/sales contacts.'},
-    {role:'user',content:JSON.stringify({evidence:evidence.map(e=>({id:e.id,fact:e.fact,source_url:e.source_url})),limit})}],
+    {role:'user',content:JSON.stringify({evidence:remaining.map(e=>({id:e.id,fact:e.fact,source_url:e.source_url})),limit})}],
    max_output_tokens:3200
   },{maxRetries:0,timeout:90000});
   let parsed;
   try{parsed=JSON.parse(plainText(answer));}catch{throw Error('DISCOVERY_SEARCH_JSON_INVALID');}
   if(!Array.isArray(parsed?.candidates))throw Error('DISCOVERY_SEARCH_CANDIDATES_REQUIRED');
-  const allowed=new Set(evidence.map(e=>e.id)),seen=new Set(),links=[];
+  const allowed=new Set(remaining.map(e=>e.id)),seen=new Set(),links=[...reused];
   for(const item of parsed.candidates.slice(0,limit)){
    if(!item||typeof item.name!=='string'||typeof item.email!=='string'||typeof item.category!=='string')continue;
    const contactUrl=publicHttps(item.contact_url),website=publicHttps(item.website);
