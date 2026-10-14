@@ -64,3 +64,24 @@ test('same evidence ID with changed facts cannot reuse prior scan links',async()
  const links=await createAutonomousOutletDiscovery(h)({document,outlets:[existing]});
  assert.equal(searches,1);assert.deepEqual(links,[]);
 });
+
+test('rejects web-search responses without valid structured candidates and never writes',async()=>{
+ const h=harness([]);
+ h.openai.responses.create=async()=>({output:[{content:[{type:'output_text',text:'not JSON'}]}]});
+ const {createAutonomousOutletDiscovery}=await load();
+ await assert.rejects(createAutonomousOutletDiscovery(h)({document}),/DISCOVERY_SEARCH_JSON_INVALID/);
+ assert.equal(h.saved.length,0);
+});
+test('rejects unverified editorial email even when search suggests a matching address',async()=>{
+ const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],'Editorial enquiries to another@journal.example');
+ const {createAutonomousOutletDiscovery}=await load();
+ assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);
+ assert.equal(h.saved.length,0);
+});
+test('rejects contact pages that redirect or return non-HTML in real reader',async()=>{
+ const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
+ h.contactReader=async()=>{throw Error('CONTACT_RESPONSE_INVALID')};
+ const {createAutonomousOutletDiscovery}=await load();
+ assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);
+ assert.equal(h.saved.length,0);
+});
