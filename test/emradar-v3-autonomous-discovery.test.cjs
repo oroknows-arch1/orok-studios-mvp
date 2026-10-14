@@ -45,3 +45,12 @@ test('directory selection preserves individual scan evidence links',async()=>{
  const selected=await discover({scan:{},document,history:[]});
  assert.ok(selected.some(d=>d.id===h.saved[0].id));
 });
+
+test('reuses already verified evidence-linked outlet without paid search',async()=>{
+ const h=harness([]);
+ h.openai.responses.create=async()=>{throw Error('SEARCH_MUST_NOT_RUN')};
+ const existing={id:'existing-1',active:true,contact_verified:true,editorial_fit_verified:true,contact:{email:'editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13'},verification:{evidence_ids:['e1']}};
+ const {createAutonomousOutletDiscovery}=await load();
+ const links=await createAutonomousOutletDiscovery(h)({document,outlets:[existing]});
+ assert.equal(links.length,1);assert.equal(links[0].outlet_id,'existing-1');assert.equal(h.saved.length,0);
+});
