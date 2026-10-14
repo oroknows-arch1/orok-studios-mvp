@@ -13,11 +13,9 @@ test('V3 PostgreSQL prepared API: durable owner notification reserves once and r
  const id='v3-'+crypto.randomUUID(),token='private-'+crypto.randomUUID(),origin='https://review.example.org';
  const review={campaign_id:id,status:'ISSUED',token_hash:crypto.createHash('sha256').update(token).digest('hex'),consumed_at:null,expires_at:Date.now()+600000};
  const state={phase:'PUBLICATION_REVIEW',assets:{},decisions:{},deliveries:{}};
- await pool.query('CREATE TABLE IF NOT EXISTS v3_campaign_state (campaign_id TEXT PRIMARY KEY,version BIGINT NOT NULL,payload JSONB NOT NULL)');
  await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb),($3,1,$4::jsonb)',[id,JSON.stringify(state),'review:'+id,JSON.stringify(review)]);
  const events=[],auth='test-token'.padEnd(48,'x');
  const integration=createV3PreparedIntegration({pool,token:auth,reviewOrigin:origin,sendOwnerReview:async()=>{events.push('smtp');return {accepted:true,provider_id:'simulated-review-receipt'};},sendApprovedEmail:async()=>{throw Error('MUST_NOT_SEND');}});
- await integration.initialize();
  const payload={version:'EMRADAR_V3',kind:'OWNER_REVIEW',campaign_id:id,to:'oroknows@gmail.com',private_review_url:origin+'/review/access#token='+encodeURIComponent(token)+'&campaign='+encodeURIComponent(id)};
  const req={headers:{authorization:'Bearer '+auth},params:{operation:'owner-notification'},body:payload};
  const run=async()=>{const res=response();await integration.route(req,res);return res;};
