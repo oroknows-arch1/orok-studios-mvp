@@ -1,0 +1,245 @@
+{
+  "version": 11,
+  "snapshot_date": "2026-10-10",
+  "previous_scan_date": "2026-10-09",
+  "contract": "causal-chain-evolution-v1",
+  "publication_state": "PUBLISHED",
+  "run_mode": "SCHEDULED",
+  "started_at": "2026-10-10T09:56:07+11:00",
+  "completed_at": "2026-10-10T09:57:24+11:00",
+  "timezone": "Australia/Sydney",
+  "rule": "Blank global candidate set first. Prior holdings, watchlists, themes and findings did not constrain discovery.",
+  "scope_note": "Fresh world-change-first scan. Twelve candidates were evaluated across industrial localisation, cross-border payments, development-finance equity, sovereign infrastructure finance, capital-market integration, regional project preparation, procurement and manufacturing; six survived. The 9 October scan was consulted only after classification for stable-ID comparison.",
+  "scan_statistics": {
+    "surviving_findings": 6,
+    "discarded_count": 6,
+    "total_candidates_reviewed": 12,
+    "by_status": {"FORMING": 4, "INVESTIGATE": 2},
+    "note": "Discarded candidates included conference-level GCC industrial coordination without disclosed transactions, a small Pacific procurement update, a Japanese committee process, a general African Union integration statement, a repeated Kenyan infrastructure-fund signal without a new deployment step, and an Australian project outside the emerging-market consequence layer."
+  },
+  "scan_report": {
+    "headline": "Capital is being rewired around emerging-market infrastructure: through industrial-zone projects, yuan payment rails, development-finance equity, local-government debt capacity and cross-border securities access.",
+    "summary": "South Africa launched a Free State industrialisation programme anchored by a proposed R100 billion renewable-energy project and a R5.5 billion electric-vehicle plant targeting 8,000 vehicles a year. Ecobank said it would join China's CIPS network, extending direct yuan-settlement infrastructure across Africa. The US International Development Finance Corporation signalled a broader use of direct equity after its record WIOCC commitment and expanded statutory authority. China allocated 550 billion yuan of unused local-government debt capacity, partly for infrastructure and fiscal support. Dangote Refinery's N2.15 trillion IPO exposed both demand for pan-African ownership and the regulatory fragmentation that blocks it. SADC and AfDB renewed a project-preparation and financing partnership, but named bankable transactions remain absent.",
+    "narrative": [
+      "South Africa's Free State programme is the strongest industrial signal. The launch joined Chinese investors, an operating special economic zone and public institutions around a proposed R100 billion renewable-energy project, a R5.5 billion Joylong automotive plant and agro-processing projects. The automotive plan targets up to 8,000 electric vehicles a year and 1,500 direct jobs. It is FORMING rather than confirmed because land, finance, power, permits, orders and construction milestones are not yet disclosed.",
+      "African trade settlement is gaining another yuan rail. Ecobank said it would join CIPS, while Standard Bank, Bank of Kigali and Ecobank Guinea already provide independent evidence that African banks are building direct renminbi capability. The formation is FORMING: the payment infrastructure is spreading, but transaction volumes, liquidity and economics remain opaque.",
+      "US development finance is shifting from loans and guarantees toward strategic minority equity. DFC's expanded authorities include a US$5 billion revolving equity fund and ownership of up to 40%; the agency has already approved its largest equity commitment through WIOCC and says Africa, digital infrastructure and critical minerals are priorities. The capital mechanism is FORMING, although new dated project commitments beyond WIOCC remain to be identified.",
+      "China activated 550 billion yuan of unused local-government debt quotas. The measure is concrete and partly supports infrastructure, but 300 billion yuan is reserved for county and district operations. The formation is therefore FORMING: fiscal capacity has been released, while project allocation, additionality and debt sustainability remain unresolved.",
+      "Dangote Refinery's N2.15 trillion IPO is testing whether African industrial assets can raise capital across borders. Kenya and Uganda created country-specific access routes, yet fragmented securities rules prevented a single seamless pan-African offer. This remains INVESTIGATE because subscription geography, final proceeds and the effect of exchange-linkage infrastructure are not yet public.",
+      "SADC and AfDB deepened cooperation around project preparation, guarantees, blended finance, regional corridors and industrialisation. Existing funded programmes prove an operating institutional relationship, but the new engagement did not identify financing approvals for fresh regional projects. It remains INVESTIGATE."
+    ],
+    "unresolved_questions": [
+      "Which Free State projects have binding finance, land, grid access, customers and construction schedules?",
+      "How much African trade moves through CIPS, and does it reduce settlement cost or only change correspondent routes?",
+      "Which new African assets receive DFC equity under the expanded authority?",
+      "Which Chinese infrastructure projects receive the released debt capacity and how much is genuinely incremental?",
+      "Can African regulators and exchanges turn one-off country approvals into reusable cross-border issuance infrastructure?",
+      "Which SADC projects move from preparation into signed finance and procurement?"
+    ]
+  },
+  "what_is_forming": [
+    {"id": "south-africa-free-state-industrialisation", "status": "FORMING", "summary": "A Free State industrial programme now links proposed renewable energy, EV manufacturing and agro-processing around the MAP-SEZ."},
+    {"id": "africa-yuan-payment-rails", "status": "FORMING", "summary": "Ecobank's planned CIPS connection joins a growing set of African banks building direct yuan-settlement capability."},
+    {"id": "us-dfc-africa-strategic-equity", "status": "FORMING", "summary": "Expanded DFC equity authority and the WIOCC commitment create a new state-backed capital channel for African digital and critical-mineral assets."},
+    {"id": "china-local-government-infrastructure-fiscal-push", "status": "FORMING", "summary": "China released 550 billion yuan of unused local-government debt capacity, including infrastructure support."}
+  ],
+  "current_scene": [
+    {"name": "Joylong Automotive / YJC", "location": "Free State, South Africa", "role": "Proposed EV and renewable-energy industrial investor", "ticker": null, "exchange": null, "why_now": "Public launch set out R100 billion renewable-energy and R5.5 billion EV projects."},
+    {"name": "Ecobank Transnational Incorporated", "location": "Pan-Africa / China", "role": "Cross-border yuan settlement bank", "ticker": "ETI / ETIT", "exchange": "NGX / BRVM", "why_now": "Its planned CIPS entry would extend renminbi settlement across its African network."},
+    {"name": "Standard Bank Group", "location": "South Africa / China", "role": "Existing African CIPS-linked banking participant", "ticker": "SBK", "exchange": "JSE", "why_now": "Provides independent evidence that direct yuan payment capability is spreading among African banks."},
+    {"name": "WIOCC Group", "location": "Sub-Saharan Africa", "role": "Digital-infrastructure equity recipient", "ticker": null, "exchange": null, "why_now": "DFC's largest equity commitment anchors its stated shift toward strategic ownership."},
+    {"name": "Ecobank, NGX Group and regional regulators", "location": "Nigeria / Kenya / Uganda / pan-Africa", "role": "Cross-border capital-market participants", "ticker": "ETI / NGXGROUP", "exchange": "NGX", "why_now": "The Dangote Refinery offer exposed both demand and jurisdiction-by-jurisdiction access barriers."},
+    {"name": "SADC Secretariat and African Development Bank", "location": "Southern Africa", "role": "Regional project-preparation and financing institutions", "ticker": null, "exchange": null, "why_now": "They renewed cooperation around bankable corridors, energy, trade facilitation and industry."}
+  ],
+  "records": [
+    {
+      "id": "south-africa-free-state-industrialisation",
+      "theme": "Industrial localisation and green manufacturing",
+      "location": "Free State, South Africa",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "A government-backed launch disclosed project-level values, capacity and job targets across renewable energy, EV manufacturing and agro-processing.",
+      "causal_chain": {
+        "world_change": ["South Africa launched a provincial industrial programme with Chinese investors and the Maluti-a-Phofung SEZ."],
+        "pressure": ["Weak regional employment, constrained industrial capacity, power needs and demand for local green-economy value chains."],
+        "bottleneck_or_scarcity": ["Binding finance, grid connection, serviced land, permits, customers, supplier depth and execution capability."],
+        "formation": ["A renewable-energy and EV manufacturing cluster could form around the Free State SEZ."],
+        "industries": ["Renewable energy", "Electric vehicles", "Agro-processing", "Industrial infrastructure"],
+        "connected_companies_and_tickers": ["Joylong Automotive (private)", "YJC (private)"],
+        "consequences": ["New productive capacity", "Regional supplier demand", "Potential clean-power and mobility exports", "High execution and grid dependency"],
+        "evidence": ["South African presidential launch", "Provincial project announcement", "Independent public broadcaster coverage"]
+      },
+      "chain_evolution": {"previous_scan_state": null, "current_scan_state": "FORMING", "what_changed": "New stable formation ID in the blank 10 October scan.", "why_state_changed": "The launch disclosed multiple connected projects and capacity targets, but not binding delivery evidence.", "strengthening_evidence": ["R100 billion renewable-energy proposal", "R5.5 billion EV plant targeting 8,000 vehicles annually", "Named SEZ and investors"], "weakening_evidence": ["Projects are described as proposed or planned"], "break_conditions": ["Finance or grid access fails", "No construction or procurement follows", "Vehicle demand is not secured"], "actual_breaks": [], "unresolved_evidence": ["Financial close", "EPC contracts", "Land and permits", "Offtake and vehicle customers"], "new_links": ["Renewable power, vehicle manufacturing and agro-processing are grouped in one provincial industrial programme"], "removed_links": []},
+      "listed_players": [],
+      "valuation": null,
+      "valuation_research": "No direct listed exposure or binding project cash flow has been disclosed.",
+      "evidence": [
+        {"fact": "The proposed YJC renewable-energy project is valued at about R100 billion and could create 6,500 jobs; Joylong's R5.5 billion plant targets up to 8,000 EVs annually.", "source": "South African Government", "url": "https://www.gov.za/news/speeches/president-cyril-ramaphosa-launch-free-state-catalytic-investment-and", "date": "2026-10-09", "language": "English"},
+        {"fact": "The programme was launched with the Free State government, municipality and Chinese investors Joy Long-YJC.", "source": "South African Government", "url": "https://www.gov.za/news/media-advisories/government-activities/free-state-province-launches-catalytic-investment-and", "date": "2026-10-09", "language": "English"},
+        {"fact": "SAnews reported a broader R120 billion initiative spanning renewable energy, EV manufacturing and agricultural processing.", "source": "SAnews", "url": "https://www.sanews.gov.za/south-africa/president-announces-r120-billion-free-state-investment-initiative", "date": "2026-10-09", "language": "English"}
+      ],
+      "contradictions": ["Launch values may represent proposals rather than committed capital.", "Free State power, municipal infrastructure and execution constraints remain material.", "Job and capacity targets are forecasts."],
+      "missing_evidence": ["Finance documents", "Construction contracts", "Grid connection", "Customer orders", "Commissioning timetable"],
+      "what_to_check_next": ["Financial close", "EPC awards", "Environmental approvals", "Factory groundbreaking", "Vehicle orders"]
+    },
+    {
+      "id": "africa-yuan-payment-rails",
+      "theme": "Cross-border payments and trade finance",
+      "location": "Pan-Africa / China",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "Ecobank's planned CIPS connection joins several independently documented African bank connections to China's renminbi settlement infrastructure.",
+      "causal_chain": {
+        "world_change": ["African banks are adding direct or indirect CIPS access for yuan transactions."],
+        "pressure": ["Africa-China trade growth, dollar scarcity, correspondent-banking cost and demand for currency diversification."],
+        "bottleneck_or_scarcity": ["Yuan liquidity, regulatory approval, compliance, client adoption and transparent pricing."],
+        "formation": ["A pan-African renminbi payment and trade-finance rail is beginning to form."],
+        "industries": ["Banking", "Payments", "Trade finance", "Foreign exchange"],
+        "connected_companies_and_tickers": ["Ecobank Transnational (NGX:ETI; BRVM:ETIT)", "Standard Bank (JSE:SBK)", "ICBC (SSE:601398)"],
+        "consequences": ["Potentially faster Africa-China settlement", "New fee pools and FX services", "Greater yuan exposure", "Operational and geopolitical dependencies"],
+        "evidence": ["Ecobank CEO statement", "Existing Standard Bank and Bank of Kigali connections", "Ecobank Guinea indirect participation"]
+      },
+      "chain_evolution": {"previous_scan_state": null, "current_scan_state": "FORMING", "what_changed": "New stable formation ID in the blank 10 October scan.", "why_state_changed": "Multiple banks now provide repeated evidence of network expansion, though usage economics remain unknown.", "strengthening_evidence": ["Ecobank plans to join CIPS", "Standard Bank and Bank of Kigali already connected", "Ecobank Guinea has indirect participation"], "weakening_evidence": ["A signed access agreement does not prove material payment volumes"], "break_conditions": ["Regulatory or technical integration stalls", "Clients do not adopt", "Yuan liquidity is insufficient"], "actual_breaks": [], "unresolved_evidence": ["Go-live date", "Volumes", "Pricing", "Direct versus indirect participant status"], "new_links": ["Bank-network reach connects CIPS infrastructure to trade-finance distribution"], "removed_links": []},
+      "listed_players": ["Ecobank Transnational (NGX:ETI; BRVM:ETIT)", "Standard Bank Group (JSE:SBK)", "ICBC (SSE:601398)"],
+      "valuation": null,
+      "valuation_research": "Potential fee and liquidity effects cannot be valued without transaction volumes, margins and implementation cost.",
+      "evidence": [
+        {"fact": "Ecobank's CEO said the group would sign an agreement to join CIPS for yuan transactions.", "source": "Reuters", "url": "https://www.reuters.com/world/asia-pacific/ecobank-join-chinas-cips-payments-platform-yuan-settlement-2026-10-09/", "date": "2026-10-09", "language": "English"},
+        {"fact": "French-language reporting noted Ecobank's plan and existing African bank participation while cautioning that yuan settlement does not imply currency replacement.", "source": "BankAssur Afrik", "url": "https://www.bankassurafrik.com/news/paiements-afrique-chine-ecobank-rejoint-le-système-chinois-cips-pour-accélérer-les-règlements-en-yuans", "date": "2026-10-09", "language": "French", "english_summary": "Ecobank plans to use CIPS to facilitate Africa-China yuan settlement; broader adoption remains gradual."},
+        {"fact": "Ecobank Guinea had already entered CIPS as an indirect participant with Bank of China support.", "source": "Bénin Web TV", "url": "https://beninwebtv.bj/ecobank-cips-paiements-yuan/", "date": "2026-10-09", "language": "French", "english_summary": "The Ecobank group already has an indirect CIPS connection in Guinea, supporting a repeatable network mechanism."}
+      ],
+      "contradictions": ["Network membership does not prove cost savings or scale.", "Dollar-based settlement remains dominant.", "Direct and indirect participation have different economics."],
+      "missing_evidence": ["Signed agreement", "Technical go-live", "Volumes", "Fees and spreads", "Corporate adoption"],
+      "what_to_check_next": ["CIPS participant register", "Ecobank disclosures", "Trade-finance volumes", "Client pricing"]
+    },
+    {
+      "id": "us-dfc-africa-strategic-equity",
+      "theme": "Development finance and strategic equity",
+      "location": "Sub-Saharan Africa",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "DFC's expanded equity authority is now paired with a record WIOCC equity commitment and an explicit intention to use more direct ownership in Africa and critical minerals.",
+      "causal_chain": {
+        "world_change": ["The United States' development-finance arm is shifting more capital from debt and guarantees into minority equity."],
+        "pressure": ["Competition over digital infrastructure and critical-mineral supply chains."],
+        "bottleneck_or_scarcity": ["Bankable assets, governance rights, political risk, exit markets and co-investors."],
+        "formation": ["A state-backed strategic equity channel for African infrastructure and resources is forming."],
+        "industries": ["Digital infrastructure", "Critical minerals", "Energy", "Development finance"],
+        "connected_companies_and_tickers": ["WIOCC Group (private)", "Syrah Resources (ASX:SYR)"],
+        "consequences": ["More patient risk capital", "US influence over strategic assets", "Potential crowding-in of private investors", "Governance and geopolitical conditions"],
+        "evidence": ["Expanded statutory equity authority", "WIOCC board approval", "DFC Africa strategy statement"]
+      },
+      "chain_evolution": {"previous_scan_state": null, "current_scan_state": "FORMING", "what_changed": "New stable formation ID in the blank 10 October scan.", "why_state_changed": "Policy authority and a large executed commitment now align, but the next project cohort is not disclosed.", "strengthening_evidence": ["US$5 billion revolving equity fund", "Up to 40% minority ownership authority", "Record WIOCC equity commitment"], "weakening_evidence": ["Most announced activity is still concentrated in a small number of strategic projects"], "break_conditions": ["No additional equity closes", "Political conditions deter investees", "Exit or governance problems emerge"], "actual_breaks": [], "unresolved_evidence": ["Next investments", "Pricing", "Ownership stakes", "Private co-investment"], "new_links": ["Digital infrastructure and critical minerals share one economic-statecraft capital channel"], "removed_links": []},
+      "listed_players": ["Syrah Resources (ASX:SYR), contextual rather than a new dated commitment"],
+      "valuation": null,
+      "valuation_research": "Project pricing, ownership stakes and cash-flow rights are not public enough for entry analysis.",
+      "evidence": [
+        {"fact": "DFC's Africa head said the agency planned to deploy more direct equity, including in African critical minerals.", "source": "Reuters", "url": "https://www.reuters.com/world/africa/us-agency-do-more-equity-investing-africa-official-says-2026-10-09/", "date": "2026-10-09", "language": "English"},
+        {"fact": "DFC approved an equity investment in WIOCC to strengthen digital infrastructure across Africa.", "source": "U.S. International Development Finance Corporation", "url": "https://www.dfc.gov/media/press-releases/dfc-announces-more-8-billion-investments-fuel-american-economic-and-national", "date": "2026-09-16", "language": "English"},
+        {"fact": "DFC's expanded authority created a US$5 billion revolving equity fund and allowed minority ownership up to 40%.", "source": "U.S. International Development Finance Corporation", "url": "https://www.dfc.gov/media/press-releases/dfc-secures-expanded-authorities-fy26-ndaa-signed-law", "date": "2026-01-05", "language": "English"}
+      ],
+      "contradictions": ["Strategic investment can prioritise policy objectives over commercial return.", "A record deal does not yet establish a broad portfolio trend.", "Listed exposure is mostly indirect."],
+      "missing_evidence": ["New approved investments", "Stake sizes", "Valuation terms", "Exit mechanisms", "Co-investors"],
+      "what_to_check_next": ["DFC board approvals", "WIOCC closing", "Critical-mineral term sheets", "Investee disclosures"]
+    },
+    {
+      "id": "china-local-government-infrastructure-fiscal-push",
+      "theme": "Sovereign finance and infrastructure",
+      "location": "China",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "China activated 550 billion yuan of unused local-government borrowing capacity amid weak demand and investment.",
+      "causal_chain": {
+        "world_change": ["The finance ministry released unused local-government debt quotas for fiscal operations and infrastructure."],
+        "pressure": ["Weak domestic demand, investment slowdown, local fiscal strain and infrastructure needs."],
+        "bottleneck_or_scarcity": ["Project quality, local debt capacity, transmission into real investment and private-sector confidence."],
+        "formation": ["A renewed local-government fiscal and infrastructure impulse is forming."],
+        "industries": ["Infrastructure", "Construction", "Industrial equipment", "Municipal finance"],
+        "connected_companies_and_tickers": ["No project-level listed beneficiaries identified"],
+        "consequences": ["Support for local budgets and projects", "Potential equipment and materials demand", "Higher public leverage", "Uncertain additionality"],
+        "evidence": ["Chinese Ministry of Finance announcement", "Official English fiscal-policy statement", "Independent reporting"]
+      },
+      "chain_evolution": {"previous_scan_state": null, "current_scan_state": "FORMING", "what_changed": "New stable formation ID in the blank 10 October scan.", "why_state_changed": "The quota release is concrete, but project-level transmission is not yet observable.", "strengthening_evidence": ["550 billion yuan allocation", "Infrastructure explicitly eligible", "Existing special-bond issuance and project pipeline"], "weakening_evidence": ["300 billion yuan supports routine county and district operations rather than new projects"], "break_conditions": ["Funds mainly refinance obligations", "Projects fail to start", "Debt stress suppresses spending"], "actual_breaks": [], "unresolved_evidence": ["Provincial allocation", "Project lists", "Incremental capex", "Private-sector response"], "new_links": ["Local-government liquidity support and infrastructure stimulus are combined in one quota action"], "removed_links": []},
+      "listed_players": [],
+      "valuation": null,
+      "valuation_research": "No project allocation or attributable earnings channel is yet public.",
+      "evidence": [
+        {"fact": "The Ministry of Finance listed a 550 billion yuan local-government debt-limit allocation on 9 October.", "source": "Ministry of Finance, People's Republic of China", "url": "https://www.mof.gov.cn/zhengwuxinxi/", "date": "2026-10-09", "language": "Chinese", "english_summary": "The ministry allocated 550 billion yuan of unused local-government debt limits."},
+        {"fact": "Official data described continued proactive fiscal policy and a government deficit of 5.89 trillion yuan in 2026.", "source": "State Council of the People's Republic of China", "url": "https://english.www.gov.cn/news/202610/09/content_WS6ac8ee28c6d00ca5f9a0d974.html", "date": "2026-10-09", "language": "English"},
+        {"fact": "Independent reporting said the quota supports local finances and infrastructure; 300 billion yuan is earmarked for county and district operations.", "source": "Reuters", "url": "https://www.reuters.com/world/china/china-ramps-up-fiscal-push-meet-growth-target-2026-10-09/", "date": "2026-10-09", "language": "English"}
+      ],
+      "contradictions": ["A large share supports operating budgets, limiting new infrastructure additionality.", "Local-government debt stress may weaken multiplier effects.", "Quota allocation is not project execution."],
+      "missing_evidence": ["Provincial breakdown", "Project list", "Tendering", "Construction starts", "Private-capital response"],
+      "what_to_check_next": ["Provincial bond issuance", "NDRC project approvals", "Equipment orders", "Infrastructure fixed-asset investment"]
+    },
+    {
+      "id": "africa-cross-border-industrial-capital-access",
+      "theme": "Capital-market integration",
+      "location": "Nigeria / Kenya / Uganda / pan-Africa",
+      "status": "INVESTIGATE",
+      "new_to_radar": true,
+      "why_surfaced": "Dangote Refinery's record IPO created genuine cross-border demand but required separate national approvals and access structures.",
+      "causal_chain": {
+        "world_change": ["Africa's largest industrial IPO is testing cross-border retail and institutional participation."],
+        "pressure": ["Large African projects need domestic capital while investors lack seamless access across national exchanges."],
+        "bottleneck_or_scarcity": ["Regulatory passporting, custody, settlement, foreign exchange, investor protection and distribution."],
+        "formation": ["A reusable cross-border African industrial-capital channel may emerge from country-specific workarounds and exchange linkage."],
+        "industries": ["Capital markets", "Refining", "Brokerage", "Exchange infrastructure"],
+        "connected_companies_and_tickers": ["NGX Group (NGX:NGXGROUP)", "Dangote Petroleum Refinery (IPO; listing pending)", "Nairobi Securities Exchange (NSE:NSE)"],
+        "consequences": ["Broader ownership of African industrial assets", "New exchange and brokerage activity", "Fragmented access and settlement cost", "Greater scrutiny of investor protection"],
+        "evidence": ["N2.15 trillion approved offer", "Kenyan GDR approval", "Ugandan approval", "Reported cross-border fragmentation"]
+      },
+      "chain_evolution": {"previous_scan_state": null, "current_scan_state": "INVESTIGATE", "what_changed": "New stable formation ID in the blank 10 October scan.", "why_state_changed": "The IPO is real and cross-border routes exist, but they remain jurisdiction-specific rather than integrated.", "strengthening_evidence": ["Nigeria SEC approval", "Kenyan short-form prospectus and GDR route", "Ugandan investor access", "AELP infrastructure exists"], "weakening_evidence": ["Patchy participation outside Nigeria", "No single pan-African prospectus or regulatory passport"], "break_conditions": ["Cross-border subscriptions remain immaterial", "Settlement or FX frictions dominate", "Offer fails to raise expected capital"], "actual_breaks": [], "unresolved_evidence": ["Final proceeds", "Country subscription mix", "Listing date", "AELP role"], "new_links": ["Industrial-project finance is directly testing African exchange integration"], "removed_links": []},
+      "listed_players": ["NGX Group (NGX:NGXGROUP)", "Nairobi Securities Exchange (NSE:NSE)"],
+      "valuation": null,
+      "valuation_research": "Offer pricing exists, but final subscription, free float, listing liquidity and attributable exchange revenue are not yet known.",
+      "evidence": [
+        {"fact": "NGX opened the N2.15 trillion Dangote Refinery IPO, the exchange's first petroleum-refinery public offer.", "source": "Nigerian Exchange Group", "url": "https://ngxgroup.com/dangote-sounds-ngx-gong-as-refinery-ipo-opens/", "date": "2026-09-14", "language": "English"},
+        {"fact": "Kenya approved a GDR-based short-form prospectus enabling eligible investors to participate.", "source": "Capital Markets Authority Kenya", "url": "https://www.cma.or.ke/cma-approves-participation-by-kenyan-investors-in-the-dangote-petroleum-refinery-petrochemicals-initial-public-offering-ipo-through-a-global-depository-receipt/", "date": "2026-10-05", "language": "English"},
+        {"fact": "Cross-border take-up remained patchy because national regulators lack jurisdiction outside their markets.", "source": "Reuters", "url": "https://www.reuters.com/business/energy/africas-biggest-ipo-exposes-continents-cross-border-investing-barriers-2026-10-09/", "date": "2026-10-09", "language": "English"}
+      ],
+      "contradictions": ["Country-specific approvals show progress but also prove fragmentation.", "A landmark offer may not create reusable infrastructure.", "Marketing ambition for pan-African ownership may exceed actual subscriptions."],
+      "missing_evidence": ["Final allocation", "Cross-border subscription share", "Listing liquidity", "Settlement performance", "Exchange revenue"],
+      "what_to_check_next": ["Offer close", "Allotment statement", "Listing data", "Regulatory cooperation", "AELP transaction flow"]
+    },
+    {
+      "id": "sadc-afdb-regional-project-finance",
+      "theme": "Regional infrastructure finance",
+      "location": "Southern Africa",
+      "status": "INVESTIGATE",
+      "new_to_radar": true,
+      "why_surfaced": "SADC and AfDB renewed a concrete institutional relationship around bankable projects, guarantees, blended finance and corridor integration.",
+      "causal_chain": {
+        "world_change": ["SADC and AfDB held a strategic mission focused on project preparation and sustainable regional financing."],
+        "pressure": ["Cross-border infrastructure gaps, weak project bankability, trade friction and limited fiscal space."],
+        "bottleneck_or_scarcity": ["Prepared projects, sovereign coordination, guarantees, procurement and private co-finance."],
+        "formation": ["A regional preparation-to-finance platform may accelerate Southern African corridors and industrial projects."],
+        "industries": ["Transport", "Energy", "Trade facilitation", "Industrial development", "Health security"],
+        "connected_companies_and_tickers": ["No named listed contractors or concessionaires"],
+        "consequences": ["More bankable regional infrastructure", "Improved corridor efficiency", "Potential private capital mobilisation", "Continued dependence on member-state execution"],
+        "evidence": ["Strategic engagement mission", "Existing funded SADC programmes", "Repeated AfDB financing commitment"]
+      },
+      "chain_evolution": {"previous_scan_state": null, "current_scan_state": "INVESTIGATE", "what_changed": "New stable formation ID in the blank 10 October scan.", "why_state_changed": "Institutional cooperation is repeated and operating, but no new project approval was disclosed.", "strengthening_evidence": ["Named trade, health and financial-integration programmes", "AfDB commitment to preparation, guarantees and blended finance"], "weakening_evidence": ["The latest engagement produced no new financing amount or project close"], "break_conditions": ["No project pipeline advances", "Member states fail to coordinate", "Financing remains only advisory"], "actual_breaks": [], "unresolved_evidence": ["Priority project list", "Preparation funding", "Approval dates", "Procurement"], "new_links": ["Project preparation is explicitly linked with guarantees and regional industrialisation"], "removed_links": []},
+      "listed_players": [],
+      "valuation": null,
+      "valuation_research": "No named transaction, contractor or revenue allocation supports listed-exposure valuation.",
+      "evidence": [
+        {"fact": "SADC and AfDB held a strategic engagement on 8-9 October covering integration, industrialisation, infrastructure and sustainable finance.", "source": "Southern African Development Community", "url": "https://www.sadc.int/latest-news/sadc-and-afdb-deepen-strategic-partnership-accelerate-regional-integration-and", "date": "2026-10-09", "language": "English"},
+        {"fact": "Existing programmes include North-South Corridor trade facilitation, health resilience and macroeconomic integration projects.", "source": "Southern African Development Community", "url": "https://www.sadc.int/latest-news/sadc-and-afdb-deepen-strategic-partnership-accelerate-regional-integration-and", "date": "2026-10-09", "language": "English"},
+        {"fact": "The institutions had already reaffirmed development-finance and regional-integration cooperation in July.", "source": "Southern African Development Community", "url": "https://www.sadc.int/latest-news/sadc-and-afdb-commit-enhance-collaboration-development-financing-and-integration", "date": "2026-07-29", "language": "English"}
+      ],
+      "contradictions": ["Repeated partnership language may not shorten project-development cycles.", "Existing programmes are modest relative to regional infrastructure needs.", "No new transaction was approved at the mission."],
+      "missing_evidence": ["Named pipeline", "Preparation grants", "Financing approvals", "Private partners", "Procurement milestones"],
+      "what_to_check_next": ["AfDB board approvals", "SADC project pipeline", "Corridor tenders", "Guarantee instruments"]
+    }
+  ],
+  "absent_from_current_scan": [
+    {"id": "indonesia-weda-bay-downstream-cluster", "previous_scan_state": "CONFIRMED", "current_scan_state": "ABSENT", "reason": "No new operating, customer, emissions or project-finance milestone independently entered today's blank scan."},
+    {"id": "kenya-national-infrastructure-fund-deployment", "previous_scan_state": "FORMING", "current_scan_state": "ABSENT", "reason": "No new project allocation or leverage step followed the seed bond deployment."},
+    {"id": "azerbaijan-bilajari-yalama-rail-modernisation", "previous_scan_state": "FORMING", "current_scan_state": "ABSENT", "reason": "No procurement award or construction milestone was newly disclosed."},
+    {"id": "argentina-amba-private-transmission", "previous_scan_state": "INVESTIGATE", "current_scan_state": "ABSENT", "reason": "No tender issuance, bidder or risk-allocation document entered today's candidate set."},
+    {"id": "kazakhstan-aktobe-glass-localisation", "previous_scan_state": "INVESTIGATE", "current_scan_state": "ABSENT", "reason": "No capacity, finance or construction evidence was newly disclosed."},
+    {"id": "saudi-uae-rail-power-integration", "previous_scan_state": "INVESTIGATE", "current_scan_state": "ABSENT", "reason": "No capex, route or timetable followed the bilateral MoU."},
+    {"id": "egypt-korea-industrial-localisation", "previous_scan_state": "INVESTIGATE", "current_scan_state": "ABSENT", "reason": "No company-level capital commitment or project contract was newly disclosed."}
+  ]
+}
