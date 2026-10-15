@@ -20,13 +20,13 @@ function sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible})
  brand.brand(asset);
  return asset;
 }
-export function createOpenAiPreparationProviders({openai,model='gpt-4.1-mini',imageModel='gpt-image-1'}={}) {
+export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',imageModel='gpt-image-1'}={}) {
  if(typeof openai?.chat?.completions?.create!=='function'||typeof openai?.images?.generate!=='function')
   throw Error('V3_OPENAI_PROVIDER_REQUIRED');
  const complete=async (system,payload)=>{
   const response=await openai.chat.completions.create({
-   model,response_format:{type:'json_object'},temperature:0,
-   messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}],max_tokens:700
+   model,response_format:{type:'json_object'},
+   messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}],max_completion_tokens:4096
   },{maxRetries:0,timeout:90000});
   console.info('V3_WRITER_USAGE '+JSON.stringify({model,usage:response.usage}));
   let parsed;
