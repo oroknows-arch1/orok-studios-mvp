@@ -222,6 +222,24 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     return res.status(409).json({reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'});
    }
   });
+  // One-time recovery of the consumed October 10 private owner invitation.
+  // The durable claim prevents duplicate emails across restarts/instances.
+  if(env.EMRADAR_V3_PREPARATION_ENABLED==='true'){
+   const campaignId='v3-2602ddf68a3ced8aeafb769fc928423f';
+   const adapter=service.store.adapter;
+   const prior=(await adapter.read(campaignId))?.value;
+   const review=(await adapter.read('review:'+campaignId))?.value;
+   if(prior?.phase==='PUBLICATION_REVIEW'&&review?.status==='CONSUMED'){
+    const key='v3-owner-review-renewal:2026-10-15:'+campaignId;
+    const claimed=await adapter.compareAndSwap(key,null,{status:'STARTED',started_at:new Date().toISOString()});
+    if(claimed){
+     try{await service.workflow.issue(campaignId);
+      const saved=await adapter.read(key);
+      await adapter.compareAndSwap(key,saved.version,{status:'COMPLETE',completed_at:new Date().toISOString()});
+     }catch(error){console.error('V3_OWNER_REVIEW_RENEWAL_FAILED',error.message);}
+    }
+   }
+  }
   return {enabled:true,pool,service,runCampaign,refreshDirectory};
  }catch(error){await pool.end?.();throw error;}
 }
