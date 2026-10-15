@@ -165,6 +165,31 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     client.release();
    }
   };
+  // Explicit owner-authenticated release of ONE approved email at a time.
+  // No automatic distribution, no X publishing, and no retries of ambiguous sends.
+  app.post('/emradar/v3/release-email',async(req,res)=>{
+   const {campaignId,destinationId,sessionId,sessionSecret}=req.body??{};
+   if([campaignId,destinationId,sessionId,sessionSecret].some(v=>typeof v!=='string'||!v))
+    return res.status(400).json({reason:'V3_RELEASE_REQUEST_INVALID'});
+   try{
+    await service.workflow.authenticate(campaignId,sessionId,sessionSecret);
+    const state=(await service.store.adapter.read(campaignId))?.value;
+    const entry=state?.assets?.[destinationId];
+    const approval=state?.decisions?.[destinationId];
+    if(state?.phase!=='PUBLICATION_REVIEW'||entry?.asset?.kind!=='EMAIL'||approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.asset_sha256!==entry.fingerprint||state.deliveries?.[destinationId])
+     throw Error('V3_RELEASE_NOT_APPROVED');
+    const claimed=await service.store.claimDelivery(campaignId,destinationId);
+    const key=claimed.deliveries[destinationId].idempotency_key;
+    try{
+     const receipt=await integration.handle({operation:'approved-delivery',payload:{version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:campaignId,destination_id:destinationId,asset:entry.asset,approval,idempotency_key:key}});
+     await service.store.recordDelivery(campaignId,destinationId,'ACCEPTED',{provider_id:receipt.receipt_id});
+     return res.status(200).json({status:'ACCEPTED',campaignId,destinationId});
+    }catch(error){
+     await service.store.recordDelivery(campaignId,destinationId,'AMBIGUOUS',{reason:'TRANSPORT_OUTCOME_UNKNOWN'});
+     throw Error('V3_DELIVERY_OUTCOME_AMBIGUOUS');
+    }
+   }catch(error){return res.status(409).json({reason:/^V3_[A-Z0-9_]+$/.test(error.message)?error.message:'V3_RELEASE_FAILED'});}
+  });
   app.post('/emradar/v3/discover',async(req,res)=>{
    if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
    try{return res.status(200).json(await refreshDirectory());}
