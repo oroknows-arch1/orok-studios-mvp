@@ -34,7 +34,7 @@ async function refreshPublishedScans({fetcher=fetch}={}){
 }
 // Historical archives are verified from the original published source, not local attestations.
 async function fetchHistoricalPublishedScan(snapshotDate,{fetcher=fetch}={}){
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(snapshotDate||''))throw Error('INVALID_HISTORICAL_SCAN_DATE');
+ if(typeof snapshotDate!=='string'||snapshotDate.length!==10||snapshotDate[4]!=='-'||snapshotDate[7]!=='-'||!Number.isFinite(Date.parse(snapshotDate+'T00:00:00Z')))throw Error('INVALID_HISTORICAL_SCAN_DATE');
  const archiveUrl='https://raw.githubusercontent.com/oroknows-arch1/emerging-markets-radar/main/data/checkpoints/discovery-'+snapshotDate+'.json';
  const response=await fetcher(archiveUrl,{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
  if(!response.ok)throw Error('HISTORICAL_SCAN_HTTP_'+response.status);
