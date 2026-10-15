@@ -12,7 +12,7 @@ button:disabled{opacity:.4}
 button:focus-visible{outline:3px solid #e0a825}
 small{color:#52636d}
 </style></head><body><header><h1>EMRADAR · Publication Review</h1><p>Nothing is distributed until you approve its exact content.</p></header>
-<p id="status" role="status">Opening your private review…</p><main id="entries"></main>
+<p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><main id="entries"></main>
 <script>
 'use strict';
 let campaign;
@@ -107,6 +107,13 @@ async function refresh(){
    if(!campaign)throw Error('MISSING_CAMPAIGN');
   }
   await refresh();
+  const discover=document.getElementById('discover');discover.disabled=false;
+  discover.addEventListener('click',async()=>{
+   discover.disabled=true;status.textContent='Discovering evidence-matched destinations and preparing review drafts…';
+   try{const result=await api('discover',{campaignId:campaign});await refresh();status.textContent+=' Discovery: '+(result.editorial_drafts??0)+' new drafts.';}
+   catch(e){status.textContent='Discovery could not complete: '+e.message;}
+   finally{discover.disabled=false;}
+  });
  }catch(e){status.textContent='This review link is invalid, expired, or already used. Request a new private link.';}
 })();
 </script></body></html>`;
