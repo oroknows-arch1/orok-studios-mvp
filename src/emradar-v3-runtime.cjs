@@ -6,7 +6,7 @@ const path=require('node:path');
 const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
-const REVIEW_PATHS=new Set(['/review/access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise']);
+const REVIEW_PATHS=new Set(['/review/access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
  return readdirSync(attestationDir).filter(name=>/^publication-\d{4}-\d{2}-\d{2}\.json$/.test(name)).map(name=>name.slice(12,-5)).filter(date=>{
@@ -121,7 +121,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
    autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
   });
-  const reviewServer=createReviewServer({workflow:service.workflow});
+  const reviewServer=createReviewServer({workflow:service.workflow,runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId)});
   setReviewHandler((req,res,next)=>{
    if(!REVIEW_PATHS.has(req.url.split('?')[0]))return next();
    reviewServer.emit('request',req,res);
