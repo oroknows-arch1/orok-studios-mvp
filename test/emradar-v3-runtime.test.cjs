@@ -77,3 +77,17 @@ test('incomplete persisted recovery never records a false COMPLETE checkpoint',a
  await assert.rejects(runIncompleteCampaignRecovery({adapter,service,campaignId:'campaign',key:'recovery'}),/V3_PUBLICATION_REVIEW_INCOMPLETE/);
  assert.equal(checkpoint.value.status,'STARTED');
 });
+test('daily refresh detects October 15 without bundled attestations and verifies archive identity',async()=>{
+ const {refreshPublishedScans,campaignIdFor}=require('../src/emradar-v3-runtime.cjs');
+ const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
+ const bytes=Buffer.from(JSON.stringify({snapshot_date:'2026-10-15',publication_state:'PUBLISHED',evidence:[]}));
+ const fetcher=async()=>({ok:true,arrayBuffer:async()=>bytes});
+ const [scan]=await refreshPublishedScans({fetcher});
+ const verified=await verifyPublishedScan({...scan,fetcher});
+ assert.equal(verified.scan.snapshot_date,'2026-10-15');
+ assert.equal(campaignIdFor(scan),'v3-'+require('node:crypto').createHash('sha256').update(verified.scan.source_key).digest('hex').slice(0,32));
+ const next=await require('../src/emradar-v3-runtime.cjs').selectNextPublishedScan({published:[scan,...loadPublishedScans()],readCampaign:async id=>id===campaignIdFor(scan)?null:{phase:'DESTINATIONS_SELECTED'}});
+ assert.equal(next.snapshotDate,'2026-10-15');
+ await assert.rejects(verifyPublishedScan({...scan,fetcher:async()=>({ok:true,arrayBuffer:async()=>Buffer.from('{}')})}),/UNVERIFIED_PUBLICATION/);
+ await assert.rejects(refreshPublishedScans({fetcher:async()=>({ok:true,arrayBuffer:async()=>Buffer.from('{"snapshot_date":"2026-10-15","publication_state":"DRAFT"}')})}),/SCAN_NOT_PUBLISHED/);
+});

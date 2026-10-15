@@ -691,23 +691,19 @@ if (require.main === module) {
       smtp_password_configured:Boolean(process.env.EDITORIAL_SMTP_PASSWORD),
       v3_enabled:process.env.EMRADAR_V3_PREPARATION_ENABLED==='true'
     }));
-    // Run discovery before preparation, never concurrently. Each stage is optional.
-    const discoverEnabled=process.env.EMRADAR_V3_AUTO_DISCOVER_ONCE==='true' && typeof refreshDirectory==='function';
-    const prepareEnabled=process.env.EMRADAR_V3_AUTO_PREPARE==='true' && typeof runCampaign==='function';
-    (async()=>{
-      if(!discoverEnabled && !prepareEnabled && typeof runCampaign==='function'){
-        // Persistent campaign identity makes this release action one-shot across restarts.
-        try{console.log('V3_PREPARATION_RESULT',JSON.stringify(await runCampaign()));}
-        catch(error){console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED');}
-      } else if(discoverEnabled){
-        try{console.log('V3_DISCOVERY_RESULT',JSON.stringify(await refreshDirectory()));}
-        catch(error){console.error('V3_DISCOVERY_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_DISCOVERY_FAILED');}
-      }
-      if(prepareEnabled){
-        try{console.log('V3_PREPARATION_RESULT',JSON.stringify(await runCampaign()));}
-        catch(error){console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED');}
-      }
-    })();
+    // Refresh daily intake without a redeployment. Never overlap local attempts;
+    // cross-process exclusion is held by the campaign's database session lock.
+    let preparing=false;
+    const prepareLatest=async()=>{
+      if(preparing||typeof runCampaign!=='function')return;
+      preparing=true;
+      try{console.log('V3_PREPARATION_RESULT',JSON.stringify(await runCampaign()));}
+      catch(error){console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED');}
+      finally{preparing=false;}
+    };
+    prepareLatest();
+    const v3IntakeTimer=setInterval(prepareLatest,60*60*1000);
+    v3IntakeTimer.unref();
     require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
   });
 

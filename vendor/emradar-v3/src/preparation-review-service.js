@@ -80,7 +80,12 @@ export async function createPreparationReviewService({
   return {...resumed,...await reviewCompletion(campaignId)};
  };
  const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
- return {store,directory,workflow,prepare,discover,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare,workflow})};
+ return {store,directory,workflow,prepare,discover,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
+  const result=await prepare(input);
+  const completion=await reviewCompletion(result.campaignId);
+  if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
+  return result;
+ },workflow})};
 }
 
 // Convenience composition for the paid API's existing OpenAI connection.

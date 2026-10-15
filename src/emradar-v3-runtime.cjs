@@ -19,6 +19,19 @@ function loadPublishedScans(attestationDir=ATTESTATION_DIR){
   return {snapshotDate,expectedSha256,liveUrl:archiveUrl,archiveUrl,publicationRecord,releaseAttestation};
  });
 }
+// Refresh the public source at execution time; immutable archive bytes are
+// independently checked by verifyPublishedScan before any campaign is created.
+async function refreshPublishedScans({fetcher=fetch}={}){
+ const liveUrl='https://emerging-markets-radar.onrender.com/data/discovery.json';
+ const response=await fetcher(liveUrl,{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
+ if(!response.ok)throw Error('SCAN_HTTP_'+response.status);
+ const bytes=Buffer.from(await response.arrayBuffer());
+ if(bytes.length>10*1024*1024)throw Error('SCAN_TOO_LARGE');
+ const document=JSON.parse(bytes.toString('utf8'));
+ if(document.publication_state!=='PUBLISHED'||!/^\d{4}-\d{2}-\d{2}$/.test(document.snapshot_date||''))throw Error('SCAN_NOT_PUBLISHED');
+ return [{snapshotDate:document.snapshot_date,expectedSha256:createHash('sha256').update(bytes).digest('hex'),liveUrl,
+ archiveUrl:'https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+document.snapshot_date+'.json'}];
+}
 const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snapshotDate+':'+published.expectedSha256).digest('hex').slice(0,32);
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of published){
@@ -109,12 +122,12 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   });
   const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
   const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
-  const published=loadPublishedScans();
+  const published=()=>refreshPublishedScans({fetcher});
   const verify=async selected=>{
    const verified=await verifyPublishedScan({...selected,fetcher});
    return {...verified,document:normalizePublishedEvidence(verified.document)};
   };
-  const choose=()=>selectNextPublishedScan({published,readCampaign:async id=>(await service.store.adapter.read(id))?.value});
+  const choose=async()=>selectNextPublishedScan({published:await published(),readCampaign:async id=>(await service.store.adapter.read(id))?.value});
   const refreshDirectory=async(selected)=>{
    if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY!=='true')throw Error('V3_AUTONOMOUS_DISCOVERY_DISABLED');
    selected=selected??await choose();
@@ -126,22 +139,28 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async()=>{
-   const adapter=service.store.adapter;
-   const original=(await adapter.read('v3-release:2026-10-14-one-live-campaign'))?.value;
-   if(original?.status==='COMPLETE' && original?.result?.campaignId){
-    const drafts=(await adapter.read('v3-release:2026-10-14-editorial-drafts'))?.value;
-    if(drafts?.status==='COMPLETE')return runIncompleteCampaignRecovery({adapter,service,campaignId:original.result.campaignId});
-    return runReleaseOnce({adapter,key:'v3-release:2026-10-14-editorial-drafts',run:()=>service.resumeEditorialDrafts(original.result.campaignId)});
+   const selected=(await published())[0];
+   const campaignId=campaignIdFor(selected);
+   // Hold a database session lock through preparation. A crashed process releases
+   // it automatically; all workers/restarts share the same durable scan identity.
+   const client=await pool.connect();
+   try{
+    const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[campaignId]);
+    if(!lock.rows[0]?.acquired)return {status:'SCAN_PREPARATION_IN_PROGRESS',campaignId};
+    const adapter=service.store.adapter;
+    const prior=(await adapter.read(campaignId))?.value;
+    const review=(await adapter.read('review:'+campaignId))?.value;
+    if(prior?.phase==='PUBLICATION_REVIEW'&&review){
+     const completion=await service.reviewCompletion(campaignId);
+     return {campaignId,snapshotDate:selected.snapshotDate,status:completion.complete?'PUBLICATION_REVIEW':'V3_PUBLICATION_REVIEW_INCOMPLETE',...completion,notification:review.status};
+    }
+    // Preparation owns evidence research and discovery, preserving their order
+    // and resuming persisted destinations instead of repeating completed work.
+    return {...await service.prepareAndNotify(selected),snapshotDate:selected.snapshotDate};
+   }finally{
+    await client.query('SELECT pg_advisory_unlock(hashtext($1))',[campaignId]);
+    client.release();
    }
-   return runReleaseOnce({adapter,key:'v3-release:2026-10-14-one-live-campaign',run:()=>
-    runNextPublishedCampaign({
-     published,readCampaign:async id=>(await adapter.read(id))?.value,
-     startCampaign:scan=>service.store.start(scan),verify,
-     discover:({scan,document})=>service.discover({scan,document}),
-     persistDestinations:(campaignId,destinations)=>service.store.select(campaignId,destinations),
-     prepareAndNotify:selected=>service.prepareAndNotify(selected)
-    })
-   });
   };
   app.post('/emradar/v3/discover',async(req,res)=>{
    if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
@@ -163,4 +182,4 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   return {enabled:true,pool,service,runCampaign,refreshDirectory};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={mountV3PreparationReview,loadPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
+module.exports={mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
