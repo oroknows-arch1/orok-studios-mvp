@@ -58,10 +58,10 @@ export async function createPreparationReviewService({
  });
  const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin});
- const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS}={})=>{
+ const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS,verifiedPublicationsOnly=false}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
-  const destinations=selectPersistedDraftDestinations({candidates:await directory.list(),document:state.preparation_input.document,existingIds:state.destinations.map(item=>item.id)});
+  const destinations=selectPersistedDraftDestinations({candidates:(await directory.list()).filter(candidate=>!verifiedPublicationsOnly||candidate.verification?.status==='VERIFIED'),document:state.preparation_input.document,existingIds:state.destinations.map(item=>item.id)});
   const evidenceIds=new Set(state.preparation_input.document.evidence.filter(item=>item.verified===true).map(item=>item.id));
   const assets=[];
   for(const destination of destinations.slice(0,limit)){
@@ -82,6 +82,7 @@ export async function createPreparationReviewService({
  const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
  return {store,directory,workflow,prepare,discover,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
+  await resumeEditorialDrafts(result.campaignId,{verifiedPublicationsOnly:true});
   const completion=await reviewCompletion(result.campaignId);
   if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
   return result;
