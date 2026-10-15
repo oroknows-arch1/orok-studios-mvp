@@ -230,7 +230,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const prior=(await adapter.read(campaignId))?.value;
    const review=(await adapter.read('review:'+campaignId))?.value;
    if(prior?.phase==='PUBLICATION_REVIEW'&&review?.status==='CONSUMED'){
-    const key='v3-owner-review-renewal:2026-10-15:'+campaignId;
+    const key='v3-owner-review-renewal:2026-10-16:'+campaignId;
     const claimed=await adapter.compareAndSwap(key,null,{status:'STARTED',started_at:new Date().toISOString()});
     if(claimed){
      try{await service.workflow.issue(campaignId);
