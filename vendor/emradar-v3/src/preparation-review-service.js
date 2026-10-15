@@ -67,9 +67,9 @@ export async function createPreparationReviewService({
   for(const destination of destinations.slice(0,limit)){
    const asset=await write({campaignId,destination,document:state.preparation_input.document,scan:state.scan});
    verifyEditorialAsset(asset,{evidenceIds});
+   await store.extendReview(campaignId,[destination],[asset]);
    assets.push(asset);
   }
-  if(assets.length)await store.extendReview(campaignId,destinations.slice(0,limit),assets);
   return {campaignId,status:'PUBLICATION_REVIEW',editorial_drafts:assets.length,notification:'EXISTING_REVIEW_SESSION'};
  };
  const resumeIntelligentDiscovery=async campaignId=>{

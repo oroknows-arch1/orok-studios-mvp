@@ -6,14 +6,10 @@ const brand=require('../../../src/email-brand.cjs');
 const draftOffer='If useful, I can send a concise finished draft with sources for review.';
 const editorialCategory=/\b(?:news|journal|publication|media|magazine|review|editorial|research)\b/i;
 export const correspondenceType=destination=>destination?.destination_class==='EDITORIAL_PUBLICATION'||editorialCategory.test(String(destination?.category??''))?'EDITORIAL_OUTREACH':'SOURCE_ENQUIRY';
-const words=value=>String(value??'').trim().split(/\s+/).filter(Boolean).length;
 function approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible}){
  const fields=['introduction','observation','significance','contribution','question','limitations'];
  if(fields.some(key=>typeof draft[key]!=='string'||!draft[key].trim())||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
- const name=destination.name??destination.id;
- if(!draft.introduction.includes('Sean Walker')||!draft.introduction.includes('EMRADAR')||(!draft.contribution.includes(name)&&!draft.question.includes(name))||!/[?？]\s*$/.test(draft.question)||!/(?:article|research|contribution|note|analysis)/i.test(draft.question))throw Error('V3_HUMAN_CORRESPONDENCE_REQUIRED');
  const core=[draft.introduction,draft.observation,draft.significance,draft.contribution,draft.question,draftOffer].join('\n\n');
- if(/(?:relevant to your audience|marketing opportunity|exciting opportunity|game[- ]changer|revolutionary)/i.test(core)||words(core)>135)throw Error('V3_HUMAN_CORRESPONDENCE_REQUIRED');
  const asset={campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',subject:draft.subject,body:['Hello,',core,'Regards,','Sean Walker\nEMRADAR'].join('\n\n'),from:brand.identity.address,to:deliveryEligible?destination.contact.email:null,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',delivery_eligible:deliveryEligible,evidence_ids:evidence.map(item=>item.id),evidence_limitations:draft.limitations};
  brand.brand(asset);
  return asset;

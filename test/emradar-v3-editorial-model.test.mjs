@@ -20,3 +20,13 @@ test('institutions are source enquiries, never editorial outreach',async()=>{
  const asset=await providers.write({campaignId:'campaign',destination:{id:'bank',name:'World Bank',category:'International Finance',contact_verified:false,delivery_eligible:false,evidence:{ids:['e1']}},document:{evidence:[evidence]}});
  assert.equal(asset.correspondence_type,'SOURCE_ENQUIRY');assert.doesNotMatch(asset.body,/article|research contribution/i);assert.equal(asset.delivery_eligible,false);
 });
+
+test('editorial style remains an owner decision without bypassing required evidence',async()=>{
+ const {createOpenAiPreparationProviders}=await import('../vendor/emradar-v3/src/openai-preparation-providers.js');
+ const draft={subject:'Research contribution',introduction:'Sean Walker at EMRADAR.',observation:'Evidence shows a change. '.repeat(45),significance:'This may affect refining.',contribution:'A research contribution for Journal.',question:'Would you like to review it?',limitations:'Commercial utilisation is uncertain.'};
+ const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify(draft)}}]})}},images:{generate:async()=>{}}}});
+ const destination={id:'journal',name:'Journal',destination_class:'EDITORIAL_PUBLICATION',evidence:{ids:['e1']},contact_verified:false,delivery_eligible:false};
+ const asset=await providers.write({campaignId:'campaign',destination,document:{evidence:[{id:'e1',verified:true,fact:'Published fact'}]}});
+ assert.equal(asset.kind,'EMAIL');assert.equal(asset.delivery_eligible,false);assert.equal(asset.to,null);assert.match(asset.body,/Would you like to review it/);
+ await assert.rejects(providers.write({campaignId:'campaign',destination,document:{evidence:[]}}),/V3_DESTINATION_EVIDENCE_REQUIRED/);
+});
