@@ -138,8 +138,11 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
-  const runCampaign=async()=>{
-   const selected=(await published())[0];
+  const runCampaign=async(snapshotDate)=>{
+   // Historical runs require the source's paired release attestations and exact archive digest.
+   // Never substitute the current live scan for a requested historical date.
+   const selected=snapshotDate?loadPublishedScans().find(item=>item.snapshotDate===snapshotDate):(await published())[0];
+   if(!selected)throw Error('HISTORICAL_SCAN_NOT_ATTESTED');
    const campaignId=campaignIdFor(selected);
    // Hold a database session lock through preparation. A crashed process releases
    // it automatically; all workers/restarts share the same durable scan identity.
@@ -173,7 +176,9 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(req.headers.authorization!=='Bearer '+env.EMRADAR_V3_API_TOKEN)
     return res.status(403).json({reason:'V3_API_AUTH_REQUIRED'});
    try{
-    const result=await runCampaign();
+    const requestedDate=req.body?.snapshotDate;
+    if(requestedDate!==undefined && (typeof requestedDate!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(requestedDate)))throw Error('INVALID_HISTORICAL_SCAN_DATE');
+    const result=await runCampaign(requestedDate);
     return res.status(200).json(result);
    }catch(error){
     return res.status(409).json({reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'});
