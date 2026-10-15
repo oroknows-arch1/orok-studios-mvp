@@ -32,6 +32,19 @@ async function refreshPublishedScans({fetcher=fetch}={}){
  return [{snapshotDate:document.snapshot_date,expectedSha256:createHash('sha256').update(bytes).digest('hex'),liveUrl,
  archiveUrl:'https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+document.snapshot_date+'.json'}];
 }
+// Historical archives are verified from the original published source, not local attestations.
+async function fetchHistoricalPublishedScan(snapshotDate,{fetcher=fetch}={}){
+ if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(snapshotDate||''))throw Error('INVALID_HISTORICAL_SCAN_DATE');
+ const archiveUrl='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+snapshotDate+'.json';
+ const response=await fetcher(archiveUrl,{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
+ if(!response.ok)throw Error('HISTORICAL_SCAN_HTTP_'+response.status);
+ const bytes=Buffer.from(await response.arrayBuffer());
+ if(bytes.length>10*1024*1024)throw Error('SCAN_TOO_LARGE');
+ const document=JSON.parse(bytes.toString('utf8'));
+ if(document.publication_state!=='PUBLISHED'||document.snapshot_date!==snapshotDate)throw Error('HISTORICAL_SCAN_NOT_PUBLISHED');
+ const expectedSha256=createHash('sha256').update(bytes).digest('hex');
+ return {snapshotDate,expectedSha256,liveUrl:archiveUrl,archiveUrl};
+}
 const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snapshotDate+':'+published.expectedSha256).digest('hex').slice(0,32);
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of published){
@@ -141,8 +154,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const runCampaign=async(snapshotDate)=>{
    // Historical runs require the source's paired release attestations and exact archive digest.
    // Never substitute the current live scan for a requested historical date.
-   const selected=snapshotDate?loadPublishedScans().find(item=>item.snapshotDate===snapshotDate):(await published())[0];
-   if(!selected)throw Error('HISTORICAL_SCAN_NOT_ATTESTED');
+   const selected=snapshotDate?await fetchHistoricalPublishedScan(snapshotDate,{fetcher}):(await published())[0];
    const campaignId=campaignIdFor(selected);
    // Hold a database session lock through preparation. A crashed process releases
    // it automatically; all workers/restarts share the same durable scan identity.
