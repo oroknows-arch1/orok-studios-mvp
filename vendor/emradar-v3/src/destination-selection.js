@@ -26,8 +26,8 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
   if(!candidate?.id || seen.has(candidate.id)) continue;
   seen.add(candidate.id);
   const linked=(candidate.evidence_ids??[]).filter(id=>evidenceIds.has(id));
-  if(!linked.length || candidate.contact_verified!==true || candidate.editorial_fit_verified!==true || candidate.active!==true) continue;
-  if(!candidate.contact || !candidate.contact.source_url || !candidate.contact.checked_at) continue;
+  if(!linked.length || candidate.editorial_fit_verified!==true || candidate.active!==true) continue;
+  // Missing contact details prevent delivery, not discovery or owner review.
   const previous=prior.get(candidate.id);
   if(previous?.do_not_contact===true || previous?.opted_out===true || previous?.status==='PENDING_REPLY') continue;
   const repeat=Boolean(previous?.last_scan_digest && candidate.scan_digest && previous.last_scan_digest===candidate.scan_digest);
@@ -37,8 +37,8 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
   eligible.push({...candidate,linked_evidence:linked,relevance,last_contacted_at:Number.isFinite(recency)?recency:0});
  }
  eligible.sort((a,b)=>b.relevance-a.relevance || a.last_contacted_at-b.last_contacted_at || a.id.localeCompare(b.id));
- const selected=eligible.slice(0,limit).map(({id,category,contact,linked_evidence,editorial_fit_verified})=>({
-  id,category,contact,evidence:{ids:linked_evidence},contact_verified:true,editorial_fit_verified
+ const selected=eligible.slice(0,limit).map(({id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified})=>({
+  id,name,category,website,publication_type,destination_class,relationship,contact:contact_verified===true?contact:null,evidence:{ids:linked_evidence},contact_verified:contact_verified===true,editorial_fit_verified,delivery_eligible:contact_verified===true&&Boolean(contact?.email),draft_only:contact_verified!==true
  }));
  return {selected,excluded_count:candidates.length-selected.length,selection_digest:sha256(selected)};
 }
