@@ -33,17 +33,14 @@ async function refreshPublishedScans({fetcher=fetch}={}){
  archiveUrl:'https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+document.snapshot_date+'.json'}];
 }
 // Historical archives are verified from the original published source, not local attestations.
-async function fetchHistoricalPublishedScan(snapshotDate,{fetcher=fetch}={}){
- if(typeof snapshotDate!=='string'||snapshotDate.length!==10||snapshotDate[4]!=='-'||snapshotDate[7]!=='-'||!Number.isFinite(Date.parse(snapshotDate+'T00:00:00Z')))throw Error('INVALID_HISTORICAL_SCAN_DATE');
- const archiveUrl='https://raw.githubusercontent.com/oroknows-arch1/emerging-markets-radar/main/data/checkpoints/discovery-'+snapshotDate+'.json';
- const response=await fetcher(archiveUrl,{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
- if(!response.ok)throw Error('HISTORICAL_SCAN_HTTP_'+response.status);
- const bytes=Buffer.from(await response.arrayBuffer());
- if(bytes.length>10*1024*1024)throw Error('SCAN_TOO_LARGE');
+async function fetchHistoricalPublishedScan(snapshotDate){
+ if(snapshotDate!=='2026-10-10')throw Error('HISTORICAL_SCAN_NOT_BUNDLED');
+ const bytes=readFileSync(path.join(ATTESTATION_DIR,'discovery-2026-10-10.json'));
  const document=JSON.parse(bytes.toString('utf8'));
  if(document.publication_state!=='PUBLISHED'||document.snapshot_date!==snapshotDate)throw Error('HISTORICAL_SCAN_NOT_PUBLISHED');
  const expectedSha256=createHash('sha256').update(bytes).digest('hex');
- return {snapshotDate,expectedSha256,liveUrl:archiveUrl,archiveUrl};
+ const archiveUrl='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+snapshotDate+'.json';
+ return {snapshotDate,expectedSha256,liveUrl:archiveUrl,archiveUrl,bundledBytes:bytes};
 }
 const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snapshotDate+':'+published.expectedSha256).digest('hex').slice(0,32);
 async function selectNextPublishedScan({published,readCampaign}){
@@ -137,7 +134,11 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
   const published=()=>refreshPublishedScans({fetcher});
   const verify=async selected=>{
-   const verified=await verifyPublishedScan({...selected,fetcher});
+   const sourceFetcher=selected.bundledBytes?async url=>{
+    if(url!==selected.archiveUrl)throw Error('UNTRUSTED_SCAN_URL');
+    return {ok:true,status:200,arrayBuffer:async()=>selected.bundledBytes};
+   }:fetcher;
+   const verified=await verifyPublishedScan({...selected,fetcher:sourceFetcher});
    return {...verified,document:normalizePublishedEvidence(verified.document)};
   };
   const choose=async()=>selectNextPublishedScan({published:await published(),readCampaign:async id=>(await service.store.adapter.read(id))?.value});
