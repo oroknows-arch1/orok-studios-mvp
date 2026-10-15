@@ -701,6 +701,12 @@ if (require.main === module) {
       catch(error){console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED');}
       finally{preparing=false;}
     };
+    // One bounded historical owner-review test. Existing campaigns remain idempotent;
+    // preparation never sends to editorial destinations or posts to X.
+    if(typeof runCampaign==='function'){
+      runCampaign('2026-10-10').then(result=>console.log('V3_OCT10_REVIEW_TEST',JSON.stringify(result)))
+        .catch(error=>console.error('V3_OCT10_REVIEW_TEST_FAILED',error.message));
+    }
     prepareLatest();
     const v3IntakeTimer=setInterval(prepareLatest,60*60*1000);
     v3IntakeTimer.unref();
