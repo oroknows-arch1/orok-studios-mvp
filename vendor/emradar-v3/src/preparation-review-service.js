@@ -16,11 +16,11 @@ export function selectPersistedDraftDestinations({candidates,document,existingId
  const evidenceIds=new Set(evidence.map(item=>item.id));
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
  const existing=new Set(existingIds);
- return (candidates??[]).filter(candidate=>candidate?.destination_class==='EDITORIAL_PUBLICATION'&&candidate?.active===true&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
+ return (candidates??[]).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&candidate?.active===true&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
   const ids=(candidate.verification.evidence_ids??[]).filter(id=>evidenceIds.has(id));
   if(!ids.length)return null;
   const deliveryEligible=candidate.contact_verified===true&&candidate.editorial_fit_verified===true&&Boolean(candidate.contact?.email)&&Boolean(candidate.contact?.source_url);
-  return {id:candidate.id,name:candidate.name,category:candidate.category,destination_class:candidate.destination_class,relationship:candidate.relationship,contact:deliveryEligible?candidate.contact:null,evidence:{ids},contact_verified:deliveryEligible,editorial_fit_verified:candidate.editorial_fit_verified===true,delivery_eligible:deliveryEligible,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',draft_only:!deliveryEligible};
+  return {id:candidate.id,name:candidate.name,category:candidate.category,publication_type:candidate.publication_type,website:candidate.website,destination_class:candidate.destination_class,relationship:candidate.relationship,contact:deliveryEligible?candidate.contact:null,evidence:{ids},contact_verified:deliveryEligible,editorial_fit_verified:candidate.editorial_fit_verified===true,delivery_eligible:deliveryEligible,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',draft_only:!deliveryEligible};
  }).filter(Boolean).slice(0,Math.max(0,MAX_DESTINATIONS-existing.size));
 }
 
@@ -28,7 +28,7 @@ export function assessPublicationReview({state,candidates}) {
  if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)return {complete:false,verified_publications:0,editorial_emails:0,x_ready:false,missing_destination_ids:[]};
  const evidence=state.preparation_input.document.evidence.filter(item=>item?.verified===true&&item?.id);
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
- const publications=(candidates??[]).filter(candidate=>candidate?.destination_class==='EDITORIAL_PUBLICATION'&&candidate?.active===true&&candidate?.editorial_fit_verified===true&&candidate?.verification?.status==='VERIFIED'&&candidate?.verification?.scan_evidence_digest===scanDigest);
+ const publications=(candidates??[]).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&candidate?.active===true&&candidate?.editorial_fit_verified===true&&candidate?.verification?.status==='VERIFIED'&&candidate?.verification?.scan_evidence_digest===scanDigest);
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
  const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL').map(asset=>asset.destination_id));
