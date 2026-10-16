@@ -9,7 +9,7 @@ const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,ite
 
 test('reuses persisted evidence-linked publication as a clearly unverified draft destination',()=>{
  const selected=selectPersistedDraftDestinations({document:{evidence},existingIds:['x'],candidates:[{id:'journal',name:'Journal',category:'news',destination_class:'EDITORIAL_PUBLICATION',active:true,contact_verified:false,editorial_fit_verified:true,contact:{email:null},verification:{evidence_ids:['e1'],scan_evidence_digest:scanDigest}}]});
- assert.deepEqual(selected,[{id:'journal',name:'Journal',category:'news',destination_class:'EDITORIAL_PUBLICATION',relationship:undefined,contact:null,evidence:{ids:['e1']},contact_verified:false,editorial_fit_verified:true,delivery_eligible:false,contact_status:'UNVERIFIED',draft_only:true}]);
+ assert.deepEqual(selected,[{id:'journal',name:'Journal',category:'news',publication_type:undefined,website:undefined,destination_class:'EDITORIAL_PUBLICATION',relationship:undefined,contact:null,evidence:{ids:['e1']},contact_verified:false,editorial_fit_verified:true,delivery_eligible:false,contact_status:'UNVERIFIED',draft_only:true}]);
 });
 
 test('does not turn a legacy source institution into an editorial draft destination',()=>{
@@ -29,7 +29,7 @@ test('adds draft to existing X review without changing X, decisions or delivery 
  assert.equal(value.assets.x.fingerprint,'kept');
  assert.equal(value.decisions.x.decision,'APPROVE');
  assert.equal(value.assets.journal.asset.contact_status,'UNVERIFIED');
- assert.throws(()=>assertSendable({asset,approval:{}}),/VERIFIED_DELIVERY_DETAILS_REQUIRED/);
+ assert.throws(()=>assertSendable({asset,approval:{}}),/OWNER_APPROVAL_REQUIRED/);
 });
 
 test('persisted completion requires every verified publication email and X graphic',()=>{

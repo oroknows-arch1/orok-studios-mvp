@@ -1,3 +1,4 @@
+import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import { createHash } from 'node:crypto';
 
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key,canonical(value[key])])) : value;
@@ -33,8 +34,8 @@ export function assertApproval(asset, approval) {
   return fingerprint;
 }
 export function assertSendable({asset,approval,receipt}) {
-  if(asset?.kind==='EMAIL' && (asset.delivery_eligible===false || asset.contact_status==='UNVERIFIED' || !asset.to)) throw new Error('VERIFIED_DELIVERY_DETAILS_REQUIRED');
   const fingerprint = assertApproval(asset,approval);
+  if(asset.kind==='EMAIL')recipientPolicy.assertRecipientAllowed(asset);
   if (receipt && receipt.status !== 'FAILED_DEFINITELY_UNSENT' && receipt.status !== 'NOT_ATTEMPTED') throw new Error('DELIVERY_ALREADY_ATTEMPTED_OR_AMBIGUOUS');
   return sha256([asset.campaign_id,asset.destination_id,fingerprint]);
 }

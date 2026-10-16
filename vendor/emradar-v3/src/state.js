@@ -1,3 +1,5 @@
+import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
+import emailBrand from '../../../src/email-brand.cjs';
 import { randomUUID } from 'node:crypto';
 import { assertScan, assertDestinations, assetFingerprint, assertApproval, assertSendable, sha256 } from './contracts.js';
 
@@ -82,7 +84,7 @@ export class CampaignStore {
   }
   async revise(id,destinationId,fingerprint,changes) {
     if (!changes || typeof changes!=='object' || Array.isArray(changes)) throw Error('INVALID_REVISION');
-    const allowed=['subject','body'];
+    const allowed=['subject','body','to'];
     if (!Object.keys(changes).length || Object.keys(changes).some(key=>!allowed.includes(key))) throw Error('INVALID_REVISION_FIELDS');
     for (const value of Object.values(changes)) {
       if (typeof value!=='string' || !value.trim() || value.length>50000) throw Error('INVALID_REVISION_TEXT');
@@ -93,6 +95,12 @@ export class CampaignStore {
       if (!entry || entry.fingerprint!==fingerprint) throw Error('STALE_ASSET_REVISION');
       if (state.deliveries[destinationId]) throw Error('REVISION_AFTER_DISTRIBUTION');
       const revised={...entry.asset,...changes};
+      if(Object.hasOwn(changes,'to')){
+        if(entry.asset.kind!=='EMAIL')throw Error('INVALID_RECIPIENT_REVISION');
+        recipientPolicy.assertRecipientAllowed(revised,state.destinations.find(d=>d.id===destinationId));
+        revised.contact_status='OWNER_SUPPLIED';
+      }
+      if(revised.brand_version)revised.html=emailBrand.render(revised.body);
       if (sha256(revised)===sha256(entry.asset)) return state;
       const nextFingerprint=assetFingerprint(revised);
       const priorDecision=state.decisions[destinationId]?.decision??null;
@@ -108,6 +116,7 @@ export class CampaignStore {
       const item = state.assets[destinationId];
       if (!item) throw Error('UNKNOWN_DESTINATION');
       const prior = state.deliveries[destinationId];
+      if(item.asset.kind==='EMAIL')recipientPolicy.assertRecipientAllowed(item.asset,state.destinations.find(d=>d.id===destinationId));
       const key = assertSendable({asset:item.asset,approval:state.decisions[destinationId],receipt:prior});
       state.deliveries[destinationId] = {status:'ATTEMPTING',idempotency_key:key,claimed_at:new Date().toISOString()};
       return state;

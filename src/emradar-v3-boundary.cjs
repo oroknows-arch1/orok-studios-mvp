@@ -32,7 +32,7 @@ function createV3Boundary({verifyNotification,verifyApprovedDelivery,sendOwnerRe
    catch(error){await sendReservation.record({idempotency_key:payload.idempotency_key});throw error;}
    await sendReservation.record({idempotency_key:payload.idempotency_key,provider_id:result?.accepted===true?result?.receipt_id:undefined});
    if(result?.accepted!==true||!result.receipt_id)throw Error('V3_SMTP_OUTCOME_UNCONFIRMED');
-   return {accepted:true,receipt_id:result.receipt_id};
+   return {accepted:true,receipt_id:result.receipt_id,sent_folder:result.sent_folder,smtp_response:result.smtp_response};
   }
   throw Error('V3_UNKNOWN_OPERATION');
  };

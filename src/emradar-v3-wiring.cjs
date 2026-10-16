@@ -6,10 +6,11 @@ const {createV3Smtp}=require('./emradar-v3-smtp.cjs');
 // connection occurs until the owner separately authorizes activation.
 function createV3IsolatedWiring({pool,token,reviewOrigin,env,createTransport}={}){
  const smtp=createV3Smtp({env,createTransport});
- return createV3PreparedIntegration({
+ const integration=createV3PreparedIntegration({
   pool,token,reviewOrigin,
   sendOwnerReview:smtp.sendOwnerReview,
   sendApprovedEmail:smtp.sendApprovedEmail
  });
+ return {...integration,verifyMailTransport:smtp.verifyTransport};
 }
 module.exports={createV3IsolatedWiring};

@@ -6,12 +6,12 @@ const {createV3ApprovalVerifier}=require('../src/emradar-v3-approval-verifier.cj
 const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
 const hash=x=>crypto.createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
 test('paid API V3 verifier reads persisted approval and claimed delivery, never trusts request alone',async()=>{
- const asset={campaign_id:'v3-campaign',destination_id:'journal',kind:'EMAIL',body:'evidence'};
+ const asset={campaign_id:'v3-campaign',destination_id:'journal',kind:'EMAIL',to:'editor@example.org',contact_status:'UNVERIFIED',delivery_eligible:false,body:'evidence'};
  const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
  const key=hash([asset.campaign_id,asset.destination_id,approval.asset_sha256]);
  const state={phase:'PUBLICATION_REVIEW',assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
  const reads=[];
- const verify=createV3ApprovalVerifier({pool:{query:async(sql,args)=>{reads.push(args);return {rows:[{payload:state}]};}}});
+ const verify=createV3ApprovalVerifier({pool:{query:async(sql,args)=>{if(sql.startsWith('SELECT record'))return {rows:[]};reads.push(args);return {rows:[{payload:state}]};}}});
  const request={asset,approval,idempotency_key:key,campaign_id:asset.campaign_id,destination_id:asset.destination_id};
  assert.equal(await verify(request),true);
  assert.deepEqual(reads,[['v3-campaign']]);

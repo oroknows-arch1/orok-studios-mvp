@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -703,11 +703,14 @@ if (require.main === module) {
     };
     // One bounded historical owner-review test. Existing campaigns remain idempotent;
     // preparation never sends to editorial destinations or posts to X.
-    if(!editorialWritingReviewPending&&typeof runCampaign==='function'){
+    if(!distributionPreflightPending&&!editorialWritingReviewPending&&typeof runCampaign==='function'){
       runCampaign('2026-10-10').then(result=>console.log('V3_OCT10_REVIEW_TEST',JSON.stringify(result)))
         .catch(error=>console.error('V3_OCT10_REVIEW_TEST_FAILED',error.message));
     }
-    if(editorialWritingReviewPending){
+    if(distributionPreflightPending){
+      runDistributionPreflight().then(result=>console.log('V3_EMAIL_DISTRIBUTION_PREFLIGHT',JSON.stringify(result)))
+        .catch(error=>console.error('V3_EMAIL_DISTRIBUTION_PREFLIGHT_FAILED','TRANSPORT_CHECK_FAILED'));
+    }else if(editorialWritingReviewPending){
       runEditorialWritingReview().then(result=>console.log('V3_EDITORIAL_WRITING_REVIEW',JSON.stringify(result)))
         .catch(error=>console.error('V3_EDITORIAL_WRITING_REVIEW_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_PROVIDER_FAILED'));
     }else prepareLatest();

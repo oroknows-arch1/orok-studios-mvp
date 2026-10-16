@@ -20,7 +20,7 @@ async function body(req) {
  }
  return JSON.parse(value||'{}');
 }
-export function createReviewServer({workflow,runDiscovery,health=()=>({ok:true})}) {
+export function createReviewServer({workflow,runDiscovery,releaseEmail,health=()=>({ok:true})}) {
  if(!(workflow instanceof ReviewWorkflow)) throw Error('WORKFLOW_REQUIRED');
  return createServer(async(req,res)=>{
   try {
@@ -31,7 +31,7 @@ export function createReviewServer({workflow,runDiscovery,health=()=>({ok:true})
     return res.end(reviewPage);
    }
    if(req.method!=='POST') return json(res,404,{error:'NOT_FOUND'});
-   if(!['/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
+   if(!['/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
    if(req.headers.origin && req.headers.origin!==workflow.baseUrl) return json(res,403,{error:'ORIGIN_DENIED'});
    const input=await body(req);
    if(url.pathname==='/api/review/exchange'){
@@ -51,6 +51,11 @@ export function createReviewServer({workflow,runDiscovery,health=()=>({ok:true})
    if(url.pathname==='/api/review/view') return json(res,200,await workflow.view(input.campaignId,session.id,session.secret));
    const csrf=cookie(req,'emradar_v3_csrf');
    if(!csrf || req.headers['x-emradar-csrf']!==csrf) return json(res,403,{error:'CSRF_DENIED'});
+   if(url.pathname==='/api/review/release'){
+    if(typeof releaseEmail!=='function')return json(res,503,{error:'RELEASE_UNAVAILABLE'});
+    await workflow.authenticate(input.campaignId,session.id,session.secret);
+    return json(res,200,await releaseEmail({campaignId:input.campaignId,destinationId:input.destinationId,sessionId:session.id,sessionSecret:session.secret}));
+   }
    if(url.pathname==='/api/review/discover'){
     if(typeof runDiscovery!=='function')return json(res,503,{error:'DISCOVERY_UNAVAILABLE'});
     await workflow.authenticate(input.campaignId,session.id,session.secret);
