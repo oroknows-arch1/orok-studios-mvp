@@ -11,11 +11,11 @@ button{border:1px solid #123f53;background:white;color:#123f53;padding:10px 14px
 button:disabled{opacity:.4}
 button:focus-visible{outline:3px solid #e0a825}
 small{color:#52636d}
-</style></head><body><header><h1>EMRADAR · Publication Review</h1><p>Nothing is distributed until you approve its exact content.</p></header>
+</style></head><body><header><h1>EMRADAR · Publication Review</h1><p>Approval saves your decision. Use the separate release control to distribute approved content.</p></header>
 <p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><main id="entries"></main>
 <script>
 'use strict';
-let campaign;
+let campaign,invitationToken;
 const status=document.getElementById('status'),main=document.getElementById('entries');
 const csrf=()=>decodeURIComponent((document.cookie.split('; ').find(x=>x.startsWith('emradar_v3_csrf='))||'').split('=').slice(1).join('='));
 const api=async(path,payload)=>{
@@ -70,12 +70,14 @@ async function refresh(){
     card.append(editSubject);
    }
   }
+  if(asset.kind==='X'&&!delivery)card.append(text('p','X publishing is not connected to V3. Approval has not posted this asset.'));
   if(asset.kind==='X' && asset.visual_url){
    const link=document.createElement('a');const visual=new URL(asset.visual_url,location.origin);if(visual.protocol==='https:'){link.href=visual.href;link.rel='noopener noreferrer';link.target='_blank';link.textContent='View accompanying graphic';card.append(link);}
   }
   if(asset.kind==='EMAIL'&&asset.to&&decision?.decision==='APPROVE'&&!delivery){
    const send=text('button','Send approved email');
    send.addEventListener('click',async()=>{
+    if(!confirm('Send this exact approved email to '+asset.to+'?'))return;
     send.disabled=true;
     try{await api('release',{campaignId:campaign,destinationId:asset.destination_id});await refresh();status.textContent='Mail accepted. The receipt and Sent-folder result are shown with this email.';}
     catch(e){await refresh();status.textContent='Send was blocked or its result is uncertain. Check the saved delivery record before trying again.';}
@@ -107,16 +109,18 @@ async function refresh(){
 (async()=>{
  try{
   const params=new URLSearchParams(location.hash.slice(1));
-  const token=params.get('token');campaign=params.get('campaign');
-  if(token&&campaign){
-   history.replaceState(null,'',location.pathname+'?campaign='+encodeURIComponent(campaign));
+  const token=params.get('token');invitationToken=token;campaign=params.get('campaign');
+  campaign=campaign||new URLSearchParams(location.search).get('campaign');
+  if(!campaign)throw Error('MISSING_CAMPAIGN');
+  history.replaceState(null,'',location.pathname+'?campaign='+encodeURIComponent(campaign));
+  // The invitation authenticates once; reopening uses the existing secure cookie.
+  try{await refresh();}
+  catch(error){
+   if(!token)throw error;
    const exchanged=await api('exchange',{campaignId:campaign,token});
    if(!exchanged.expiresAt)throw Error('SESSION_MISSING');
-  }else{
-   campaign=new URLSearchParams(location.search).get('campaign');
-   if(!campaign)throw Error('MISSING_CAMPAIGN');
+   await refresh();
   }
-  await refresh();
   const discover=document.getElementById('discover');discover.disabled=false;
   discover.addEventListener('click',async()=>{
    discover.disabled=true;status.textContent='Discovering evidence-matched destinations and preparing review drafts…';
@@ -124,6 +128,16 @@ async function refresh(){
    catch(e){status.textContent='Discovery could not complete: '+e.message;}
    finally{discover.disabled=false;}
   });
- }catch(e){status.textContent='This review link is invalid, expired, or already used. Request a new private link.';}
+ }catch(e){
+  status.textContent='Your saved sign-in has expired or is unavailable on this device. Your approvals are preserved.';
+  if(campaign){
+   const renew=text('button','Email me a fresh private sign-in link');
+   renew.addEventListener('click',async()=>{
+    renew.disabled=true;
+    try{const result=await api('request-access',{campaignId:campaign,token:invitationToken});status.textContent=result.status==='EXISTING_INVITATION'?'Use the latest private invitation already sent to sean@emradar.net.':'Your private invitation was accepted for sending to sean@emradar.net. Inbox arrival is not yet confirmed.';}
+    catch(error){status.textContent='A sign-in link was already requested today, or its delivery is uncertain. No duplicate was sent.';}
+   });main.replaceChildren(renew);
+  }
+ }
 })();
 </script></body></html>`;

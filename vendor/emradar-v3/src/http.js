@@ -1,5 +1,6 @@
 import {createServer} from 'node:http';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,createHash} from 'node:crypto';
+import {OWNER_SESSION_TTL_MS} from './owner-sessions.js';
 import {ReviewWorkflow} from './review-workflow.js';
 import {reviewPage} from './review-page.js';
 
@@ -8,6 +9,7 @@ const json=(res,status,payload)=>{
  res.writeHead(status,{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; frame-ancestors 'none'"});
  res.end(body);
 };
+const sessionCookie=campaignId=>'emradar_v3_session_'+createHash('sha256').update(String(campaignId)).digest('hex').slice(0,16);
 const cookie=(req,name)=>{
  const found=(req.headers.cookie??'').split(';').map(s=>s.trim()).find(s=>s.startsWith(name+'='));
  return found?decodeURIComponent(found.slice(name.length+1)):null;
@@ -31,24 +33,37 @@ export function createReviewServer({workflow,runDiscovery,releaseEmail,health=()
     return res.end(reviewPage);
    }
    if(req.method!=='POST') return json(res,404,{error:'NOT_FOUND'});
-   if(!['/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
+   if(!['/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
    if(req.headers.origin && req.headers.origin!==workflow.baseUrl) return json(res,403,{error:'ORIGIN_DENIED'});
    const input=await body(req);
+   if(url.pathname==='/api/review/request-access'){
+    if(req.headers.origin!==workflow.baseUrl)return json(res,403,{error:'ORIGIN_DENIED'});
+    const oldCookie=cookie(req,sessionCookie(input.campaignId))||cookie(req,'emradar_v3_session')||'';const dot=oldCookie.indexOf('.');
+    return json(res,200,await workflow.requestAccess(input.campaignId,{token:input.token,sessionId:dot>0?oldCookie.slice(0,dot):null,sessionSecret:dot>0?oldCookie.slice(dot+1):null}));
+   }
    if(url.pathname==='/api/review/exchange'){
     const session=await workflow.exchange(input.campaignId,input.token);
     const csrf=randomBytes(24).toString('hex');
     res.setHeader('set-cookie',[
-     'emradar_v3_session='+encodeURIComponent(session.sessionId+'.'+session.secret)+'; HttpOnly; Secure; SameSite=Strict; Path=/api/review; Max-Age=86400',
-     'emradar_v3_csrf='+encodeURIComponent(csrf)+'; Secure; SameSite=Strict; Path=/; Max-Age=86400'
+     sessionCookie(input.campaignId)+'='+encodeURIComponent(session.sessionId+'.'+session.secret)+'; HttpOnly; Secure; SameSite=Strict; Path=/api/review; Max-Age='+Math.floor(OWNER_SESSION_TTL_MS/1000),
+     'emradar_v3_csrf='+encodeURIComponent(csrf)+'; Secure; SameSite=Strict; Path=/; Max-Age='+Math.floor(OWNER_SESSION_TTL_MS/1000)
     ]);
     return json(res,200,{expiresAt:session.expiresAt});
    }
-   const value=cookie(req,'emradar_v3_session');
+   const value=cookie(req,sessionCookie(input.campaignId))||cookie(req,'emradar_v3_session');
    if(!value) return json(res,403,{error:'ACCESS_DENIED'});
    const separator=value.indexOf('.');
    if(separator<1) return json(res,403,{error:'ACCESS_DENIED'});
    const session={id:value.slice(0,separator),secret:value.slice(separator+1)};
-   if(url.pathname==='/api/review/view') return json(res,200,await workflow.view(input.campaignId,session.id,session.secret));
+   if(url.pathname==='/api/review/view'){
+    const view=await workflow.view(input.campaignId,session.id,session.secret);
+    await workflow.renewSession(input.campaignId,session.id,session.secret);
+    res.setHeader('set-cookie',[
+     sessionCookie(input.campaignId)+'='+encodeURIComponent(session.id+'.'+session.secret)+'; HttpOnly; Secure; SameSite=Strict; Path=/api/review; Max-Age='+Math.floor(OWNER_SESSION_TTL_MS/1000),
+     'emradar_v3_csrf='+randomBytes(24).toString('hex')+'; Secure; SameSite=Strict; Path=/; Max-Age='+Math.floor(OWNER_SESSION_TTL_MS/1000)
+    ]);
+    return json(res,200,view);
+   }
    const csrf=cookie(req,'emradar_v3_csrf');
    if(!csrf || req.headers['x-emradar-csrf']!==csrf) return json(res,403,{error:'CSRF_DENIED'});
    if(url.pathname==='/api/review/release'){

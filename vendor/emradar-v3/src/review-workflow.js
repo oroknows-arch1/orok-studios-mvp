@@ -1,7 +1,7 @@
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash,timingSafeEqual} from 'node:crypto';
 import {issueReviewAccess,consumeReviewAccess} from './review-access.js';
-import {createOwnerSession,validateOwnerSession} from './owner-sessions.js';
+import {createOwnerSession,validateOwnerSession,OWNER_SESSION_TTL_MS} from './owner-sessions.js';
 import {identicalEmailGroupKey} from './contracts.js';
 import {validateNotificationReceipt} from './owner-notification.js';
 
@@ -61,6 +61,33 @@ export class ReviewWorkflow {
   const current=review?.owner_session;
   if(!current || current.id!==sessionId) throw Error('OWNER_SESSION_REQUIRED');
   return validateOwnerSession(current,secret,campaignId,{now:this.clock()});
+ }
+ async requestAccess(campaignId,{token,sessionId,sessionSecret}={}){
+  const campaign=(await this.store.adapter.read(campaignId))?.value;
+  if(campaign?.phase!=='PUBLICATION_REVIEW')throw Error('REVIEW_NOT_OPEN');
+  const current=(await this.adapter.read('review:'+campaignId))?.value;
+  const equalHash=(expected,secret)=>{if(typeof expected!=='string'||typeof secret!=='string')return false;const a=Buffer.from(expected,'hex'),b=createHash('sha256').update(secret).digest();return a.length===b.length&&timingSafeEqual(a,b);};
+  const session=current?.owner_session;
+  const proof=equalHash(current?.token_hash,token)||(session?.id===sessionId&&session?.revoked_at===null&&equalHash(session?.secret_hash,sessionSecret));
+  // This proof permits an email to the fixed owner only; it never authenticates a view or release.
+  if(!proof)throw Error('REVIEW_ACCESS_DENIED');
+  if(current&&!['CONSUMED','EXPIRED'].includes(current.status)&&current.expires_at>this.clock())return {status:'EXISTING_INVITATION'};
+  // Fixed owner recipient; one durable request per campaign/day, never automatic resend.
+  const key='review-access-request:'+campaignId+':'+new Date(this.clock()).toISOString().slice(0,10);
+  if(!await this.adapter.compareAndSwap(key,null,{status:'REQUESTED',requested_at:this.clock()}))throw Error('REVIEW_ACCESS_REQUEST_ALREADY_RECORDED');
+  try{await this.issue(campaignId);await this.update(key,old=>({...old,status:'SMTP_ACCEPTED'}));return {status:'SMTP_ACCEPTED'};}
+  catch(error){await this.update(key,old=>({...old,status:'OUTCOME_UNCONFIRMED'}));throw error;}
+ }
+ async renewSession(campaignId,sessionId,secret){
+  // Only an unexpired, unrevoked session can extend itself. Old consumed tokens never qualify.
+  await this.authenticate(campaignId,sessionId,secret);
+  const now=this.clock();
+  await this.update('review:'+campaignId,current=>{
+   if(current.owner_session?.id!==sessionId)throw Error('OWNER_SESSION_REQUIRED');
+   validateOwnerSession(current.owner_session,secret,campaignId,{now});
+   current.owner_session.expires_at=now+OWNER_SESSION_TTL_MS;return current;
+  });
+  return now+OWNER_SESSION_TTL_MS;
  }
  async view(campaignId,sessionId,secret) {
   await this.authenticate(campaignId,sessionId,secret);
