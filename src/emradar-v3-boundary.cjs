@@ -8,7 +8,7 @@ function createV3Boundary({verifyNotification,verifyApprovedDelivery,sendOwnerRe
  return async ({operation,payload})=>{
   if(payload?.version!=='EMRADAR_V3')throw Error('V3_VERSION_REQUIRED');
   if(operation==='owner-notification'){
-   if(payload.kind!=='OWNER_REVIEW'||payload.to!=='oroknows@gmail.com'||typeof payload.campaign_id!=='string'||typeof payload.private_review_url!=='string')throw Error('V3_NOTIFICATION_INVALID');
+   if(payload.kind!=='OWNER_REVIEW'||payload.to!=='sean@emradar.net'||typeof payload.campaign_id!=='string'||typeof payload.private_review_url!=='string')throw Error('V3_NOTIFICATION_INVALID');
    const link=new URL(payload.private_review_url);
    if(link.protocol!=='https:'||!link.hash.startsWith('#token='))throw Error('V3_PRIVATE_LINK_REQUIRED');
    await verifyNotification(payload);

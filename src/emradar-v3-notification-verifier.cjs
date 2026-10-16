@@ -12,7 +12,7 @@ function createV3NotificationVerifier({pool,reviewOrigin,clock=()=>Date.now()}={
  if(typeof pool?.query!=='function')throw Error('V3_POSTGRES_POOL_REQUIRED');
  return async request=>{
   const id=request?.campaign_id,raw=request?.private_review_url;
-  if(typeof id!=='string'||!id.startsWith('v3-')||typeof raw!=='string')throw Error('V3_NOTIFICATION_INVALID');
+  if(request?.to!=='sean@emradar.net'||typeof id!=='string'||!id.startsWith('v3-')||typeof raw!=='string')throw Error('V3_NOTIFICATION_INVALID');
   let url;
   try{url=new URL(raw);}catch{throw Error('V3_PRIVATE_LINK_REQUIRED');}
   if(url.origin!==allowed.origin||url.protocol!=='https:'||url.username||url.password||url.search||url.pathname!=='/review/access')throw Error('V3_PRIVATE_LINK_REQUIRED');

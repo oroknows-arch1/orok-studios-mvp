@@ -19,7 +19,7 @@ test('V3 owner notification verifies and reserves before simulated SMTP',async()
  d.notificationReservation={reserve:async()=>events.push('reserve'),record:async()=>events.push('record')};
  d.sendOwnerReview=async()=>{events.push('smtp');return {accepted:true,provider_id:'smtp-review'};};
  const handler=createV3Boundary(d);
- const result=await handler({operation:'owner-notification',payload:{version:'EMRADAR_V3',kind:'OWNER_REVIEW',to:'oroknows@gmail.com',campaign_id:'v3-test',private_review_url:'https://example.org/review/access#token=abc'}});
+ const result=await handler({operation:'owner-notification',payload:{version:'EMRADAR_V3',kind:'OWNER_REVIEW',to:'sean@emradar.net',campaign_id:'v3-test',private_review_url:'https://example.org/review/access#token=abc'}});
  assert.equal(result.provider_id,'smtp-review');
  assert.deepEqual(events,['verify','reserve','smtp','record']);
 });

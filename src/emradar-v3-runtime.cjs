@@ -83,6 +83,16 @@ async function runIncompleteCampaignRecovery({adapter,service,campaignId,key='v3
  }});
 }
 
+async function runOwnerInvitationOnce({adapter,workflow,inspectInbox,campaignId,reviewOrigin,key}){
+ return runReleaseOnce({adapter,key,run:async()=>{
+  await workflow.issue(campaignId);
+  const review=(await adapter.read('review:'+campaignId))?.value;
+  if(review?.status!=='NOTIFIED'||review.notification_receipt?.recipient!=='sean@emradar.net')throw Error('V3_OWNER_NOTIFICATION_UNCONFIRMED');
+  const inbox=await inspectInbox({provider_id:review.notification_receipt.provider_id,campaignId,reviewOrigin,token_hash:review.token_hash});
+  return {status:inbox.status==='PASS'&&inbox.link_ready?'OWNER_REVIEW_READY':'OWNER_REVIEW_BLOCKED',recipient:'sean@emradar.net',smtp:'PASS',inbox};
+ }});
+}
+
 // Activation is opt-in and fails before mounting any routes if required
 // configuration is missing. The only outbound SMTP operation is owner review.
 async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetch,
@@ -246,25 +256,10 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     ]});
    }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[editorialCampaign]);client.release();}
   };
-  // One-time recovery of the consumed October 10 private owner invitation.
-  // The durable claim prevents duplicate emails across restarts/instances.
-  if(env.EMRADAR_V3_PREPARATION_ENABLED==='true'){
-   const campaignId='v3-2602ddf68a3ced8aeafb769fc928423f';
-   const adapter=service.store.adapter;
-   const prior=(await adapter.read(campaignId))?.value;
-   const review=(await adapter.read('review:'+campaignId))?.value;
-   if(!distributionPreflightPending&&!editorialWritingReviewPending&&prior?.phase==='PUBLICATION_REVIEW'&&review?.status==='CONSUMED'){
-    const key='v3-owner-review-renewal:2026-10-16:'+campaignId;
-    const claimed=await adapter.compareAndSwap(key,null,{status:'STARTED',started_at:new Date().toISOString()});
-    if(claimed){
-     try{await service.workflow.issue(campaignId);
-      const saved=await adapter.read(key);
-      await adapter.compareAndSwap(key,saved.version,{status:'COMPLETE',completed_at:new Date().toISOString()});
-     }catch(error){console.error('V3_OWNER_REVIEW_RENEWAL_FAILED',error.message);}
-    }
-   }
-  }
-  return {enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight};
+  const ownerInvitationKey='v3-owner-purelymail-invitation:2026-10-16-v1';
+  const ownerInvitationPending=!(await service.store.adapter.read(ownerInvitationKey));
+  const runOwnerInvitation=()=>runOwnerInvitationOnce({adapter:service.store.adapter,workflow:service.workflow,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerInvitationKey});
+  return {enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
+module.exports={runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

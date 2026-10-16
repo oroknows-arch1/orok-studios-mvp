@@ -34,8 +34,8 @@ export class ReviewWorkflow {
   const link=this.baseUrl+'/review/access#token='+encodeURIComponent(token)+'&campaign='+encodeURIComponent(campaignId);
   // Notification failure is recorded as AMBIGUOUS; never silently reissue a second live link.
   try {
-   const receipt=await this.notify({recipient:'oroknows@gmail.com',campaignId,link});
-   await this.update(key,current=>({...current,status:'NOTIFIED',notification_receipt:validateNotificationReceipt(receipt,'oroknows@gmail.com',campaignId)}));
+   const receipt=await this.notify({recipient:'sean@emradar.net',campaignId,link});
+   await this.update(key,current=>({...current,status:'NOTIFIED',notification_receipt:validateNotificationReceipt(receipt,'sean@emradar.net',campaignId)}));
   } catch(error) {
    await this.update(key,current=>({...current,status:'NOTIFICATION_AMBIGUOUS',notification_error_code:'TRANSPORT_OUTCOME_UNKNOWN'}));
    throw Error('REVIEW_NOTIFICATION_AMBIGUOUS');

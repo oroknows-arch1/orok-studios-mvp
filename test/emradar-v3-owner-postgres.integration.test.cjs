@@ -16,7 +16,7 @@ test('V3 PostgreSQL prepared API: durable owner notification reserves once and r
  await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb),($3,1,$4::jsonb)',[id,JSON.stringify(state),'review:'+id,JSON.stringify(review)]);
  const events=[],auth='test-token'.padEnd(48,'x');
  const integration=createV3PreparedIntegration({pool,token:auth,reviewOrigin:origin,sendOwnerReview:async()=>{events.push('smtp');return {accepted:true,provider_id:'simulated-review-receipt'};},sendApprovedEmail:async()=>{throw Error('MUST_NOT_SEND');}});
- const payload={version:'EMRADAR_V3',kind:'OWNER_REVIEW',campaign_id:id,to:'oroknows@gmail.com',private_review_url:origin+'/review/access#token='+encodeURIComponent(token)+'&campaign='+encodeURIComponent(id)};
+ const payload={version:'EMRADAR_V3',kind:'OWNER_REVIEW',campaign_id:id,to:'sean@emradar.net',private_review_url:origin+'/review/access#token='+encodeURIComponent(token)+'&campaign='+encodeURIComponent(id)};
  const req={headers:{authorization:'Bearer '+auth},params:{operation:'owner-notification'},body:payload};
  const run=async()=>{const res=response();await integration.route(req,res);return res;};
  const results=await Promise.all([run(),run()]);

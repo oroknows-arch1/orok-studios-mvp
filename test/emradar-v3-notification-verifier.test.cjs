@@ -10,7 +10,7 @@ test('V3 notification verifier validates durable review token and ready campaign
   {campaign_id:'review:'+id,payload:{campaign_id:id,status:'ISSUED',token_hash:crypto.createHash('sha256').update(token).digest('hex'),consumed_at:null,expires_at:now+1000}}
  ];
  const verifier=createV3NotificationVerifier({reviewOrigin:'https://example.org',pool:{query:async()=>({rows:records})},clock:()=>now});
- const payload={campaign_id:id,private_review_url:'https://example.org/review/access#token='+token+'&campaign='+id};
+ const payload={to:'sean@emradar.net',campaign_id:id,private_review_url:'https://example.org/review/access#token='+token+'&campaign='+id};
  assert.equal(await verifier(payload),true);
  await assert.rejects(verifier({...payload,private_review_url:'https://example.org/review/access#token=wrong&campaign='+id}),/V3_PRIVATE_LINK_MISMATCH/);
  records[1].payload.status='CONSUMED';
@@ -20,5 +20,5 @@ test('V3 notification verifier validates durable review token and ready campaign
 });
 test('V3 notification verifier rejects missing durable records',async()=>{
  const verifier=createV3NotificationVerifier({reviewOrigin:'https://example.org',pool:{query:async()=>({rows:[]})}});
- await assert.rejects(verifier({campaign_id:'v3-missing',private_review_url:'https://example.org/review/access#token=abc&campaign=v3-missing'}),/V3_DURABLE_NOTIFICATION_REQUIRED/);
+ await assert.rejects(verifier({to:'sean@emradar.net',campaign_id:'v3-missing',private_review_url:'https://example.org/review/access#token=abc&campaign=v3-missing'}),/V3_DURABLE_NOTIFICATION_REQUIRED/);
 });

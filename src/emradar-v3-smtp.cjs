@@ -46,6 +46,27 @@ function createV3Smtp({env=process.env,createTransport=nodemailer.createTranspor
   finally{await closeMailbox(client);}
  };
  return {
+  inspectOwnerInvitation:async({provider_id,campaignId,reviewOrigin,token_hash})=>{
+   let client,lock;
+   try{
+    client=await openMailbox();lock=await client.getMailboxLock('INBOX',{readOnly:true});
+    for(let attempt=0;attempt<3;attempt++){
+     const ids=await client.search({header:{'message-id':provider_id}},{uid:true});
+     if(Array.isArray(ids)&&ids.length){
+      const message=await client.fetchOne(ids[ids.length-1],{source:true},{uid:true});
+      const parsed=await require('mailparser').simpleParser(message.source);
+      const raw=(parsed.text||'').match(/https:\/\/[^\s]+\/review\/access#[^\s]+/)?.[0];
+      const url=raw?new URL(raw):null;
+      const params=url?new URLSearchParams(url.hash.slice(1)):null;
+      const digest=require('node:crypto').createHash('sha256').update(params?.get('token')||'').digest('hex');
+      const ready=parsed.messageId===provider_id&&parsed.to?.value?.some(to=>to.address==='sean@emradar.net')&&url?.origin===new URL(reviewOrigin).origin&&url?.protocol==='https:'&&url?.pathname==='/review/access'&&!url.search&&params?.size===2&&params.get('campaign')===campaignId&&digest===token_hash;
+      return {status:ready?'PASS':'FAIL',inbox_uid:ids[ids.length-1],message_id:parsed.messageId,link_ready:Boolean(ready)};
+     }
+     if(attempt<2)await new Promise(resolve=>setTimeout(resolve,2000));
+    }
+    return {status:'FAIL',reason:'INVITATION_NOT_IN_INBOX'};
+   }finally{lock?.release();await closeMailbox(client);}
+  },
   verifyTransport:async()=>{
    const result={provider:/purelymail\.com$/i.test(env.EDITORIAL_SMTP_HOST||'')?'Purelymail':'EXISTING_SMTP',smtp:'FAIL',imap:'FAIL',sent_folder:{status:'UNKNOWN'},emails_sent:0};
    let transport,client;
@@ -56,7 +77,7 @@ function createV3Smtp({env=process.env,createTransport=nodemailer.createTranspor
    return result;
   },
   sendOwnerReview:async payload=>{
-   if(payload?.to!=='oroknows@gmail.com'||typeof payload.private_review_url!=='string')throw Error('V3_OWNER_MAIL_INVALID');
+   if(payload?.to!=='sean@emradar.net'||typeof payload.private_review_url!=='string')throw Error('V3_OWNER_MAIL_INVALID');
    const info=await send({from:{name:brand.identity.name,address:brand.identity.address},to:payload.to,
     replyTo:brand.identity.reply_to,subject:'EMRADAR private campaign review',
     text:'Your private EMRADAR campaign review link:\n'+payload.private_review_url});
