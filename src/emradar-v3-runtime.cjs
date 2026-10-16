@@ -259,7 +259,10 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const ownerInvitationKey='v3-owner-purelymail-invitation:2026-10-16-v1';
   const ownerInvitationPending=!(await service.store.adapter.read(ownerInvitationKey));
   const runOwnerInvitation=()=>runOwnerInvitationOnce({adapter:service.store.adapter,workflow:service.workflow,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerInvitationKey});
-  return {enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation};
+  const editorialStandardKey='v3-sfy-editorial-standard:2026-10-16-v1';
+  const editorialStandardPending=!(await service.store.adapter.read(editorialStandardKey));
+  const runEditorialStandard=()=>runReleaseOnce({adapter:service.store.adapter,key:editorialStandardKey,run:()=>service.refreshUnreviewedEditorialDrafts(editorialCampaign)});
+  return {enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

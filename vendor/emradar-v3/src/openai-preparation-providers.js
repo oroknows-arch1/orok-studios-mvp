@@ -1,10 +1,10 @@
+import {EDITORIAL_REFERENCE,isEditorialDestination,selectEditorialEvidence,validateEditorialStory,editorialPrompt} from './editorial-reference.js';
 // Reuse the OpenAI client already configured by the existing paid API.
 // No model calls occur at import or assembly time.
 import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const brand=require('../../../src/email-brand.cjs');
-const editorialCategory=/\b(?:news|journal|publication|media|magazine|review|editorial|research)\b/i;
-export const correspondenceType=destination=>destination?.destination_class==='EDITORIAL_PUBLICATION'||editorialCategory.test(String(destination?.category??''))?'EDITORIAL_OUTREACH':'SOURCE_ENQUIRY';
+export const correspondenceType=destination=>isEditorialDestination(destination)?'EDITORIAL_OUTREACH':'SOURCE_ENQUIRY';
 function approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible}){
  if(typeof draft.subject!=='string'||!draft.subject.trim()||typeof draft.body!=='string'||!draft.body.trim()||typeof draft.limitations!=='string'||!draft.limitations.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
  const core=draft.body.trim();
@@ -15,6 +15,7 @@ function approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryE
 }
 function sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible}){
  if(typeof draft.subject!=='string'||!draft.subject.trim()||typeof draft.body!=='string'||!draft.body.trim()||!/[?？]/.test(draft.body))throw Error('V3_SOURCE_ENQUIRY_INVALID');
+ if(/\b(?:article|editorial pitch|research contribution)\b/i.test(draft.body))throw Error('V3_EDITORIAL_ROUTE_REQUIRED');
  const asset={campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'SOURCE_ENQUIRY',subject:draft.subject,body:['Hello,',"I'm Sean Walker, working on EMRADAR research.",draft.body,'Regards,','Sean Walker\nEMRADAR'].join('\n\n'),from:brand.identity.address,to:deliveryEligible?destination.contact.email:null,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',delivery_eligible:deliveryEligible,evidence_ids:evidence.map(item=>item.id)};
  brand.brand(asset);
  return asset;
@@ -47,14 +48,21 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    const evidence=(document?.evidence??[]).filter(e=>e.verified===true && allowed.includes(e.id));
    if(!evidence.length)throw Error('V3_DESTINATION_EVIDENCE_REQUIRED');
    const isX=destination.id==='x';
-   const type=isX?'X':destination.destination_class==='INFORMATION_CHANNEL'?'CHANNEL_PROPOSAL':correspondenceType(destination);
+   const type=isX?'X':correspondenceType(destination);
+   const story=type==='EDITORIAL_OUTREACH'?selectEditorialEvidence(document,allowed):null;
+   const writerEvidence=story?.evidence??evidence;
    const draft=await complete(
-    type==='EDITORIAL_OUTREACH'?'Write as a researcher approaching an editor with an interesting discovery, in plain everyday English. Return JSON strings subject, body, limitations. Body excludes greeting and signature. Use the successful Semiconductor For You correspondence approach (verified Gmail thread 1a0f640622c1fefe): introduce yourself naturally, explain what caught your attention, connect a few concrete developments, offer an article or research contribution, and ask if the editor is interested. Explain EMRADAR simply as looking at how changes in the world connect. Tell the discovery before discussing its significance. Explain why this specific story could interest this publication using ONLY the supplied publication relationship; do not invent readership, coverage, expertise or a relationship. Propose a clear article angle that would still make sense without the publication name. Avoid research jargon such as market formations, ecosystem, catalytic investment, financial close, commercial utilisation, evidence state and capital deployment. Translate necessary technical language immediately. Omit financial totals and production numbers unless essential to understanding the discovery. Do not recap the scan, use classifications, repeat a fixed template or list uncertainties. Use short connected paragraphs, warm professional first-person language and roughly 100–150 words. One short sentence should preserve the material uncertainty (for example plans are not completed projects). Use only supplied verified facts: distinguish proposals from operating projects; do not invent causes, physical connections, consequences, jobs or customer demand. The limitations field retains the relevant unresolved issue for the evidence record. Follow editorial_angle if supplied, varying the story emphasis naturally rather than replacing publication names. Do not copy the semiconductor topic or its technical wording. No greeting, signature or URLs in body.':type==='CHANNEL_PROPOSAL'?'Write a concise evidence-backed proposal appropriate for this destination type (podcast, newsletter, business platform, social community or forum). Return JSON strings subject and body. State the verified economic story and uncertainty, why it fits the destination, and ask which submission or participation route is suitable. Do not assume permission to publish or an existing relationship.':type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write a standalone factual EMRADAR X post grounded only in supplied facts. Preserve uncertainty. Return JSON with nonempty strings body and subject. No claims beyond supplied evidence.',
-    {channel:type,...(type==='EDITORIAL_OUTREACH'?{editorial_angle:editorialAngle??null}:{}),destination:{id:destination.id,category:destination.category,name:destination.name??destination.id,relationship:destination.relationship},evidence:evidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
+    type==='EDITORIAL_OUTREACH'?editorialPrompt:type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write a standalone factual EMRADAR X post grounded only in supplied facts. Preserve uncertainty. Return JSON with nonempty strings body and subject. No claims beyond supplied evidence.',
+    {channel:type,...(story?{editorial_reference:EDITORIAL_REFERENCE,story_record_id:story.record_id,editorial_angle:editorialAngle??null}:{}),destination:{id:destination.id,category:destination.category,name:destination.name??destination.id,relationship:destination.relationship},evidence:writerEvidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
    );
    const deliveryEligible=destination.contact_verified===true && destination.delivery_eligible!==false && Boolean(destination.contact?.email);
-   if(type==='EDITORIAL_OUTREACH')return approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible});
-   if(type==='SOURCE_ENQUIRY'||type==='CHANNEL_PROPOSAL')return sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible});
+   if(type==='EDITORIAL_OUTREACH'){
+    validateEditorialStory(draft,story);
+    const asset=approvedEditorialEmail({campaignId,destination,evidence:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)),draft,deliveryEligible});
+    asset.editorial_reference=EDITORIAL_REFERENCE;asset.story_record_id=story.record_id;
+    return asset;
+   }
+   if(type==='SOURCE_ENQUIRY')return sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible});
    if(typeof draft.body!=='string'||!draft.body.trim()||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
    return {campaign_id:campaignId,destination_id:destination.id,kind:'X',body:draft.body,subject:draft.subject,from:brand.identity.address,evidence_ids:evidence.map(e=>e.id)};
   },

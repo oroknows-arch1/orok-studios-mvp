@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -703,11 +703,14 @@ if (require.main === module) {
     };
     // One bounded historical owner-review test. Existing campaigns remain idempotent;
     // preparation never sends to editorial destinations or posts to X.
-    if(!ownerInvitationPending&&!distributionPreflightPending&&!editorialWritingReviewPending&&typeof runCampaign==='function'){
+    if(!editorialStandardPending&&!ownerInvitationPending&&!distributionPreflightPending&&!editorialWritingReviewPending&&typeof runCampaign==='function'){
       runCampaign('2026-10-10').then(result=>console.log('V3_OCT10_REVIEW_TEST',JSON.stringify(result)))
         .catch(error=>console.error('V3_OCT10_REVIEW_TEST_FAILED',error.message));
     }
-    if(ownerInvitationPending){
+    if(editorialStandardPending){
+      runEditorialStandard().then(result=>console.log('V3_EDITORIAL_STANDARD_RESULT',JSON.stringify(result)))
+        .catch(error=>console.error('V3_EDITORIAL_STANDARD_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_PROVIDER_FAILED'));
+    }else if(ownerInvitationPending){
       runOwnerInvitation().then(result=>console.log('V3_OWNER_INVITATION_RESULT',JSON.stringify(result)))
         .catch(()=>console.error('V3_OWNER_INVITATION_FAILED','INVITATION_OR_INBOX_UNCONFIRMED'));
     }else if(distributionPreflightPending){

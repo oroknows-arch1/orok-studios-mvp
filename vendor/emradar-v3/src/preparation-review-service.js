@@ -1,3 +1,4 @@
+import {refreshUnreviewedEditorialDrafts} from './editorial-standard-refresh.js';
 import {prepareEditorialAlternatives} from './editorial-alternatives.js';
 import {createOpenAiPreparationProviders} from './openai-preparation-providers.js';
 import {PostgresAdapter} from './adapters/postgres.js';
@@ -81,7 +82,7 @@ export async function createPreparationReviewService({
   return {...resumed,...await reviewCompletion(campaignId)};
  };
  const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
- return {store,directory,workflow,prepare,discover,prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
+ return {store,directory,workflow,prepare,discover,refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
   await resumeEditorialDrafts(result.campaignId,{verifiedPublicationsOnly:true});
   const completion=await reviewCompletion(result.campaignId);

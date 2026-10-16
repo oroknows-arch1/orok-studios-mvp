@@ -41,9 +41,9 @@ test('already distributed editorial assets cannot be rewritten',async()=>{
 
 test('active writer receives plain-language direction, actual publication relevance and only linked evidence',async()=>{
  let request;
- const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async input=>{request=input;return {choices:[{message:{content:JSON.stringify({subject:'Article idea',body:'I’m Sean Walker at EMRADAR. Could we contribute an article about these proposed projects?',limitations:'Projects are proposed.'})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGES');}}}});
+ const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async input=>{request=input;return {choices:[{message:{content:JSON.stringify({story_evidence_ids:['e1'],subject:'Article idea',body:'I’m Sean Walker at EMRADAR. Could we contribute an article about these proposed projects? Projects are proposed.',limitations:'Projects are proposed.'})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGES');}}}});
  const asset=await providers.write({campaignId:'campaign',destination:{id:'journal',name:'African Energy',destination_class:'EDITORIAL_PUBLICATION',relationship:{reason:'Reports on African energy industries.'},evidence:{ids:['e1']},contact_verified:false},document:{evidence:[{id:'e1',verified:true,fact:'Proposed energy project.'},{id:'e2',verified:true,fact:'Unrelated story.'},{id:'e3',verified:false,fact:'Unverified story.'}]},editorialAngle:'Follow the announced energy plans'});
  const payload=JSON.parse(request.messages[1].content);
- assert.match(request.messages[0].content,/plain everyday English/);assert.match(request.messages[0].content,/Omit financial totals/);
+ assert.match(request.messages[0].content,/everyday language/);assert.match(request.messages[0].content,/Financial figures are optional/);
  assert.equal(payload.destination.relationship.reason,'Reports on African energy industries.');assert.deepEqual(payload.evidence.map(e=>e.id),['e1']);assert.equal(payload.editorial_angle,'Follow the announced energy plans');assert.equal(asset.delivery_eligible,false);assert.equal(asset.to,null);
 });
