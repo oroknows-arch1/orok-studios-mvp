@@ -62,12 +62,12 @@ async function runNextPublishedCampaign({published,readCampaign,startCampaign,ve
  const result=await prepareAndNotify(selected);
  return {...result,campaignId,snapshotDate:selected.snapshotDate,discovery:selected.resume?'RESUMED':'COMPLETE'};
 }
-async function runReleaseOnce({adapter,key,run}){
+async function runReleaseOnce({adapter,key,run,isComplete=()=>true}){
  const claimed=await adapter.compareAndSwap(key,null,{status:'STARTED',started_at:new Date().toISOString()});
  if(!claimed)return {status:'RELEASE_ALREADY_EXECUTED'};
  try{
   const result=await run();
-  await adapter.compareAndSwap(key,1,{status:'COMPLETE',completed_at:new Date().toISOString(),result});
+  await adapter.compareAndSwap(key,1,{status:isComplete(result)?'COMPLETE':'BLOCKED',completed_at:new Date().toISOString(),result});
   return result;
  }catch(error){throw error;}
 }
@@ -84,12 +84,27 @@ async function runIncompleteCampaignRecovery({adapter,service,campaignId,key='v3
 }
 
 async function runOwnerInvitationOnce({adapter,workflow,inspectInbox,campaignId,reviewOrigin,key}){
- return runReleaseOnce({adapter,key,run:async()=>{
+ return runReleaseOnce({adapter,key,isComplete:result=>result.status==='OWNER_REVIEW_READY',run:async()=>{
   await workflow.issue(campaignId);
   const review=(await adapter.read('review:'+campaignId))?.value;
   if(review?.status!=='NOTIFIED'||review.notification_receipt?.recipient!=='sean@emradar.net')throw Error('V3_OWNER_NOTIFICATION_UNCONFIRMED');
   const inbox=await inspectInbox({provider_id:review.notification_receipt.provider_id,campaignId,reviewOrigin,token_hash:review.token_hash});
   return {status:inbox.status==='PASS'&&inbox.link_ready?'OWNER_REVIEW_READY':'OWNER_REVIEW_BLOCKED',recipient:'sean@emradar.net',smtp:'PASS',inbox};
+ }});
+}
+
+async function restoreOwnerReviewAccess({adapter,workflow,inspectMailbox,inspectInbox,campaignId,reviewOrigin,key}){
+ return runReleaseOnce({adapter,key,isComplete:result=>result.status==='OWNER_REVIEW_READY',run:async()=>{
+  const review=(await adapter.read('review:'+campaignId))?.value;
+  if(!review?.notification_receipt?.provider_id||review.notification_receipt.recipient!=='sean@emradar.net')return {status:'OWNER_REVIEW_BLOCKED',reason:'CANONICAL_PRIOR_INVITATION_REQUIRED',emails_sent:0};
+  const input={provider_id:review.notification_receipt.provider_id,campaignId,reviewOrigin,token_hash:review.token_hash};
+  const routing=await inspectMailbox(input);
+  await adapter.compareAndSwap(key+':mailbox',null,routing);
+  if(routing.status!=='PASS'||!routing.inbox)return {status:'OWNER_REVIEW_BLOCKED',reason:routing.reason??'INVITATION_FILED_OUTSIDE_INBOX',routing,emails_sent:0};
+  // A live unconsumed invitation is never replaced by another message.
+  if(!['CONSUMED','EXPIRED'].includes(review.status)&&review.expires_at>Date.now())return {status:'OWNER_REVIEW_READY',smtp:'PASS',inbox:routing,emails_sent:0};
+  const fresh=await runOwnerInvitationOnce({adapter,workflow,inspectInbox,campaignId,reviewOrigin,key:key+':fresh'});
+  return {...fresh,routing,emails_sent:1};
  }});
 }
 
@@ -273,7 +288,14 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    await service.store.adapter.compareAndSwap('v3-engine-access:2026-10-16-v1',null,production_access);
    return {...await service.resumeIntelligentDiscovery(editorialCampaign),production_access};
   }});
-  return {engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  const ownerAccessKey='v3-owner-access-restore:2026-10-16-v1';
+  const ownerAccessPending=!(await service.store.adapter.read(ownerAccessKey));
+  const runOwnerAccess=async()=>{
+   const old=await service.store.adapter.read(ownerInvitationKey);
+   if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
+   return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
+  };
+  return {ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
+module.exports={restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

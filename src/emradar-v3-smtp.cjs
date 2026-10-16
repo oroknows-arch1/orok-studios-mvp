@@ -45,27 +45,56 @@ function createV3Smtp({env=process.env,createTransport=nodemailer.createTranspor
   }catch{return {status:'FAILED',reason:'IMAP_ARCHIVE_FAILED'};}
   finally{await closeMailbox(client);}
  };
+ const matchesInvitation=async(source,{campaignId,reviewOrigin,token_hash})=>{
+  const parsed=await require('mailparser').simpleParser(source);
+  const raw=(parsed.text||'').match(/https:\/\/[^\s]+\/review\/access#[^\s]+/)?.[0];
+  let ready=false;
+  try{
+   const url=new URL(raw),params=new URLSearchParams(url.hash.slice(1));
+   const digest=require('node:crypto').createHash('sha256').update(params.get('token')||'').digest('hex');
+   ready=parsed.to?.value?.some(to=>to.address?.toLowerCase()==='sean@emradar.net')&&url.origin===new URL(reviewOrigin).origin&&url.protocol==='https:'&&url.pathname==='/review/access'&&!url.search&&params.size===2&&params.get('campaign')===campaignId&&digest===token_hash;
+  }catch{}
+  return {ready:Boolean(ready),message_id:parsed.messageId};
+ };
+ const findInvitation=async(client,path,input)=>{
+  const lock=await client.getMailboxLock(path,{readOnly:true});
+  try{
+   const exact=await client.search({header:{'message-id':input.provider_id}},{uid:true});
+   const recent=Array.isArray(exact)&&exact.length?exact:await client.search({subject:'EMRADAR private campaign review'},{uid:true});
+   for(const uid of (Array.isArray(recent)?recent:[]).slice(-20).reverse()){
+    const message=await client.fetchOne(uid,{source:true},{uid:true});
+    if(!message?.source||message.source.length>1000000)continue;
+    const match=await matchesInvitation(message.source,input);
+    if(match.ready)return {status:'PASS',inbox_uid:uid,message_id:match.message_id,link_ready:true,...(match.message_id!==input.provider_id?{smtp_message_id:input.provider_id,message_id_changed:true}:{})};
+   }
+   return Array.isArray(exact)&&exact.length?{status:'FAIL',reason:'INVITATION_EVIDENCE_MISMATCH',link_ready:false}:null;
+  }finally{lock.release();}
+ };
  return {
-  inspectOwnerInvitation:async({provider_id,campaignId,reviewOrigin,token_hash})=>{
-   let client,lock;
+  inspectOwnerMailbox:async input=>{
+   let client;const folders_checked=[],failures=[];
    try{
-    client=await openMailbox();lock=await client.getMailboxLock('INBOX',{readOnly:true});
+    client=await openMailbox();
+    const boxes=(await client.list()).filter(box=>!box.flags?.has('\\Noselect')&&box.specialUse!=='\\Sent'&&!/(^|[/.])sent(?: items| messages)?$/i.test(box.path)).sort((a,b)=>Number(b.path.toUpperCase()==='INBOX')-Number(a.path.toUpperCase()==='INBOX'));
+    for(const box of boxes.slice(0,10)){
+     folders_checked.push(box.path);
+     try{const found=await findInvitation(client,box.path,input);if(found)return {...found,folder:box.path,inbox:box.path.toUpperCase()==='INBOX',folders_checked};}
+     catch{failures.push({folder:box.path,reason:'MAILBOX_READ_FAILED'});}
+    }
+    return {status:'FAIL',reason:failures.length?'MAILBOX_INSPECTION_INCOMPLETE':'INVITATION_NOT_IN_RECEIVING_MAILBOX',folders_checked,failures};
+   }finally{await closeMailbox(client);}
+  },
+  inspectOwnerInvitation:async({provider_id,campaignId,reviewOrigin,token_hash})=>{
+   let client;
+   try{
+    client=await openMailbox();
     for(let attempt=0;attempt<3;attempt++){
-     const ids=await client.search({header:{'message-id':provider_id}},{uid:true});
-     if(Array.isArray(ids)&&ids.length){
-      const message=await client.fetchOne(ids[ids.length-1],{source:true},{uid:true});
-      const parsed=await require('mailparser').simpleParser(message.source);
-      const raw=(parsed.text||'').match(/https:\/\/[^\s]+\/review\/access#[^\s]+/)?.[0];
-      const url=raw?new URL(raw):null;
-      const params=url?new URLSearchParams(url.hash.slice(1)):null;
-      const digest=require('node:crypto').createHash('sha256').update(params?.get('token')||'').digest('hex');
-      const ready=parsed.messageId===provider_id&&parsed.to?.value?.some(to=>to.address==='sean@emradar.net')&&url?.origin===new URL(reviewOrigin).origin&&url?.protocol==='https:'&&url?.pathname==='/review/access'&&!url.search&&params?.size===2&&params.get('campaign')===campaignId&&digest===token_hash;
-      return {status:ready?'PASS':'FAIL',inbox_uid:ids[ids.length-1],message_id:parsed.messageId,link_ready:Boolean(ready)};
-     }
+     const found=await findInvitation(client,'INBOX',{provider_id,campaignId,reviewOrigin,token_hash});
+     if(found)return found;
      if(attempt<2)await new Promise(resolve=>setTimeout(resolve,2000));
     }
     return {status:'FAIL',reason:'INVITATION_NOT_IN_INBOX'};
-   }finally{lock?.release();await closeMailbox(client);}
+   }finally{await closeMailbox(client);}
   },
   verifyTransport:async()=>{
    const result={provider:/purelymail\.com$/i.test(env.EDITORIAL_SMTP_HOST||'')?'Purelymail':'EXISTING_SMTP',smtp:'FAIL',imap:'FAIL',sent_folder:{status:'UNKNOWN'},emails_sent:0};

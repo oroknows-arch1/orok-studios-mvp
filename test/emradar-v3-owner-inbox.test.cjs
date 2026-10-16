@@ -32,3 +32,33 @@ test('IMAP confirms exact invitation and private token without consuming or foll
  await assert.rejects(smtp.sendOwnerReview({to:'oroknows@gmail.com',private_review_url:link}),/V3_OWNER_MAIL_INVALID/);
  assert.equal(reads,2);assert.equal(sends,0);
 });
+
+test('failed inbox verification is BLOCKED and never COMPLETE or resent',async()=>{
+ const records=new Map();let sends=0;
+ const adapter={read:async k=>records.get(k),compareAndSwap:async(k,v,value)=>{const p=records.get(k);if((p?.version??null)!==v)return false;records.set(k,{version:(v??0)+1,value});return true;}};
+ const workflow={issue:async()=>{sends++;records.set('review:campaign',{version:1,value:{status:'NOTIFIED',notification_receipt:{recipient:'sean@emradar.net',provider_id:'mail'},token_hash:'hash'}});}};
+ const run=()=>runOwnerInvitationOnce({adapter,workflow,inspectInbox:async()=>({status:'FAIL',reason:'INVITATION_NOT_IN_INBOX'}),campaignId:'campaign',reviewOrigin:'https://review.example',key:'job'});
+ assert.equal((await run()).status,'OWNER_REVIEW_BLOCKED');assert.equal(records.get('job').value.status,'BLOCKED');
+ await run();assert.equal(sends,1);
+});
+test('unconfirmed recipient routing does not issue a fresh invitation',async()=>{
+ const {restoreOwnerReviewAccess}=require('../src/emradar-v3-runtime.cjs');
+ const records=new Map([['review:campaign',{version:1,value:{status:'CONSUMED',notification_receipt:{recipient:'sean@emradar.net',provider_id:'prior'},token_hash:'hash'}}]]);
+ const adapter={read:async k=>records.get(k),compareAndSwap:async(k,v,value)=>{const p=records.get(k);if((p?.version??null)!==v)return false;records.set(k,{version:(v??0)+1,value});return true;}};
+ const result=await restoreOwnerReviewAccess({adapter,workflow:{issue:async()=>{throw Error('MUST_NOT_SEND');}},inspectMailbox:async()=>({status:'FAIL',reason:'INVITATION_NOT_IN_RECEIVING_MAILBOX',folders_checked:['INBOX','Junk']}),inspectInbox:async()=>{throw Error('NO_FRESH_MESSAGE');},campaignId:'campaign',reviewOrigin:'https://review.example',key:'restore'});
+ assert.equal(result.emails_sent,0);assert.equal(records.get('restore').value.status,'BLOCKED');assert.equal(records.get('review:campaign').value.status,'CONSUMED');
+});
+test('confirmed inbox routing permits exactly one fresh invitation and durable verified completion',async()=>{
+ const {restoreOwnerReviewAccess}=require('../src/emradar-v3-runtime.cjs');
+ const records=new Map([['review:campaign',{version:1,value:{status:'CONSUMED',notification_receipt:{recipient:'sean@emradar.net',provider_id:'prior'},token_hash:'hash'}}]]);let sends=0;
+ const adapter={read:async k=>records.get(k),compareAndSwap:async(k,v,value)=>{const p=records.get(k);if((p?.version??null)!==v)return false;records.set(k,{version:(v??0)+1,value});return true;}};
+ const workflow={issue:async()=>{sends++;records.set('review:campaign',{version:2,value:{status:'NOTIFIED',notification_receipt:{recipient:'sean@emradar.net',provider_id:'fresh'},token_hash:'newhash'}});}};
+ const run=()=>restoreOwnerReviewAccess({adapter,workflow,inspectMailbox:async()=>({status:'PASS',inbox:true,folder:'INBOX',link_ready:true}),inspectInbox:async input=>{assert.equal(input.provider_id,'fresh');return {status:'PASS',link_ready:true};},campaignId:'campaign',reviewOrigin:'https://review.example',key:'restore'});
+ assert.equal((await run()).status,'OWNER_REVIEW_READY');await run();assert.equal(sends,1);assert.equal(records.get('restore').value.status,'COMPLETE');
+});
+test('mailbox inspection finds exact private invitation despite a changed provider header, without consuming link',async()=>{
+ const campaignId='campaign',token='private',link='https://review.example/review/access#token='+token+'&campaign='+campaignId;let reads=0;const locks=[];
+ const smtp=createV3Smtp({env:{EDITORIAL_SMTP_HOST:'smtp.purelymail.com',EDITORIAL_SMTP_USER:'sean@emradar.net',EDITORIAL_SMTP_PASSWORD:'test',EDITORIAL_IMAP_HOST:'imap.purelymail.com'},createImap:()=>({on(){},connect:async()=>{},list:async()=>[{path:'INBOX',flags:new Set()},{path:'Sent',specialUse:'\\Sent',flags:new Set()}],getMailboxLock:async(path,options)=>{locks.push(path);assert.equal(options.readOnly,true);return {release(){}};},search:async query=>query.subject?[5]:[],fetchOne:async()=>{reads++;return {source:Buffer.from('To: sean@emradar.net\r\nMessage-ID: <changed@example.org>\r\nContent-Type: text/plain\r\n\r\n'+link)};},logout:async()=>{}})});
+ const result=await smtp.inspectOwnerMailbox({provider_id:'<smtp@example.org>',campaignId,reviewOrigin:'https://review.example',token_hash:crypto.createHash('sha256').update(token).digest('hex')});
+ assert.equal(result.status,'PASS');assert.equal(result.inbox,true);assert.equal(result.message_id_changed,true);assert.equal(reads,1);assert.deepEqual(locks,['INBOX']);
+});
