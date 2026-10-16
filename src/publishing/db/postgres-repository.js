@@ -3,7 +3,7 @@
 const crypto = require("crypto");
 const { PublishingRepository } = require("../repository-interface");
 const { rowToModel, modelToValues, COLUMNS, sourcesToRows } = require("./mapper");
-const { migrationStatus } = require("./migrate");
+const { migrationStatus, runMigrations } = require("./migrate");
 const { TransitionError } = require("../transitions");
 const { STREAMS, STATUSES } = require("../constants");
 
@@ -28,11 +28,10 @@ class PostgresPublishingRepository extends PublishingRepository {
   }
 
   /**
-   * No schema work happens at startup — migrations are run explicitly via the
-   * CLI. init() is intentionally a lazy no-op so a transient DB outage does not
-   * crash the wider application at boot.
+   * Apply the existing forward-only migrations before scheduler writes begin.
+   * Failed migrations leave the scheduler stopped and preserve existing rows.
    */
-  async init() {}
+  async init() { await runMigrations(this.pool); }
 
   async list(filter = {}) {
     const { where, values } = buildFilter(filter);

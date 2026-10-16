@@ -9,6 +9,9 @@ import {CampaignStore} from './state.js';
 import {OutletDirectory} from './outlet-directory.js';
 import {createDirectoryDiscovery} from './directory-discovery.js';
 import {createReviewedEvidenceLinker} from './reviewed-evidence-links.js';
+import {createEditorialContactResearch} from './editorial-contact-research.js';
+import {lookup} from 'node:dns/promises';
+import {pinnedHtml} from './autonomous-outlet-discovery.js';
 import {createAutonomousOutletDiscovery} from './autonomous-outlet-discovery.js';
 import {createPreparationRun} from './preparation-run.js';
 import {ReviewWorkflow} from './review-workflow.js';
@@ -101,7 +104,7 @@ export async function createPreparationReviewService({
   return {...result,directory_removed:cleanup.directory_removed,campaign_destinations_removed:cleanup.campaign_destinations_removed,verified_recipients:active.length,owner_decisions_preserved:true,x_unchanged:true,external_distribution:0};
  };
  const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
- return {store,directory,workflow,prepare,discover,recoverVerifiedRecipients,refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
+ return {store,directory,workflow,prepare,discover,recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
   await resumeEditorialDrafts(result.campaignId,{verifiedPublicationsOnly:true});
   const completion=await reviewCompletion(result.campaignId);

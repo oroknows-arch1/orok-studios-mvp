@@ -111,11 +111,11 @@ test('requires provider-enforced structured discovery output',async()=>{
  assert.deepEqual(request.text.format.schema.properties.candidates.items.properties.formation_ids.items.enum,['r1']);
  assert.deepEqual(request.text.format.schema.properties.candidates.items.properties.industries.items.enum,['Copper mining']);
 });
-test('rejects unverified editorial email even when search suggests a matching address',async()=>{
+test('ignores a model-suggested address and extracts the actual published editorial address',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],'Editorial enquiries to another@journal.example');
  const {createAutonomousOutletDiscovery}=await load();
- assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,0);
- assert.equal(h.saved.length,0);
+ assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,1);
+ assert.equal(h.saved.length,1);assert.equal(h.saved[0].contact.email,'another@journal.example');
 });
 test('rejects contact pages that redirect or return non-HTML in real reader',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);

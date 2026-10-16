@@ -265,7 +265,15 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const recipientRecoveryKey='v3-verified-recipients:2026-10-16-v1';
   const recipientRecoveryPending=!(await service.store.adapter.read(recipientRecoveryKey));
   const runRecipientRecovery=()=>runReleaseOnce({adapter:service.store.adapter,key:recipientRecoveryKey,run:()=>service.recoverVerifiedRecipients(editorialCampaign)});
-  return {recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  const engineRepairKey='v3-engine-repair:2026-10-16-v1';
+  const engineRepairPending=!(await service.store.adapter.read(engineRepairKey));
+  const runEngineRepair=()=>runReleaseOnce({adapter:service.store.adapter,key:engineRepairKey,run:async()=>{
+   const access=await service.testProductionContactAccess();
+   const production_access={status:access.status,primary:access.primary,pages:access.pages,failures:access.failures,contacts_examined:access.contacts?.length??0,non_editorial_rejected:access.contacts?.filter(c=>!c.eligible).length??0};
+   await service.store.adapter.compareAndSwap('v3-engine-access:2026-10-16-v1',null,production_access);
+   return {...await service.resumeIntelligentDiscovery(editorialCampaign),production_access};
+  }});
+  return {engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

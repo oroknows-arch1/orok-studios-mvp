@@ -15,10 +15,21 @@ function assertRecipientAllowed(asset,...records){
 function authoritativeUrl(value,website){
  try{const u=new URL(value),site=new URL(website);return u.protocol==='https:'&&site.protocol==='https:'&&!u.username&&!u.password&&!u.port&&u.hostname.replace(/^www\./,'')===site.hostname.replace(/^www\./,'');}catch{return false;}
 }
+function authoritativeContact(record){
+ if(authoritativeUrl(record?.contact?.source_url,record?.website))return true;
+ const path=record?.contact?.publisher_attribution;if(!Array.isArray(path)||!path.length||path.length>2)return false;
+ let previous=record.website;
+ for(const edge of path){
+  if(!authoritativeUrl(edge.from_url,previous)||!/^[a-f0-9]{64}$/.test(edge.page_sha256??'')||!/contact|editor|publisher|about/i.test(edge.link_text??''))return false;
+  try{const u=new URL(edge.to_url);if(u.protocol!=='https:'||u.username||u.password||u.port)return false;}catch{return false;}
+  previous=edge.to_url;
+ }
+ return previous===record.contact.source_url;
+}
 function verifiedDestination(record){
  const c=record?.contact,v=record?.verification;
  return record?.active===true&&record.editorial_fit_verified===true&&record.contact_verified===true&&validRecipient(c?.email)&&
- authoritativeUrl(c.source_url,record.website)&&authoritativeUrl(v?.publication_proof_url,record.website)&&v?.status==='VERIFIED'&&
+ authoritativeContact(record)&&authoritativeUrl(v?.publication_proof_url,record.website)&&v?.status==='VERIFIED'&&
  v?.method==='live_editorial_contact_page'&&['editorial','submissions','named_editor','general'].includes(c.purpose)&&
  typeof c.published_excerpt==='string'&&c.published_excerpt.toLowerCase().includes(c.email.toLowerCase())&&/^[a-f0-9]{64}$/.test(c.page_sha256??'')&&
  Array.isArray(v.evidence_ids)&&v.evidence_ids.length>0&&/^[a-f0-9]{64}$/.test(v.scan_evidence_digest??'')&&
