@@ -7,7 +7,7 @@ const sfy={subject:'India semiconductor ecosystem beyond fabs',introduction:"I'm
 const openaiFor=value=>({chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify(value)}}]})}},images:{generate:async()=>{throw Error('NOT_USED');}}});
 
 test('approved SFY behaviour produces destination-specific connected-Earth editorial correspondence',async()=>{
- const providers=createOpenAiPreparationProviders({openai:openaiFor(sfy)});
+ const providers=createOpenAiPreparationProviders({openai:openaiFor({subject:sfy.subject,body:[sfy.introduction,'What stood out was the equipment, suppliers and people appearing around the factories.',sfy.contribution,sfy.question].join('\n\n'),limitations:sfy.limitations})});
  const asset=await providers.write({campaignId:'campaign',destination:{id:'sfy',name:'Semiconductor For You',category:'Publication',contact_verified:false,delivery_eligible:false,evidence:{ids:['e1']}},document:{evidence:[evidence],uncertainty:['Commercial utilisation remains unresolved.']}});
  assert.equal(asset.correspondence_type,'EDITORIAL_OUTREACH');
  assert.match(asset.body,/I'm Sean Walker/);assert.match(asset.body,/What|development matters/);assert.match(asset.body,/Semiconductor For You/);assert.match(asset.body,/Would this be suitable as an article or research contribution/);
@@ -24,7 +24,7 @@ test('institutions are source enquiries, never editorial outreach',async()=>{
 test('editorial style remains an owner decision without bypassing required evidence',async()=>{
  const {createOpenAiPreparationProviders}=await import('../vendor/emradar-v3/src/openai-preparation-providers.js');
  const draft={subject:'Research contribution',introduction:'Sean Walker at EMRADAR.',observation:'Evidence shows a change. '.repeat(45),significance:'This may affect refining.',contribution:'A research contribution for Journal.',question:'Would you like to review it?',limitations:'Commercial utilisation is uncertain.'};
- const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify(draft)}}]})}},images:{generate:async()=>{}}}});
+ const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify({...draft,body:[draft.introduction,draft.observation,draft.significance,draft.contribution,draft.question].join("\n\n")})}}]})}},images:{generate:async()=>{}}}});
  const destination={id:'journal',name:'Journal',destination_class:'EDITORIAL_PUBLICATION',evidence:{ids:['e1']},contact_verified:false,delivery_eligible:false};
  const asset=await providers.write({campaignId:'campaign',destination,document:{evidence:[{id:'e1',verified:true,fact:'Published fact'}]}});
  assert.equal(asset.kind,'EMAIL');assert.equal(asset.delivery_eligible,false);assert.equal(asset.to,null);assert.match(asset.body,/Would you like to review it/);

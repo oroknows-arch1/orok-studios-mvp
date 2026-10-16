@@ -222,6 +222,23 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     return res.status(409).json({reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED'});
    }
   });
+  // One bounded owner-authorized writing review. Saved old drafts remain rejected;
+  // two alternatives are stored separately without changing X or sending mail.
+  const editorialCampaign='v3-2602ddf68a3ced8aeafb769fc928423f';
+  const editorialRequest='owner-human-editorial-2026-10-16-v1';
+  const editorialState=(await service.store.adapter.read(editorialCampaign))?.value;
+  const editorialWritingReviewPending=Boolean(editorialState && editorialState.editorial_rewrite?.request_id!==editorialRequest);
+  const runEditorialWritingReview=async()=>{
+   const client=await pool.connect();
+   try{
+    const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[editorialCampaign]);
+    if(!lock.rows[0]?.acquired)return {status:'EDITORIAL_REVIEW_IN_PROGRESS'};
+    return await service.prepareEditorialAlternatives({campaignId:editorialCampaign,requestId:editorialRequest,angles:[
+     'Focus on the proposed renewable-energy project appearing alongside electric-vehicle manufacturing and agricultural processing in the Free State programme. Explain why looking at these plans together is an interesting article for an African energy publication. Do not claim the projects are built, financed, physically connected or supplying one another.',
+     'Lead with the question of what would turn the Free State renewable-energy announcement into a real project. Use the accompanying manufacturing and agricultural plans as context, offering an article that separates what has been announced from what still needs to happen. Do not invent milestones, demand, financing, jobs or completed work.'
+    ]});
+   }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[editorialCampaign]);client.release();}
+  };
   // One-time recovery of the consumed October 10 private owner invitation.
   // The durable claim prevents duplicate emails across restarts/instances.
   if(env.EMRADAR_V3_PREPARATION_ENABLED==='true'){
@@ -229,7 +246,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const adapter=service.store.adapter;
    const prior=(await adapter.read(campaignId))?.value;
    const review=(await adapter.read('review:'+campaignId))?.value;
-   if(prior?.phase==='PUBLICATION_REVIEW'&&review?.status==='CONSUMED'){
+   if(!editorialWritingReviewPending&&prior?.phase==='PUBLICATION_REVIEW'&&review?.status==='CONSUMED'){
     const key='v3-owner-review-renewal:2026-10-16:'+campaignId;
     const claimed=await adapter.compareAndSwap(key,null,{status:'STARTED',started_at:new Date().toISOString()});
     if(claimed){
@@ -240,7 +257,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     }
    }
   }
-  return {enabled:true,pool,service,runCampaign,refreshDirectory};
+  return {enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

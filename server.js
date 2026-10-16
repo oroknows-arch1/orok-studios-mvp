@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign,refreshDirectory}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({pool,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -703,11 +703,14 @@ if (require.main === module) {
     };
     // One bounded historical owner-review test. Existing campaigns remain idempotent;
     // preparation never sends to editorial destinations or posts to X.
-    if(typeof runCampaign==='function'){
+    if(!editorialWritingReviewPending&&typeof runCampaign==='function'){
       runCampaign('2026-10-10').then(result=>console.log('V3_OCT10_REVIEW_TEST',JSON.stringify(result)))
         .catch(error=>console.error('V3_OCT10_REVIEW_TEST_FAILED',error.message));
     }
-    prepareLatest();
+    if(editorialWritingReviewPending){
+      runEditorialWritingReview().then(result=>console.log('V3_EDITORIAL_WRITING_REVIEW',JSON.stringify(result)))
+        .catch(error=>console.error('V3_EDITORIAL_WRITING_REVIEW_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_PROVIDER_FAILED'));
+    }else prepareLatest();
     const v3IntakeTimer=setInterval(prepareLatest,60*60*1000);
     v3IntakeTimer.unref();
     require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
