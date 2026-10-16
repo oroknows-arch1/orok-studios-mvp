@@ -1,3 +1,4 @@
+import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 // Fresh V3 outlet directory; uses the caller's existing PostgreSQL connection.
 // Does not import or modify the old marketing directory.
 export class OutletDirectory {
@@ -11,9 +12,13 @@ export class OutletDirectory {
    record JSONB NOT NULL,
    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`);
+  await this.pool.query("CREATE UNIQUE INDEX IF NOT EXISTS v3_outlet_recipient_unique ON v3_outlet_directory(lower(record->'contact'->>'email')) WHERE record->'contact'->>'email' IS NOT NULL");
  }
  async upsert(record) {
   if(!record || typeof record.id!=='string' || !record.id.trim()) throw Error('OUTLET_ID_REQUIRED');
+  recipientPolicy.assertVerifiedDestination(record);
+  const existing=await this.pool.query("SELECT record FROM v3_outlet_directory WHERE lower(record->'contact'->>'email')=lower($1) AND outlet_id<>$2",[record.contact.email,record.id]);
+  if(existing.rows.length)throw Error('V3_DUPLICATE_RECIPIENT');
   await this.pool.query(
    'INSERT INTO v3_outlet_directory(outlet_id,record) VALUES($1,$2::jsonb) ON CONFLICT(outlet_id) DO UPDATE SET record=EXCLUDED.record,updated_at=now()',
    [record.id,JSON.stringify(record)]
@@ -22,6 +27,6 @@ export class OutletDirectory {
  }
  async list() {
   const {rows}=await this.pool.query('SELECT record FROM v3_outlet_directory ORDER BY outlet_id');
-  return rows.map(row=>row.record);
+  return rows.map(row=>row.record).filter(recipientPolicy.verifiedDestination);
  }
 }

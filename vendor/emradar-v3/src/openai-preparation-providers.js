@@ -1,3 +1,4 @@
+import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {EDITORIAL_REFERENCE,isEditorialDestination,selectEditorialEvidence,validateEditorialStory,editorialPrompt} from './editorial-reference.js';
 // Reuse the OpenAI client already configured by the existing paid API.
 // No model calls occur at import or assembly time.
@@ -43,6 +44,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    return {evidence:[],source:'published_scan',status:'SOURCE_EVIDENCE_REUSED'};
   },
   write:async({campaignId,destination,document,editorialAngle})=>{
+   if(destination?.id!=='x')recipientPolicy.assertVerifiedDestination(destination);
    const allowed=destination?.evidence?.ids;
    if(!Array.isArray(allowed)||!allowed.length)throw Error('V3_DESTINATION_EVIDENCE_LINK_REQUIRED');
    const evidence=(document?.evidence??[]).filter(e=>e.verified===true && allowed.includes(e.id));
@@ -60,6 +62,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
     validateEditorialStory(draft,story);
     const asset=approvedEditorialEmail({campaignId,destination,evidence:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)),draft,deliveryEligible});
     asset.editorial_reference=EDITORIAL_REFERENCE;asset.story_record_id=story.record_id;
+    asset.recipient_verification=destination.contact;
     return asset;
    }
    if(type==='SOURCE_ENQUIRY')return sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible});

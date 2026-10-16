@@ -1,3 +1,4 @@
+import verified from './fixtures/v3-verified-recipient.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -9,7 +10,7 @@ import {CampaignStore} from '../vendor/emradar-v3/src/state.js';
 import {CampaignPreparation} from '../vendor/emradar-v3/src/preparation.js';
 
 const evidence=[{id:'a:0',record_id:'a',verified:true,fact:'A programme includes proposed energy and vehicle projects.'},{id:'a:1',record_id:'a',verified:true,fact:'The provincial government launched the programme.'},{id:'b:0',record_id:'b',verified:true,fact:'A separate regional funding meeting took place.'}];
-const destination=(id,type='EDITORIAL_PUBLICATION')=>({id,name:id,destination_class:type,category:'news',contact_verified:false,contact_status:'UNVERIFIED',delivery_eligible:false,draft_only:true,evidence:{ids:['a:0','b:0']},relationship:{reason:'Coverage of energy and industry'}});
+const destination=(id,type='EDITORIAL_PUBLICATION')=>({...verified(id,evidence),id,name:id,destination_class:type,category:'news',evidence:{ids:['a:0','b:0']},relationship:{reason:'Coverage of energy and industry'}});
 function providers(requests=[],response){return createOpenAiPreparationProviders({openai:{chat:{completions:{create:async request=>{requests.push(request);const payload=JSON.parse(request.messages[1].content);return {choices:[{message:{content:JSON.stringify(response??{subject:'Discovery for '+payload.destination.name,body:'I’m Sean Walker at EMRADAR. The announced energy and vehicle projects caught our attention. They remain proposals. Would a research contribution examining these plans interest you?',limitations:'They remain proposals.',story_evidence_ids:payload.evidence.map(e=>e.id)})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGE_GENERATION');}}}});}
 function memory(initial){let version=initial?1:null,value=initial;const adapter={read:async()=>value?{version,value:structuredClone(value)}:null,compareAndSwap:async(_id,v,next)=>{if(v!==version)return false;version=(version??0)+1;value=structuredClone(next);return true;}};return new CampaignStore(adapter);}
 
@@ -33,7 +34,7 @@ test('publication and information-channel pitches receive the exact original thr
 test('unrelated formation IDs cannot be combined into a pitch; source-enquiry route cannot become a fallback pitch',async()=>{
  const bad={subject:'Combined story',body:'Would a research contribution interest you?',limitations:'Uncertain.',story_evidence_ids:['a:0','b:0']};
  await assert.rejects(providers([],bad).write({campaignId:'campaign',destination:destination('journal'),document:{evidence}}),/UNSUPPORTED_EDITORIAL_CONNECTION/);
- await assert.rejects(providers([],{subject:'Bypass',body:'Would you accept an article?'}).write({campaignId:'campaign',destination:{id:'source',category:'Government',evidence:{ids:['a:0']}},document:{evidence}}),/EDITORIAL_ROUTE_REQUIRED/);
+ await assert.rejects(providers([],{subject:'Bypass',body:'Would you accept an article?'}).write({campaignId:'campaign',destination:{id:'source',category:'Government',evidence:{ids:['a:0']}},document:{evidence}}),/V3_VERIFIED_RECIPIENT_REQUIRED/);
 });
 
 test('initial production preparation saves reference-backed drafts without external distribution',async()=>{
@@ -51,7 +52,7 @@ test('initial production preparation saves reference-backed drafts without exter
 
 test('refresh regenerates only undecided pitches, preserves identifiers, X, decisions and old versions, and resumes without repeats',async()=>{
  const destinations=[destination('pending','INFORMATION_CHANNEL'),destination('approved'),destination('rejected')];
- const assets=Object.fromEntries(destinations.map(d=>[d.id,{fingerprint:'old-'+d.id,asset:{campaign_id:'campaign',destination_id:d.id,kind:'EMAIL',body:'Legacy',subject:'Old',to:null,contact_status:'UNVERIFIED',delivery_eligible:false}}]));
+ const assets=Object.fromEntries(destinations.map(d=>[d.id,{fingerprint:'old-'+d.id,asset:{campaign_id:'campaign',destination_id:d.id,kind:'EMAIL',body:'Legacy',subject:'Old',to:d.contact.email,contact_status:'VERIFIED',delivery_eligible:true}}]));
  assets.x={asset:{kind:'X',body:'Keep X'},fingerprint:'keep-x'};
  const state={phase:'PUBLICATION_REVIEW',scan:{source_key:'keep-source'},destinations,assets,decisions:{approved:{decision:'APPROVE'},rejected:{decision:'REJECT'}},deliveries:{},preparation_input:{document:{evidence}},events:[]};
  const store=memory(state),requests=[],writer=providers(requests);
@@ -79,9 +80,9 @@ test('persisted-directory draft extension uses the production OpenAI writer and 
  const {createOpenAiPreparationReviewService}=await import('../vendor/emradar-v3/src/preparation-review-service.js');
  const {sha256}=await import('../vendor/emradar-v3/src/contracts.js');
  let version=1,state={id:'campaign',phase:'PUBLICATION_REVIEW',assets:{x:{asset:{kind:'X',body:'Keep X'},fingerprint:'saved-x'}},destinations:[{id:'x'}],decisions:{x:{decision:'APPROVE'}},deliveries:{},events:[],preparation_input:{document:{evidence}}};
- const candidate={...destination('journal'),active:true,verification:{status:'VERIFIED',evidence_ids:['a:0'],scan_evidence_digest:sha256(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))}};
+ const candidate={...destination('journal'),active:true,verification:{...destination('journal').verification,status:'VERIFIED',evidence_ids:['a:0'],scan_evidence_digest:sha256(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))}};
  const pool={query:async(sql,args=[])=>{
-  if(sql.includes('CREATE TABLE'))return {rows:[]};
+  if(sql.startsWith('CREATE '))return {rows:[]};
   if(sql.startsWith('SELECT record'))return {rows:[{record:candidate}]};
   if(sql.startsWith('SELECT version'))return {rows:[{version,payload:structuredClone(state)}]};
   if(sql.startsWith('UPDATE v3_campaign_state')){if(args[1]!==version)return {rowCount:0};state=JSON.parse(args[2]);version++;return {rowCount:1};}

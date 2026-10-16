@@ -12,10 +12,31 @@ function assertRecipientAllowed(asset,...records){
  if([asset,...records].filter(Boolean).some(record=>record.opted_out===true||record.do_not_contact===true||record.contact?.opted_out===true||record.contact?.do_not_contact===true))throw Error('V3_RECIPIENT_OPTED_OUT');
  return asset.to;
 }
+function authoritativeUrl(value,website){
+ try{const u=new URL(value),site=new URL(website);return u.protocol==='https:'&&site.protocol==='https:'&&!u.username&&!u.password&&!u.port&&u.hostname.replace(/^www\./,'')===site.hostname.replace(/^www\./,'');}catch{return false;}
+}
+function verifiedDestination(record){
+ const c=record?.contact,v=record?.verification;
+ return record?.active===true&&record.editorial_fit_verified===true&&record.contact_verified===true&&validRecipient(c?.email)&&
+ authoritativeUrl(c.source_url,record.website)&&authoritativeUrl(v?.publication_proof_url,record.website)&&v?.status==='VERIFIED'&&
+ v?.method==='live_editorial_contact_page'&&['editorial','submissions','named_editor','general'].includes(c.purpose)&&
+ typeof c.published_excerpt==='string'&&c.published_excerpt.toLowerCase().includes(c.email.toLowerCase())&&/^[a-f0-9]{64}$/.test(c.page_sha256??'')&&
+ Array.isArray(v.evidence_ids)&&v.evidence_ids.length>0&&/^[a-f0-9]{64}$/.test(v.scan_evidence_digest??'')&&
+ !record.opted_out&&!record.do_not_contact&&!c.opted_out&&!c.do_not_contact;
+}
+function assertVerifiedDestination(record){if(!verifiedDestination(record))throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');return record;}
+function assertVerifiedAsset(asset,destination){
+ assertVerifiedDestination(destination);assertRecipientAllowed(asset,destination);
+ if(asset.to.toLowerCase()!==destination.contact.email.toLowerCase()||asset.contact_status!=='VERIFIED'||asset.delivery_eligible!==true||
+ !asset.evidence_ids?.length||!asset.evidence_ids.some(id=>(destination.evidence?.ids??destination.verification.evidence_ids).includes(id)))throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+ return asset.to;
+}
 async function checkPersistedRecipient(pool,asset,state){
  const destination=state?.destinations?.find(d=>d.id===asset.destination_id);
- assertRecipientAllowed(asset,destination);
+ assertVerifiedAsset(asset,destination);
  const {rows}=await pool.query("SELECT record FROM v3_outlet_directory WHERE outlet_id=$1 OR lower(record->'contact'->>'email')=lower($2)",[asset.destination_id,asset.to]);
+ const current=rows.find(row=>row.record.id===asset.destination_id)?.record;
+ assertVerifiedAsset(asset,current);
  return assertRecipientAllowed(asset,destination,...rows.map(row=>row.record));
 }
-module.exports={validRecipient,assertRecipientAllowed,checkPersistedRecipient};
+module.exports={validRecipient,assertRecipientAllowed,checkPersistedRecipient,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset};

@@ -3,23 +3,25 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createV3PreparedIntegration}=require('../src/emradar-v3-integration.cjs');
 const {createV3Smtp}=require('../src/emradar-v3-smtp.cjs');
+const verified=require('./fixtures/v3-verified-recipient.cjs');
 const {validRecipient}=require('../src/emradar-v3-recipient.cjs');
 
 async function fixture(){
  const {sha256}=await import('../vendor/emradar-v3/src/contracts.js');
  const states=new Map(),receipts=new Map(),suppressed=[];
  const add=(id,decision='APPROVE')=>{
-  const asset={campaign_id:'campaign',destination_id:id,kind:'EMAIL',to:id+'@example.org',subject:'Article idea',body:'Evidence and possibility',from:'sean@emradar.net',contact_status:'UNVERIFIED',delivery_eligible:false};
+  const asset={campaign_id:'campaign',destination_id:id,kind:'EMAIL',to:id+'@journal.example',subject:'Article idea',body:'Evidence and possibility',evidence_ids:['e1'],from:'sean@emradar.net',contact_status:'VERIFIED',delivery_eligible:true};
   const fingerprint=sha256(asset),approval={authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:'campaign',destination_id:id};
   const key=sha256(['campaign',id,fingerprint]);
   const state=states.get('campaign')??{phase:'PUBLICATION_REVIEW',destinations:[],assets:{},decisions:{},deliveries:{}};
+  state.destinations.push(verified(id));
   state.assets[id]={asset,fingerprint};if(decision)state.decisions[id]=approval;
   state.deliveries[id]={status:'ATTEMPTING',idempotency_key:key};states.set('campaign',state);
   return {version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:'campaign',destination_id:id,asset,approval,idempotency_key:key};
  };
  const pool={query:async(sql,args=[])=>{
   if(sql.startsWith('SELECT payload'))return {rows:[{payload:states.get(args[0])}]};
-  if(sql.startsWith('SELECT record'))return {rows:suppressed.map(record=>({record}))};
+  if(sql.startsWith('SELECT record'))return {rows:[...states.get('campaign').destinations.map(record=>({record})),...suppressed.map(record=>({record}))]};
   if(sql.includes('INSERT INTO v3_send_reservations')){
    if(receipts.has(args[0])||[...receipts.values()].some(r=>r.campaign_id===args[1]&&r.destination_id===args[2]))return {rowCount:0};
    receipts.set(args[0],{campaign_id:args[1],destination_id:args[2],status:'RESERVED'});return {rowCount:1};
@@ -32,7 +34,7 @@ async function fixture(){
  return {states,receipts,suppressed,add,integration,sends:()=>sends};
 }
 
-test('owner-approved unverified address proceeds, receipt is recorded, duplicate fails after integration restart',async()=>{
+test('owner-approved verified address proceeds, receipt is recorded, duplicate fails after integration restart',async()=>{
  const f=await fixture(),payload=f.add('editor');
  const result=await f.integration().handle({operation:'approved-delivery',payload});
  assert.equal(result.accepted,true);assert.equal(result.sent_folder.status,'APPENDED');
@@ -66,21 +68,12 @@ test('address security rejects injection, multiple recipients and local-network 
  for(const value of [null,'','editor@example.org\r\nBcc: victim@example.org','a@example.org,b@example.org','a@localhost','a@127.0.0.1','a@host.internal','a..b@example.org','a@-host.org'])assert.equal(validRecipient(value),false);
 });
 
-test('recipient edits invalidate approval; exact recipient must be approved and receipts survive store restart',async()=>{
+test('manual recipient entry cannot alter an existing approval or recipient',async()=>{
  const {CampaignStore}=await import('../vendor/emradar-v3/src/state.js');
- const {sha256}=await import('../vendor/emradar-v3/src/contracts.js');
- let value={phase:'PUBLICATION_REVIEW',destinations:[{id:'journal'}],assets:{journal:{fingerprint:'old',asset:{campaign_id:'campaign',destination_id:'journal',kind:'EMAIL',subject:'Story',body:'Body',to:null,contact_status:'UNVERIFIED',delivery_eligible:false}}},decisions:{journal:{decision:'APPROVE'}},deliveries:{},events:[]},version=1;
- const adapter={read:async()=>({version,value:structuredClone(value)}),compareAndSwap:async(_id,v,next)=>{if(v!==version)return false;version++;value=structuredClone(next);return true;}};
- const store=new CampaignStore(adapter);
- await store.revise('campaign','journal','old',{to:'editor@example.org'});
- assert.equal(value.decisions.journal,undefined);
- await assert.rejects(store.claimDelivery('campaign','journal'),/OWNER_APPROVAL_REQUIRED/);
- await store.decide('campaign','journal','APPROVE',value.assets.journal.fingerprint);
- await store.claimDelivery('campaign','journal');
- await store.recordDelivery('campaign','journal','ACCEPTED',{provider_id:'smtp-receipt',sent_folder:{status:'APPENDED',uid:7}});
- const restarted=new CampaignStore(adapter);assert.equal((await restarted.adapter.read('campaign')).value.deliveries.journal.receipt.provider_id,'smtp-receipt');
- await assert.rejects(restarted.claimDelivery('campaign','journal'),/DELIVERY_ALREADY_ATTEMPTED/);
- assert.equal(value.assets.journal.fingerprint,sha256(value.assets.journal.asset));
+ const original={decisions:{journal:{decision:'REJECT'}},assets:{},destinations:[],deliveries:{}};
+ const store=new CampaignStore({read:async()=>({version:1,value:original}),compareAndSwap:async()=>{throw Error('MUST_NOT_WRITE');}});
+ await assert.rejects(store.revise('campaign','journal','old',{to:'editor@example.org'}),/INVALID_REVISION_FIELDS/);
+ assert.equal(original.decisions.journal.decision,'REJECT');
 });
 
 test('SMTP raw bytes are also filed in Sent; filing failure never becomes an SMTP retry',async()=>{

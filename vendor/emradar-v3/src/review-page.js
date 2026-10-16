@@ -41,7 +41,7 @@ async function refresh(){
   const {asset,fingerprint,groupKey,decision,delivery}=item;
   const card=document.createElement('article');
   card.append(text('h2',asset.destination_id),text('small','Status: '+(decision?.decision||'Awaiting decision')+(delivery?' · Delivery: '+delivery.status:'')));
-  if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.to?'Recipient: '+asset.to+' · Verification: '+(asset.contact_status||'unknown')+' (informational)':'Recipient: not set — add an address before approving'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
+  if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.to?'Recipient: '+asset.to+' · Verification: '+(asset.contact_status||'unknown'):'Recipient unavailable'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
   if(delivery?.receipt)card.append(text('p','Mail receipt: '+(delivery.receipt.provider_id||'unconfirmed')+' · Sent folder: '+(delivery.receipt.sent_folder?.status||'no filing receipt')));
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
@@ -68,15 +68,6 @@ async function refresh(){
      catch(e){status.textContent='Subject not saved. Reload and retry.';editSubject.disabled=false;}
     });
     card.append(editSubject);
-    const editRecipient=text('button','Set recipient');
-    editRecipient.addEventListener('click',async()=>{
-     const revised=prompt('Recipient email address (requires approval after saving)',asset.to||'');
-     if(revised===null||revised===asset.to)return;
-     editRecipient.disabled=true;
-     try{await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{to:revised}});await refresh();status.textContent='Recipient saved. Approve this exact email and address when ready.';}
-     catch(e){status.textContent='Recipient not saved. Check the address and recipient opt-outs.';editRecipient.disabled=false;}
-    });
-    card.append(editRecipient);
    }
   }
   if(asset.kind==='X' && asset.visual_url){

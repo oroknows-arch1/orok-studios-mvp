@@ -47,6 +47,7 @@ export class CampaignStore {
       const next = {};
       for (const asset of assets) {
         if (!valid.has(asset.destination_id) || asset.campaign_id !== id || next[asset.destination_id]) throw Error('INVALID_ASSET_DESTINATION');
+        if(asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));
         next[asset.destination_id] = {asset:structuredClone(asset), fingerprint:assetFingerprint(asset)};
       }
       if (Object.keys(next).length !== state.destinations.length) throw Error('MISSING_DESTINATION_ASSET');
@@ -65,6 +66,7 @@ export class CampaignStore {
       if(assets.length!==additions.size) throw Error('MISSING_DESTINATION_ASSET');
       for(const asset of assets){
         if(!additions.has(asset.destination_id)||asset.campaign_id!==id||state.assets[asset.destination_id]) throw Error('INVALID_ASSET_DESTINATION');
+        if(asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(asset,additions.get(asset.destination_id));
         state.assets[asset.destination_id]={asset:structuredClone(asset),fingerprint:assetFingerprint(asset)};
       }
       state.destinations.push(...[...additions.values()].map(destination=>structuredClone(destination)));
@@ -77,6 +79,7 @@ export class CampaignStore {
       if (!state || state.phase !== 'PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
       const item = state.assets[destinationId];
       if (!item || item.fingerprint !== fingerprint || !['APPROVE','REJECT'].includes(decision)) throw Error('INVALID_DECISION');
+      if(item.asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));
       if (state.deliveries[destinationId]) throw Error('DECISION_AFTER_DISTRIBUTION');
       state.decisions[destinationId] = {authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId};
       return state;
@@ -84,7 +87,7 @@ export class CampaignStore {
   }
   async revise(id,destinationId,fingerprint,changes) {
     if (!changes || typeof changes!=='object' || Array.isArray(changes)) throw Error('INVALID_REVISION');
-    const allowed=['subject','body','to'];
+    const allowed=['subject','body'];
     if (!Object.keys(changes).length || Object.keys(changes).some(key=>!allowed.includes(key))) throw Error('INVALID_REVISION_FIELDS');
     for (const value of Object.values(changes)) {
       if (typeof value!=='string' || !value.trim() || value.length>50000) throw Error('INVALID_REVISION_TEXT');
@@ -95,11 +98,6 @@ export class CampaignStore {
       if (!entry || entry.fingerprint!==fingerprint) throw Error('STALE_ASSET_REVISION');
       if (state.deliveries[destinationId]) throw Error('REVISION_AFTER_DISTRIBUTION');
       const revised={...entry.asset,...changes};
-      if(Object.hasOwn(changes,'to')){
-        if(entry.asset.kind!=='EMAIL')throw Error('INVALID_RECIPIENT_REVISION');
-        recipientPolicy.assertRecipientAllowed(revised,state.destinations.find(d=>d.id===destinationId));
-        revised.contact_status='OWNER_SUPPLIED';
-      }
       if(revised.brand_version)revised.html=emailBrand.render(revised.body);
       if (sha256(revised)===sha256(entry.asset)) return state;
       const nextFingerprint=assetFingerprint(revised);
@@ -116,7 +114,7 @@ export class CampaignStore {
       const item = state.assets[destinationId];
       if (!item) throw Error('UNKNOWN_DESTINATION');
       const prior = state.deliveries[destinationId];
-      if(item.asset.kind==='EMAIL')recipientPolicy.assertRecipientAllowed(item.asset,state.destinations.find(d=>d.id===destinationId));
+      if(item.asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));
       const key = assertSendable({asset:item.asset,approval:state.decisions[destinationId],receipt:prior});
       state.deliveries[destinationId] = {status:'ATTEMPTING',idempotency_key:key,claimed_at:new Date().toISOString()};
       return state;

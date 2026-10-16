@@ -1,3 +1,4 @@
+import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {sha256,MAX_DESTINATIONS} from './contracts.js';
 
 const normalized=value=>String(value??'').trim().toLowerCase();
@@ -21,13 +22,14 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
   });
  }
  const eligible=[];
- const seen=new Set();
+ const seen=new Set(),emails=new Set();
  for(const candidate of candidates) {
   if(!candidate?.id || seen.has(candidate.id)) continue;
   seen.add(candidate.id);
   const linked=(candidate.evidence_ids??[]).filter(id=>evidenceIds.has(id));
-  if(!linked.length || candidate.editorial_fit_verified!==true || candidate.active!==true) continue;
-  // Missing contact details prevent delivery, not discovery or owner review.
+  if(!linked.length || candidate.editorial_fit_verified!==true || candidate.active!==true || !recipientPolicy.verifiedDestination(candidate)) continue;
+
+  const email=candidate.contact.email.toLowerCase();if(emails.has(email))continue;emails.add(email);
   const previous=prior.get(candidate.id);
   if(previous?.do_not_contact===true || previous?.opted_out===true || previous?.status==='PENDING_REPLY') continue;
   const repeat=Boolean(previous?.last_scan_digest && candidate.scan_digest && previous.last_scan_digest===candidate.scan_digest);
@@ -37,8 +39,8 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
   eligible.push({...candidate,linked_evidence:linked,relevance,last_contacted_at:Number.isFinite(recency)?recency:0});
  }
  eligible.sort((a,b)=>b.relevance-a.relevance || a.last_contacted_at-b.last_contacted_at || a.id.localeCompare(b.id));
- const selected=eligible.slice(0,limit).map(({id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified})=>({
-  id,name,category,website,publication_type,destination_class,relationship,contact:contact_verified===true?contact:null,evidence:{ids:linked_evidence},contact_verified:contact_verified===true,editorial_fit_verified,delivery_eligible:contact_verified===true&&Boolean(contact?.email),draft_only:contact_verified!==true
+ const selected=eligible.slice(0,limit).map(({id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified,verification,active})=>({
+  id,name,category,website,publication_type,destination_class,relationship,verification,active,contact:contact_verified===true?contact:null,evidence:{ids:linked_evidence},contact_verified:contact_verified===true,editorial_fit_verified,delivery_eligible:contact_verified===true&&Boolean(contact?.email),draft_only:contact_verified!==true
  }));
  return {selected,excluded_count:candidates.length-selected.length,selection_digest:sha256(selected)};
 }
@@ -47,6 +49,7 @@ export function verifyEditorialAsset(asset,{evidenceIds,requiredXVisual=true}={}
  if(!['EMAIL','X'].includes(asset.kind)) throw Error('UNSUPPORTED_ASSET_KIND');
  if(!Array.isArray(asset.evidence_ids) || !asset.evidence_ids.length || !asset.evidence_ids.every(id=>evidenceIds.has(id))) throw Error('EDITORIAL_EVIDENCE_UNVERIFIED');
  if(asset.kind==='EMAIL' && (!asset.subject?.trim() || !asset.from)) throw Error('EDITORIAL_EMAIL_INCOMPLETE');
+ if(asset.kind==='EMAIL' && asset.delivery_eligible!==true)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
  if(asset.kind==='EMAIL' && asset.delivery_eligible===true && (!asset.to || asset.contact_status!=='VERIFIED')) throw Error('EDITORIAL_EMAIL_INCOMPLETE');
  if(asset.kind==='EMAIL' && asset.delivery_eligible!==true && (asset.to || asset.contact_status!=='UNVERIFIED')) throw Error('EDITORIAL_DRAFT_CONTACT_STATUS_INVALID');
  if(asset.kind==='X' && requiredXVisual && (!asset.visual_sha256 || !/^[a-f0-9]{64}$/.test(asset.visual_sha256))) throw Error('X_VISUAL_REQUIRED');

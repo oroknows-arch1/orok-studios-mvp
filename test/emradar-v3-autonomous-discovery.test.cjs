@@ -26,7 +26,7 @@ test('rejects private IP hosts and non-editorial contacts',async()=>{
  {name:'Private',category:'mining journal',website:'https://127.0.0.1',contact_url:'https://127.0.0.1/contact',email:'editor@journal.example',evidence_ids:['e1']},
  {name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/contact',email:'editor@journal.example',evidence_ids:['e1']}];
  const h=harness(candidates,'News and analysis. Sales team editor@journal.example');const {createAutonomousOutletDiscovery}=await load();
- assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,1);assert.equal(h.saved.length,1);assert.equal(h.saved[0].contact_verified,false);assert.equal(h.saved[0].editorial_fit_verified,true);
+ assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,0);assert.equal(h.saved.length,0);
 });
 test('pinned HTTPS lookup satisfies Node all-address requests',async()=>{
  const {pinnedLookup}=await load();
@@ -35,16 +35,12 @@ test('pinned HTTPS lookup satisfies Node all-address requests',async()=>{
  const one=await new Promise((resolve,reject)=>pinnedLookup('8.8.8.8')('journal.example',{},(error,address,family)=>error?reject(error):resolve({address,family})));
  assert.deepEqual(one,{address:'8.8.8.8',family:4});
 });
-test('preserves a proof-fetch failure as explicitly unverified without linking it',async()=>{
+test('discards a proof-fetch failure without persisting or linking it',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'',email:'',evidence_ids:['e1']}]);
  h.contactReader=async()=>{throw Error('CONTACT_RESPONSE_INVALID')};
  const {createAutonomousOutletDiscovery}=await load();
  assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);
- assert.equal(h.saved.length,1);
- assert.equal(h.saved[0].discovery_status,'UNVERIFIED');
- assert.equal(h.saved[0].editorial_fit_verified,false);
- assert.equal(h.saved[0].verification.status,'UNVERIFIED');
- assert.equal(h.saved[0].verification.failure_code,'CONTACT_RESPONSE_INVALID');
+ assert.equal(h.saved.length,0);
 });
 test('does not trust model-invented evidence IDs',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/contact',email:'editor@journal.example',evidence_ids:['not-in-scan']}]);
@@ -69,7 +65,7 @@ test('directory selection preserves individual scan evidence links',async()=>{
 test('reuses already verified evidence-linked outlet without paid search',async()=>{
  const h=harness([]);
  h.openai.responses.create=async()=>{throw Error('SEARCH_MUST_NOT_RUN')};
- const existing={id:'existing-1',destination_class:'EDITORIAL_PUBLICATION',active:true,contact_verified:true,editorial_fit_verified:true,contact:{email:'editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13'},verification:{evidence_ids:['e1'],scan_evidence_digest:createHash('sha256').update(JSON.stringify(document.evidence.map(e=>[e.id,e.fact,e.source_url]))).digest('hex')}};
+ const existing={...require('./fixtures/v3-verified-recipient.cjs')('existing-1',document.evidence),id:'existing-1',destination_class:'EDITORIAL_PUBLICATION',active:true,contact_verified:true,editorial_fit_verified:true,contact:{...require('./fixtures/v3-verified-recipient.cjs')().contact,email:'editor@journal.example',published_excerpt:'Editor: editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13'},verification:{...require('./fixtures/v3-verified-recipient.cjs')().verification,evidence_ids:['e1'],scan_evidence_digest:createHash('sha256').update(JSON.stringify(document.evidence.map(e=>[e.id,e.fact,e.source_url]))).digest('hex')}};
  const {createAutonomousOutletDiscovery}=await load();
  const links=await createAutonomousOutletDiscovery(h)({document,outlets:[existing]});
  assert.equal(links.length,1);assert.equal(links[0].outlet_id,'existing-1');assert.equal(h.saved.length,0);
@@ -106,8 +102,8 @@ test('requires provider-enforced structured discovery output',async()=>{
  assert.equal(request.text.format.type,'json_schema');
  assert.equal(request.text.format.strict,true);
  assert.deepEqual(request.text.format.schema.required,['candidates']);
- assert.equal(request.text.format.schema.properties.candidates.maxItems,10);
- assert.equal(request.max_tool_calls,1);
+ assert.equal(request.text.format.schema.properties.candidates.maxItems,30);
+ assert.equal(request.max_tool_calls,4);
  const brief=JSON.parse(request.input[1].content);
  assert.match(brief.search_brief,/Copper mining.*trade magazine/);
  assert.equal(brief.evidence[0].source_url,undefined);
@@ -118,15 +114,15 @@ test('requires provider-enforced structured discovery output',async()=>{
 test('rejects unverified editorial email even when search suggests a matching address',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],'Editorial enquiries to another@journal.example');
  const {createAutonomousOutletDiscovery}=await load();
- assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,1);
- assert.equal(h.saved.length,1);assert.equal(h.saved[0].contact_verified,false);assert.equal(h.saved[0].editorial_fit_verified,true);
+ assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,0);
+ assert.equal(h.saved.length,0);
 });
 test('rejects contact pages that redirect or return non-HTML in real reader',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
  let reads=0;h.contactReader=async()=>{if(reads++===0)return 'News and analysis';throw Error('CONTACT_RESPONSE_INVALID')};
  const {createAutonomousOutletDiscovery}=await load();
- assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,1);
- assert.equal(h.saved.length,1);assert.equal(h.saved[0].contact_verified,false);assert.equal(h.saved[0].editorial_fit_verified,true);
+ assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,0);
+ assert.equal(h.saved.length,0);
 });
 test('rejects a scan source institution as a destination',async()=>{
  const h=harness([{name:'Source Institution',category:'research',website:'https://source.example',contact_url:'',email:'',evidence_ids:['e1']}],'News and analysis');

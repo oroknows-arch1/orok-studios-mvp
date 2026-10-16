@@ -244,7 +244,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const editorialCampaign='v3-2602ddf68a3ced8aeafb769fc928423f';
   const editorialRequest='owner-human-editorial-2026-10-16-v1';
   const editorialState=(await service.store.adapter.read(editorialCampaign))?.value;
-  const editorialWritingReviewPending=Boolean(editorialState && editorialState.editorial_rewrite?.request_id!==editorialRequest);
+  const editorialWritingReviewPending=Boolean(editorialState && editorialState.editorial_rewrite?.request_id!==editorialRequest && !await service.store.adapter.read('v3-verified-recipients:2026-10-16-v1'));
   const runEditorialWritingReview=async()=>{
    const client=await pool.connect();
    try{
@@ -262,7 +262,10 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const editorialStandardKey='v3-sfy-editorial-standard:2026-10-16-v1';
   const editorialStandardPending=!(await service.store.adapter.read(editorialStandardKey));
   const runEditorialStandard=()=>runReleaseOnce({adapter:service.store.adapter,key:editorialStandardKey,run:()=>service.refreshUnreviewedEditorialDrafts(editorialCampaign)});
-  return {enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  const recipientRecoveryKey='v3-verified-recipients:2026-10-16-v1';
+  const recipientRecoveryPending=!(await service.store.adapter.read(recipientRecoveryKey));
+  const runRecipientRecovery=()=>runReleaseOnce({adapter:service.store.adapter,key:recipientRecoveryKey,run:()=>service.recoverVerifiedRecipients(editorialCampaign)});
+  return {recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

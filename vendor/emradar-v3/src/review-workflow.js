@@ -1,3 +1,4 @@
+import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {randomUUID} from 'node:crypto';
 import {issueReviewAccess,consumeReviewAccess} from './review-access.js';
 import {createOwnerSession,validateOwnerSession} from './owner-sessions.js';
@@ -65,7 +66,7 @@ export class ReviewWorkflow {
   await this.authenticate(campaignId,sessionId,secret);
   const campaign=(await this.store.adapter.read(campaignId))?.value;
   if(!campaign || campaign.phase!=='PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
-  return {campaignId,scan:campaign.scan,entries:Object.values(campaign.assets).map(({asset,fingerprint})=>({
+  return {campaignId,scan:campaign.scan,entries:Object.values(campaign.assets).filter(({asset})=>asset.kind==='X'||(()=>{try{recipientPolicy.assertVerifiedAsset(asset,campaign.destinations.find(d=>d.id===asset.destination_id));return true;}catch{return false;}})()).map(({asset,fingerprint})=>({
    asset,fingerprint,groupKey:asset.kind==='EMAIL'?identicalEmailGroupKey(asset):null,decision:campaign.decisions[asset.destination_id]??null,
    delivery:campaign.deliveries[asset.destination_id]??null
   }))};
@@ -87,6 +88,7 @@ export class ReviewWorkflow {
    let count=0;
    for(const {asset,fingerprint} of Object.values(state.assets)){
     if(asset.kind!=='EMAIL' || identicalEmailGroupKey(asset)!==groupKey) continue;
+    recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));
     if(state.deliveries[asset.destination_id]) throw Error('DECISION_AFTER_DISTRIBUTION');
     // Existing individual decisions are authoritative.
     if(state.decisions[asset.destination_id]) continue;
