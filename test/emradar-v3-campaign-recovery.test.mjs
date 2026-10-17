@@ -67,3 +67,8 @@ test('one unreviewed X graphic is branded, the old graphic is retained, and rest
  const state=f.records.get(f.id).payload;assert.equal(f.imageCount(),1);assert.equal(state.assets.x.asset.body,f.original.assets.x.asset.body);assert.equal(state.assets.x.asset.visual_brand_version,'emradar-connected-world-v1');assert.deepEqual(state.editorial_versions.x[0],f.original.assets.x);assert.deepEqual(state.decisions,{});
  await f.service.prepareAndNotify(f.input);assert.equal(f.imageCount(),1);assert.equal(Object.values(state.assets).filter(entry=>entry.asset.kind==='X').length,1);
 });
+
+test('explicit research-only recovery completes drafts without sending an owner invitation',async()=>{
+ const f=await harness({count:3});const result=await f.service.resumeIntelligentDiscovery(f.id,{notifyOwner:false});
+ assert.equal(result.complete,true);assert.equal(result.notification,'NOT_REQUESTED');assert.equal(f.metrics().notifications,0);assert.equal(f.records.has('review:'+f.id),false);assert.deepEqual(f.records.get(f.id).payload.assets.x,f.original.assets.x);
+});

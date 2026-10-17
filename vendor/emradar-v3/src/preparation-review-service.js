@@ -128,7 +128,7 @@ export async function createPreparationReviewService({
    resumed=await resumeEditorialDrafts(campaignId);
   }finally{completion=await saveCompletion(campaignId);}
   const notification=completion.complete&&notifyOwner?await ensureOwnerReview(campaignId):null;
-  return {...resumed,status:completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED',...completion,notification:notification?.status??'NOT_READY'};
+  return {...resumed,status:completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED',...completion,notification:notification?.status??(completion.complete?'NOT_REQUESTED':'NOT_READY')};
  };
  const recoverVerifiedRecipients=async campaignId=>{
   const cleanup=await cleanUnverifiedRecipients({pool,campaignId});

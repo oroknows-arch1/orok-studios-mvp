@@ -205,6 +205,21 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     client.release();
    }
   };
+  // One bounded verification of this discovery revision, using the existing
+  // latest campaign. No notification, release, scan or content regeneration.
+  const discoveryTestKey='v3-intelligent-discovery-test:v2';
+  const latestResearchScan=(await published().catch(()=>[]))[0];
+  const researchCampaignId=latestResearchScan?campaignIdFor(latestResearchScan):null;
+  const researchState=researchCampaignId?(await service.store.adapter.read(researchCampaignId))?.value:null;
+  const discoveryResearchPending=Boolean(['ASSETS_PREPARED','PUBLICATION_REVIEW'].includes(researchState?.phase)&&!(await service.store.adapter.read(discoveryTestKey)));
+  const runDiscoveryResearchTest=()=>runReleaseOnce({adapter:service.store.adapter,key:discoveryTestKey,run:async()=>{
+   const client=await pool.connect();
+   try{
+    const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[researchCampaignId]);
+    if(!lock.rows[0]?.acquired)return {status:'SCAN_PREPARATION_IN_PROGRESS',campaignId:researchCampaignId,complete:false};
+    return await service.resumeIntelligentDiscovery(researchCampaignId,{notifyOwner:false});
+   }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[researchCampaignId]);client.release();}
+  },isComplete:result=>result.complete===true});
   // Explicit owner release; no automatic publication or ambiguous retries.
   releaseApprovedEmail=require('./emradar-v3-release.cjs').createV3Release({service,integration,pool});
   app.post('/emradar/v3/release-email',async(req,res)=>{
@@ -276,7 +291,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
    return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
   };
-  return {ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  return {discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

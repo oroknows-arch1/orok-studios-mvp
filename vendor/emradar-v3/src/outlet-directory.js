@@ -13,6 +13,21 @@ export class OutletDirectory {
    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
   )`);
   await this.pool.query("CREATE UNIQUE INDEX IF NOT EXISTS v3_outlet_recipient_unique ON v3_outlet_directory(lower(record->'contact'->>'email')) WHERE record->'contact'->>'email' IS NOT NULL");
+  await this.pool.query(`CREATE TABLE IF NOT EXISTS v3_contact_research (
+   research_key TEXT PRIMARY KEY, scan_digest TEXT NOT NULL, record JSONB NOT NULL,
+   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  )`);
+ }
+ async recordResearch(record){
+  if(!record?.publication||!record.scan_digest||!record.status)throw Error('RESEARCH_RECORD_REQUIRED');
+  const key=record.scan_digest+':'+(record.website?new URL(record.website).hostname.replace(/^www\./,''):record.publication.toLowerCase());
+  await this.pool.query(`INSERT INTO v3_contact_research(research_key,scan_digest,record) VALUES($1,$2,$3::jsonb)
+   ON CONFLICT(research_key) DO UPDATE SET record=EXCLUDED.record || jsonb_build_object('history',
+   COALESCE(v3_contact_research.record->'history','[]'::jsonb) || jsonb_build_array(v3_contact_research.record-'history')),updated_at=now()`,[key,record.scan_digest,JSON.stringify(record)]);
+ }
+ async researchHistory(scanDigest){
+  const {rows}=await this.pool.query('SELECT record FROM v3_contact_research WHERE scan_digest=$1 ORDER BY research_key',[scanDigest]);
+  return rows.map(row=>row.record);
  }
  async upsert(record) {
   if(!record || typeof record.id!=='string' || !record.id.trim()) throw Error('OUTLET_ID_REQUIRED');

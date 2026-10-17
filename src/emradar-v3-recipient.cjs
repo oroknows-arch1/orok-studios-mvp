@@ -26,11 +26,21 @@ function authoritativeContact(record){
  }
  return previous===record.contact.source_url;
 }
+function isDirectoryIdentityText(text){return typeof text==='string'&&/\bpublisher\b|\bpublishing\b|\b(?:press|media|editorial|newspaper|magazine)\s+(?:association|council|group|company|directory)\b/i.test(text)&&!/email marketing|lead generation|buy (?:contact|email)|data broker/i.test(text);}
+function directoryContact(record){
+ const c=record?.contact,p=c?.directory_attribution,v=record?.verification;
+ if(v?.method!=='published_editorial_directory'||!p)return false;
+ return authoritativeUrl(p.publication_url,record.website)&&p.publication_name===record.name&&
+  authoritativeUrl(p.identity_url,c.source_url)&&v.publication_proof_url===c.source_url&&
+  v.publication_page_sha256===c.page_sha256&&/^[a-f0-9]{64}$/.test(p.identity_sha256??'')&&
+  typeof p.entry_excerpt==='string'&&p.entry_excerpt.toLowerCase().includes(c.email?.toLowerCase())&&p.entry_excerpt.toLowerCase().includes(record.name?.toLowerCase())&&
+  isDirectoryIdentityText(p.identity_excerpt);
+}
 function verifiedDestination(record){
  const c=record?.contact,v=record?.verification;
  return record?.active===true&&record.editorial_fit_verified===true&&record.contact_verified===true&&validRecipient(c?.email)&&
- authoritativeContact(record)&&authoritativeUrl(v?.publication_proof_url,record.website)&&v?.status==='VERIFIED'&&
- v?.method==='live_editorial_contact_page'&&['editorial','submissions','named_editor','general'].includes(c.purpose)&&
+ ((v?.method==='live_editorial_contact_page'&&authoritativeContact(record)&&authoritativeUrl(v?.publication_proof_url,record.website))||directoryContact(record))&&v?.status==='VERIFIED'&&
+ ['editorial','submissions','named_editor','general'].includes(c.purpose)&&
  typeof c.published_excerpt==='string'&&c.published_excerpt.toLowerCase().includes(c.email.toLowerCase())&&/^[a-f0-9]{64}$/.test(c.page_sha256??'')&&
  Array.isArray(v.evidence_ids)&&v.evidence_ids.length>0&&/^[a-f0-9]{64}$/.test(v.scan_evidence_digest??'')&&
  !record.opted_out&&!record.do_not_contact&&!c.opted_out&&!c.do_not_contact;
@@ -50,4 +60,4 @@ async function checkPersistedRecipient(pool,asset,state){
  assertVerifiedAsset(asset,current);
  return assertRecipientAllowed(asset,destination,...rows.map(row=>row.record));
 }
-module.exports={validRecipient,assertRecipientAllowed,checkPersistedRecipient,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset};
+module.exports={isDirectoryIdentityText,validRecipient,assertRecipientAllowed,checkPersistedRecipient,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset};

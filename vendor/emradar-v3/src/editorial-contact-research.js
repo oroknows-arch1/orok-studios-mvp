@@ -23,7 +23,7 @@ export function navigationLinks(html,url){
  const found=[];
  for(const match of html.matchAll(/<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)){
   const label=text(match[2]);let target;try{target=publicContactUrl(new URL(decode(match[1]),url).href);}catch{continue;}
-  if(!target||target.search||!relevant.test(label+' '+target.pathname)||!(/^(?:contact(?: us)?|about(?: us)?|editorial|editors|newsroom|our team|team|staff|contributors|submissions|publisher)$/i.test(label)||/\/(?:contact(?:-us)?|about(?:-us)?|editorial|editors|newsroom|staff|team|contributors|submissions)(?:[/.\-]|$)/i.test(target.pathname)))continue;target.hash='';
+  if(!target||!relevant.test(label+' '+target.pathname)||!(/^(?:contact(?: us)?|about(?: us)?|editorial|editors|newsroom|our team|team|staff|contributors|submissions|publisher)$/i.test(label)||/\/(?:contact(?:[-_]?us)?|about(?:-us)?|editorial|editors|newsroom|staff|team|contributors|submissions)(?:[/.\-]|$)/i.test(target.pathname)))continue;target.hash='';
   found.push({url:target.href,label,priority:/contact/i.test(label+' '+target.pathname)?0:/editor|staff|team|newsroom|submission|contribut/i.test(label+' '+target.pathname)?1:2});
  }
  return found.sort((a,b)=>a.priority-b.priority||a.url.localeCompare(b.url));
@@ -36,8 +36,12 @@ export function extractPublicationContacts(html,{url,publication,topics=[]}){
   for(const raw of group.split(/\n\s*\n/)){
    const block=text(raw);const addresses=block.match(emails)??[];
    for(const address of addresses){
-    const email=address.toLowerCase();if(!recipientPolicy.validRecipient(email)||seen.has(email))continue;seen.add(email);
-    const roleText=block.replace(emails,'').trim(),context=(heading+' '+roleText).trim();
+    const email=address.toLowerCase();if(!recipientPolicy.validRecipient(email))continue;
+    // A contact may appear first in a generic footer and later under its real role.
+    // Keep both observations; the final ranking retains the stronger evidence.
+    const position=block.toLowerCase().indexOf(email),previous=block.slice(0,position).match(emails)?.at(-1);
+    const start=previous?block.toLowerCase().lastIndexOf(previous.toLowerCase(),position)+previous.length:0;
+    const roleText=block.slice(start,position).slice(-400).trim(),context=(heading+' '+roleText).trim();
     let purpose=null,rank=99,reason='NO_EDITORIAL_PURPOSE';
     if(forbidden.test(context))reason='NON_EDITORIAL_ROLE';
     else if(/editor\b/i.test(context)&&!/editorial (?:enquir|inquir)/i.test(context)){
@@ -86,4 +90,41 @@ export function createEditorialContactResearch({read,maxPages=6,maxMs=45000}={})
    return {status:primary?(primary.purpose==='general'?'GENERAL_FALLBACK_VERIFIED':'EDITORIAL_CONTACT_VERIFIED'):!complete?'RESEARCH_BUDGET_EXHAUSTED':pages.length?'NO_RELEVANT_PUBLISHED_CONTACT':'OFFICIAL_SITE_UNAVAILABLE',primary,alternatives:primary&&primary.purpose!=='general'?selected.slice(1,3).map(c=>({...c,selection_reason:'Distinct published editorial contact; alternative only, never copied automatically.'})):[],contacts:all,pages,failures,requests:visited.size};
   })();executions.set(key,run);return run;
  };
+}
+
+// Public publisher/press-directory entries are evidence only after a real read.
+// A search response or a model-supplied address can never create this proof.
+export async function researchPublishedDirectory({read,url,website,publication,topics=[]}){
+ const source=publicContactUrl(url),official=publicContactUrl(website);
+ if(!source||!official)throw Error('DIRECTORY_URL_UNSAFE');
+ const html=await read(source),containers=[],stack=[];
+ for(const token of html.matchAll(/<\/?(article|section|div|li|tr)\b[^>]*>/gi)){
+  if(token[0][1]!=='/'){stack.push({tag:token[1].toLowerCase(),start:token.index});continue;}
+  const i=stack.findLastIndex(entry=>entry.tag===token[1].toLowerCase());
+  if(i<0)continue;const open=stack[i];stack.splice(i);
+  const fragment=html.slice(open.start,token.index+token[0].length);
+  if(fragment.length<=12000)containers.push(fragment);
+ }
+ if(html.length<=12000)containers.push(html);
+ const relevantEntry=fragment=>{
+  if(!text(fragment).toLowerCase().includes(publication.toLowerCase()))return false;
+  const links=[...fragment.matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map(match=>{try{return publicContactUrl(new URL(decode(match[1]),source).href);}catch{return null;}}).filter(Boolean);
+  if(!links.some(link=>host(link.href)===host(official.href)))return false;
+  // Never borrow the email from a different publication elsewhere on a list.
+  return links.every(link=>[host(source.href),host(official.href)].includes(host(link.href))||/^(?:www\.)?(?:facebook|linkedin|twitter|x|instagram)\.com$/.test(link.hostname));
+ };
+ const entries=containers.filter(relevantEntry).sort((a,b)=>a.length-b.length);
+ let entry,contacts;
+ for(const candidate of entries){
+  const found=extractPublicationContacts(candidate,{url:source.href,publication,topics}).filter(contact=>contact.eligible);
+  if(found.length){entry=candidate;contacts=found;break;}
+ }
+ if(!entry)throw Error('DIRECTORY_PUBLICATION_CONTACT_NOT_PROVEN');
+ const about=navigationLinks(html,source.href).find(link=>host(link.url)===host(source.href)&&/about|publisher/i.test(link.label+' '+new URL(link.url).pathname));
+ if(!about)throw Error('DIRECTORY_IDENTITY_NOT_PROVEN');
+ const identity=await read(new URL(about.url)),identityText=text(visibleHtml(identity));
+ if(!recipientPolicy.isDirectoryIdentityText(identityText))throw Error('DIRECTORY_IDENTITY_NOT_PROVEN');
+ const attribution={publication_name:publication,publication_url:official.href,entry_excerpt:text(visibleHtml(entry)).slice(0,6000),identity_url:about.url,identity_excerpt:identityText.slice(0,6000),identity_sha256:hash(identity)};
+ const ranked=contacts.sort((a,b)=>a.rank-b.rank||a.email.localeCompare(b.email)).map(contact=>({...contact,page_sha256:hash(html),directory_attribution:attribution}));
+ return {status:'DIRECTORY_CONTACT_VERIFIED',primary:ranked[0],alternatives:ranked.slice(1,3),pages:[{url:source.href,page_sha256:hash(html)}],failures:[],requests:2,source_kind:'published_editorial_directory'};
 }

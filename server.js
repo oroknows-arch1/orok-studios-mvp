@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -701,7 +701,10 @@ if (require.main === module) {
       catch(error){console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED');}
       finally{preparing=false;}
     };
-    if(ownerAccessPending){
+    if(discoveryResearchPending){
+      runDiscoveryResearchTest().then(result=>console.log('V3_DISCOVERY_RESEARCH_TEST',JSON.stringify(result)))
+        .catch(error=>console.error('V3_DISCOVERY_RESEARCH_TEST_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'DISCOVERY_TEST_FAILED'));
+    }else if(ownerAccessPending){
       runOwnerAccess().then(result=>console.log('V3_OWNER_ACCESS_RESULT',JSON.stringify(result)))
         .catch(()=>console.error('V3_OWNER_ACCESS_FAILED','MAILBOX_OR_NOTIFICATION_UNCONFIRMED'));
     }else if(engineRepairPending){
