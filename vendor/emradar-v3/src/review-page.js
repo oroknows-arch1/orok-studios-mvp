@@ -12,7 +12,7 @@ button:disabled{opacity:.4}
 button:focus-visible{outline:3px solid #e0a825}
 small{color:#52636d}
 </style></head><body><header><h1>EMRADAR · Publication Review</h1><p>Approval saves your decision. Use the separate release control to distribute approved content.</p></header>
-<p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><main id="entries"></main>
+<p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><button id="connect-x" type="button" disabled>Connect X</button><button id="check-x" type="button" disabled>Check X connection</button><main id="entries"></main>
 <script>
 'use strict';
 let campaign,invitationToken;
@@ -70,16 +70,17 @@ async function refresh(){
     card.append(editSubject);
    }
   }
-  if(asset.kind==='X'&&!delivery)card.append(text('p','X publishing is not connected to V3. Approval has not posted this asset.'));
+  if(asset.kind==='X'&&!delivery)card.append(text('p','Approval does not publish this post. Release checks the account, graphic and publication history before posting.'));
   if(asset.kind==='X' && asset.visual_url){
    const link=document.createElement('a');const visual=new URL(asset.visual_url,location.origin);if(visual.protocol==='https:'){link.href=visual.href;link.rel='noopener noreferrer';link.target='_blank';link.textContent='View accompanying graphic';card.append(link);}
   }
-  if(asset.kind==='EMAIL'&&asset.to&&decision?.decision==='APPROVE'&&!delivery){
-   const send=text('button','Send approved email');
+  if((asset.kind==='X'||(asset.kind==='EMAIL'&&asset.to))&&decision?.decision==='APPROVE'&&!delivery){
+   const isX=asset.kind==='X';
+   const send=text('button',isX?'Publish approved X post':'Send approved email');
    send.addEventListener('click',async()=>{
-    if(!confirm('Send this exact approved email to '+asset.to+'?'))return;
+    if(!confirm(isX?'Publish this exact approved text and graphic to the configured X account?':'Send this exact approved email to '+asset.to+'?'))return;
     send.disabled=true;
-    try{await api('release',{campaignId:campaign,destinationId:asset.destination_id});await refresh();status.textContent='Mail accepted. The receipt and Sent-folder result are shown with this email.';}
+    try{await api('release',{campaignId:campaign,destinationId:asset.destination_id});await refresh();status.textContent=isX?'X accepted the post. Its receipt is saved with this asset.':'Mail accepted. The receipt and Sent-folder result are shown with this email.';}
     catch(e){await refresh();status.textContent='Send was blocked or its result is uncertain. Check the saved delivery record before trying again.';}
    });
    card.append(send);
@@ -121,6 +122,19 @@ async function refresh(){
    if(!exchanged.expiresAt)throw Error('SESSION_MISSING');
    await refresh();
   }
+  const connectX=document.getElementById('connect-x'),checkX=document.getElementById('check-x');
+  connectX.disabled=false;checkX.disabled=false;
+  connectX.addEventListener('click',async()=>{
+   connectX.disabled=true;
+   try{const result=await api('x/connect',{campaignId:campaign});const url=new URL(result.authorization_url);if(url.origin!=='https://x.com'||url.pathname!=='/i/oauth2/authorize')throw Error();location.assign(url.href);}
+   catch{status.textContent='X connection is unavailable. Your review and approvals are preserved.';connectX.disabled=false;}
+  });
+  checkX.addEventListener('click',async()=>{
+   checkX.disabled=true;
+   try{const result=await api('x/status',{campaignId:campaign});status.textContent='X connected: @'+result.username+'. Publishing still requires separate release.';}
+   catch{status.textContent='X connection could not be verified. Use Connect X if reconnection is needed.';}
+   finally{checkX.disabled=false;}
+  });
   const discover=document.getElementById('discover');discover.disabled=false;
   discover.addEventListener('click',async()=>{
    discover.disabled=true;status.textContent='Discovering evidence-matched destinations and preparing review drafts…';

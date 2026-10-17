@@ -6,7 +6,7 @@ const path=require('node:path');
 const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
-const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release']);
+const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
  return readdirSync(attestationDir).filter(name=>/^publication-\d{4}-\d{2}-\d{2}\.json$/.test(name)).map(name=>name.slice(12,-5)).filter(date=>{
@@ -133,7 +133,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
  const pool=createPool({connectionString:databaseUrl});
  try{
   const integration=createV3IsolatedWiring({
-   pool,token:env.EMRADAR_V3_API_TOKEN,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,env,createTransport
+   pool,token:env.EMRADAR_V3_API_TOKEN,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,env,createTransport,fetcher
   });
   await integration.initialize();
   const notify=async({recipient,campaignId,link})=>{
@@ -146,9 +146,9 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
    autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
   });
-  console.info('V3_DISTRIBUTION_CAPABILITIES '+JSON.stringify({email_release:true,x_release:false,existing_marketing_token_present:Boolean(env.MARKETING_ENGINE_TOKEN),x_client_id_present:Boolean(env.X_CLIENT_ID),x_client_secret_present:Boolean(env.X_CLIENT_SECRET),x_access_token_present:Boolean(env.X_ACCESS_TOKEN||env.TWITTER_ACCESS_TOKEN),x_authorization_store_present:Boolean(env.REDIS_URL||env.KEY_VALUE_URL)}));
+  console.info('V3_DISTRIBUTION_CAPABILITIES '+JSON.stringify({email_release:true,x_release:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true',x_client_id_present:Boolean(env.X_CLIENT_ID),x_client_secret_present:Boolean(env.X_CLIENT_SECRET),x_token_encryption_configured:Boolean(env.EMRADAR_V3_X_TOKEN_KEY)}));
   let releaseApprovedEmail;
-  const reviewServer=createReviewServer({workflow:service.workflow,runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId),releaseEmail:input=>releaseApprovedEmail(input)});
+  const reviewServer=createReviewServer({workflow:service.workflow,xAuth:integration.xAuth,runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId),releaseEmail:input=>releaseApprovedEmail(input)});
   setReviewHandler((req,res,next)=>{
    if(!REVIEW_PATHS.has(req.url.split('?')[0]))return next();
    reviewServer.emit('request',req,res);
@@ -205,28 +205,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     client.release();
    }
   };
-  // Explicit owner-authenticated release of ONE approved email at a time.
-  // No automatic distribution, no X publishing, and no retries of ambiguous sends.
-  releaseApprovedEmail=async({campaignId,destinationId,sessionId,sessionSecret}={})=>{
-   if([campaignId,destinationId,sessionId,sessionSecret].some(v=>typeof v!=='string'||!v))throw Error('V3_RELEASE_REQUEST_INVALID');
-    await service.workflow.authenticate(campaignId,sessionId,sessionSecret);
-    const state=(await service.store.adapter.read(campaignId))?.value;
-    const entry=state?.assets?.[destinationId];
-    const approval=state?.decisions?.[destinationId];
-    if(state?.phase!=='PUBLICATION_REVIEW'||entry?.asset?.kind!=='EMAIL'||approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.asset_sha256!==entry.fingerprint||state.deliveries?.[destinationId])
-     throw Error('V3_RELEASE_NOT_APPROVED');
-    await require('./emradar-v3-recipient.cjs').checkPersistedRecipient(pool,entry.asset,state);
-    const claimed=await service.store.claimDelivery(campaignId,destinationId);
-    const key=claimed.deliveries[destinationId].idempotency_key;
-    try{
-     const receipt=await integration.handle({operation:'approved-delivery',payload:{version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:campaignId,destination_id:destinationId,asset:entry.asset,approval,idempotency_key:key}});
-     await service.store.recordDelivery(campaignId,destinationId,'ACCEPTED',{provider_id:receipt.receipt_id,sent_folder:receipt.sent_folder,smtp_response:receipt.smtp_response});
-     return {status:'ACCEPTED',campaignId,destinationId,receipt_id:receipt.receipt_id,sent_folder:receipt.sent_folder};
-    }catch(error){
-     await service.store.recordDelivery(campaignId,destinationId,'AMBIGUOUS',{reason:'TRANSPORT_OUTCOME_UNKNOWN'});
-     throw Error('V3_DELIVERY_OUTCOME_AMBIGUOUS');
-    }
-  };
+  // Explicit owner release; no automatic publication or ambiguous retries.
+  releaseApprovedEmail=require('./emradar-v3-release.cjs').createV3Release({service,integration,pool});
   app.post('/emradar/v3/release-email',async(req,res)=>{
    try{return res.status(200).json(await releaseApprovedEmail(req.body));}
    catch(error){return res.status(409).json({reason:/^V3_[A-Z0-9_]+$/.test(error.message)?error.message:'V3_RELEASE_FAILED'});}
