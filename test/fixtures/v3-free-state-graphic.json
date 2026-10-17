@@ -1,0 +1,77 @@
+{
+  "asset": {
+    "body": "South Africa’s Free State launched an investment programme with Chinese investors Joy Long-YJC. The proposed YJC renewable-energy project is valued at about R100 billion and could create 6,500 jobs. Joylong’s R5.5 billion plant targets up to 8,000 EVs annually. Source: South African Government.",
+    "campaign_id": "v3-2602ddf68a3ced8aeafb769fc928423f",
+    "evidence_ids": [
+      "south-africa-free-state-industrialisation:0",
+      "south-africa-free-state-industrialisation:1",
+      "south-africa-free-state-industrialisation:2",
+      "africa-yuan-payment-rails:0",
+      "africa-yuan-payment-rails:1",
+      "africa-yuan-payment-rails:2",
+      "us-dfc-africa-strategic-equity:0",
+      "us-dfc-africa-strategic-equity:1",
+      "us-dfc-africa-strategic-equity:2",
+      "china-local-government-infrastructure-fiscal-push:0",
+      "china-local-government-infrastructure-fiscal-push:1",
+      "china-local-government-infrastructure-fiscal-push:2",
+      "africa-cross-border-industrial-capital-access:0",
+      "africa-cross-border-industrial-capital-access:1",
+      "africa-cross-border-industrial-capital-access:2",
+      "sadc-afdb-regional-project-finance:0",
+      "sadc-afdb-regional-project-finance:1",
+      "sadc-afdb-regional-project-finance:2"
+    ],
+    "kind": "X",
+    "subject": "Free State investment plans"
+  },
+  "document": {
+    "evidence": [
+      {
+        "date": "2026-10-09",
+        "fact": "The proposed YJC renewable-energy project is valued at about R100 billion and could create 6,500 jobs; Joylong's R5.5 billion plant targets up to 8,000 EVs annually.",
+        "id": "south-africa-free-state-industrialisation:0",
+        "record_id": "south-africa-free-state-industrialisation",
+        "source": "South African Government",
+        "source_url": "https://www.gov.za/news/speeches/president-cyril-ramaphosa-launch-free-state-catalytic-investment-and",
+        "verified": true
+      },
+      {
+        "date": "2026-10-09",
+        "fact": "The programme was launched with the Free State government, municipality and Chinese investors Joy Long-YJC.",
+        "id": "south-africa-free-state-industrialisation:1",
+        "record_id": "south-africa-free-state-industrialisation",
+        "source": "South African Government",
+        "source_url": "https://www.gov.za/news/media-advisories/government-activities/free-state-province-launches-catalytic-investment-and",
+        "verified": true
+      },
+      {
+        "date": "2026-10-09",
+        "fact": "SAnews reported a broader R120 billion initiative spanning renewable energy, EV manufacturing and agricultural processing.",
+        "id": "south-africa-free-state-industrialisation:2",
+        "record_id": "south-africa-free-state-industrialisation",
+        "source": "SAnews",
+        "source_url": "https://www.sanews.gov.za/south-africa/president-announces-r120-billion-free-state-investment-initiative",
+        "verified": true
+      }
+    ],
+    "records": [
+      {
+        "contradictions": [
+          "Launch values may represent proposals rather than committed capital.",
+          "Free State power, municipal infrastructure and execution constraints remain material.",
+          "Job and capacity targets are forecasts."
+        ],
+        "id": "south-africa-free-state-industrialisation",
+        "location": "Free State, South Africa",
+        "missing_evidence": [
+          "Finance documents",
+          "Construction contracts",
+          "Grid connection",
+          "Customer orders",
+          "Commissioning timetable"
+        ]
+      }
+    ]
+  }
+}

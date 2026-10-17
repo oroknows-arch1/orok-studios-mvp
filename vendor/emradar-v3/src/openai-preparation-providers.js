@@ -1,5 +1,6 @@
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {EDITORIAL_REFERENCE,isEditorialDestination,selectEditorialEvidence,validateEditorialStory,editorialPrompt} from './editorial-reference.js';
+import {emradarGraphicPrompt} from './graphic-standard.js';
 // Reuse the OpenAI client already configured by the existing paid API.
 // No model calls occur at import or assembly time.
 import {createRequire} from 'node:module';
@@ -70,9 +71,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    return {campaign_id:campaignId,destination_id:destination.id,kind:'X',body:draft.body,subject:draft.subject,from:brand.identity.address,evidence_ids:evidence.map(e=>e.id)};
   },
   renderVisual:async({asset,document})=>{
-   const evidence=(document?.evidence??[]).filter(e=>asset.evidence_ids?.includes(e.id));
-   if(!evidence.length)throw Error('V3_X_EVIDENCE_REQUIRED');
-   const prompt='Create one clear, editorial infographic illustrating this EMRADAR research theme. Use only grounded concepts; do not invent data, numbers, source logos or charts. Evidence: '+JSON.stringify(evidence.map(e=>e.fact))+'; accompanying X text: '+asset.body;
+   const prompt=emradarGraphicPrompt({asset,document});
    const generated=await openai.images.generate({model:imageModel,prompt,size:'1024x1024'},{maxRetries:0,timeout:180000});
    const base64=generated.data?.[0]?.b64_json;
    if(typeof base64!=='string'||!base64.length)throw Error('V3_X_IMAGE_BYTES_REQUIRED');
