@@ -84,7 +84,7 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
     }else{
      try{proofHtml=await read(proofUrl);if(!/(?:news|article|analysis|journal|magazine|editorial|reporting|stories|insights|podcast|episode|discussion|forum|community|newsletter|markets|business|finance|research|about)/i.test(proofHtml))throw Error('PUBLICATION_MARKERS_MISSING');}catch(error){proofFailure=error.message;journal.failures.push({url:proofUrl.href,reason:error.message});}
      result=await research({website:website.href,publication:base.name,topics:industries,sourceUrls:[item.contact_url,proofUrl.href].filter(Boolean)});
-     journal.pages.push(...result.pages);journal.failures.push(...result.failures);
+     journal.pages.push(...result.pages);journal.failures.push(...result.failures);journal.contact_observations=(result.contacts??[]).slice(0,50).map(({email,purpose,eligible,rejection_reason,source_url})=>({email,purpose,eligible,rejection_reason,source_url}));
      let alternatives=[item.directory_source_url,item.publisher_source_url].filter(Boolean);
      if(!result.primary||proofFailure){
       try{

@@ -43,7 +43,8 @@ export function extractPublicationContacts(html,{url,publication,topics=[]}){
     const start=previous?block.toLowerCase().lastIndexOf(previous.toLowerCase(),position)+previous.length:0;
     const roleText=block.slice(start,position).slice(-400).trim(),context=(heading+' '+roleText).trim();
     let purpose=null,rank=99,reason='NO_EDITORIAL_PURPOSE';
-    if(forbidden.test(context))reason='NON_EDITORIAL_ROLE';
+    if(recipientPolicy.isCommercialContactContext(block))reason='COMMERCIAL_CONTACT_ROLE';
+    else if(forbidden.test(context))reason='NON_EDITORIAL_ROLE';
     else if(/editor\b/i.test(context)&&!/editorial (?:enquir|inquir)/i.test(context)){
      purpose='named_editor';rank=1;
      if(topics.some(topic=>String(topic).length>3&&context.toLowerCase().includes(String(topic).toLowerCase()))){rank=0;}

@@ -60,3 +60,15 @@ test('WordPress boilerplate and contact-data brokers cannot establish directory 
  assert.equal(policy.isDirectoryIdentityText('Media directory for lead generation; buy email addresses.'),false);
  assert.equal(policy.isDirectoryIdentityText('We are a magazine publisher and maintain our editorial directory.'),true);
 });
+
+test('the live CF Minerals commercial enquiries wording cannot become an editorial recipient',()=>{
+ const published='General enquiries info@cf-commodities.com For commodity offers, include the mineral, origin, available quantity, specification or assay, and preferred delivery terms.';
+ const contacts=extractPublicationContacts('<h2>Washington DC</h2><p>'+published+'</p>',{url:'https://cf-commodities.com/contact',publication:'CF Minerals Solutions'});
+ assert.equal(contacts[0].eligible,false);assert.equal(contacts[0].rejection_reason,'COMMERCIAL_CONTACT_ROLE');
+ const d=verified();d.contact.published_excerpt+=' For commodity offers, include the mineral and origin.';assert.equal(Boolean(policy.verifiedDestination(d)),false);
+});
+
+test('legitimate general publication enquiries remain eligible',()=>{
+ const contacts=extractPublicationContacts('<h2>General enquiries</h2><p>hello@journal.example</p>',{url:'https://journal.example/contact',publication:'Journal'});
+ assert.equal(contacts[0].eligible,true);assert.equal(contacts[0].purpose,'general');assert(policy.verifiedDestination(verified()));
+});

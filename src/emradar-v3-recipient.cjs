@@ -36,6 +36,7 @@ function directoryContact(record){
   typeof p.entry_excerpt==='string'&&p.entry_excerpt.toLowerCase().includes(c.email?.toLowerCase())&&p.entry_excerpt.toLowerCase().includes(record.name?.toLowerCase())&&
   isDirectoryIdentityText(p.identity_excerpt);
 }
+function isCommercialContactContext(text){return typeof text==='string'&&/\bfor commodity offers\b|\b(?:sales|trading|supplier) (?:enquiries|inquiries)\b|\brequest (?:a )?(?:quote|quotation)\b/i.test(text);}
 function verifiedDestination(record){
  const c=record?.contact,v=record?.verification;
  return record?.active===true&&record.editorial_fit_verified===true&&record.contact_verified===true&&validRecipient(c?.email)&&
@@ -43,7 +44,7 @@ function verifiedDestination(record){
  ['editorial','submissions','named_editor','general'].includes(c.purpose)&&
  typeof c.published_excerpt==='string'&&c.published_excerpt.toLowerCase().includes(c.email.toLowerCase())&&/^[a-f0-9]{64}$/.test(c.page_sha256??'')&&
  Array.isArray(v.evidence_ids)&&v.evidence_ids.length>0&&/^[a-f0-9]{64}$/.test(v.scan_evidence_digest??'')&&
- !record.opted_out&&!record.do_not_contact&&!c.opted_out&&!c.do_not_contact;
+ !isCommercialContactContext(c.published_excerpt)&&!record.opted_out&&!record.do_not_contact&&!c.opted_out&&!c.do_not_contact;
 }
 function assertVerifiedDestination(record){if(!verifiedDestination(record))throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');return record;}
 function assertVerifiedAsset(asset,destination){
@@ -60,4 +61,4 @@ async function checkPersistedRecipient(pool,asset,state){
  assertVerifiedAsset(asset,current);
  return assertRecipientAllowed(asset,destination,...rows.map(row=>row.record));
 }
-module.exports={isDirectoryIdentityText,validRecipient,assertRecipientAllowed,checkPersistedRecipient,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset};
+module.exports={isCommercialContactContext,isDirectoryIdentityText,validRecipient,assertRecipientAllowed,checkPersistedRecipient,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset};
