@@ -50,9 +50,9 @@ test('cleanup commits audit snapshots before removing active records; failures r
  client.query=async sql=>{operations.push(sql);if(sql.includes('CREATE TABLE'))throw Error('DB_FAILURE');return {rows:[]};};
  await assert.rejects(cleanUnverifiedRecipients({pool,campaignId:'campaign'}),/DB_FAILURE/);assert.equal(operations.at(-1),'ROLLBACK');
 });
-test('review assembly hides unsupported entries without changing owner decisions',async()=>{
+test('review assembly includes saved content without treating recipient readiness as editorial approval',async()=>{
  const d=verified(),campaign={phase:'PUBLICATION_REVIEW',scan:{},destinations:[d,{id:'bad'},{id:'x'}],assets:{journal:{asset:{kind:'EMAIL',destination_id:'journal',to:d.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1'],subject:'Story',body:'Body',from:'sean@emradar.net'}},bad:{asset:{kind:'EMAIL',destination_id:'bad'}},x:{asset:{kind:'X',destination_id:'x'}}},decisions:{bad:{decision:'REJECT'}},deliveries:{}};
  const adapter={read:async()=>({value:campaign}),compareAndSwap:async()=>{throw Error('NO_WRITES');}};
  const workflow=new ReviewWorkflow({store:{adapter},adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:'https://review.example'});workflow.authenticate=async()=>true;
- const result=await workflow.view('campaign');assert.equal(result.entries.length,2);assert.equal(campaign.decisions.bad.decision,'REJECT');
+ const result=await workflow.view('campaign');assert.equal(result.entries.length,3);assert.equal(result.entries.find(entry=>entry.asset.destination_id==='bad').recipient_ready,false);assert.equal(campaign.decisions.bad.decision,'REJECT');
 });

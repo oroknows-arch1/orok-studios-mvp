@@ -148,7 +148,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   });
   console.info('V3_DISTRIBUTION_CAPABILITIES '+JSON.stringify({email_release:true,x_release:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true',x_client_id_present:Boolean(env.X_CLIENT_ID),x_client_secret_present:Boolean(env.X_CLIENT_SECRET),x_token_encryption_configured:Boolean(env.EMRADAR_V3_X_TOKEN_KEY)}));
   let releaseApprovedEmail;
-  const reviewServer=createReviewServer({workflow:service.workflow,xAuth:integration.xAuth,runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId),releaseEmail:input=>releaseApprovedEmail(input)});
+  const reviewServer=createReviewServer({workflow:service.workflow,xAuth:integration.xAuth,publishing:{email:{enabled:true},x:{enabled:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true',reason:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true'?null:'X publishing is disabled.'}},runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId),releaseEmail:input=>releaseApprovedEmail(input)});
   setReviewHandler((req,res,next)=>{
    if(!REVIEW_PATHS.has(req.url.split('?')[0]))return next();
    reviewServer.emit('request',req,res);

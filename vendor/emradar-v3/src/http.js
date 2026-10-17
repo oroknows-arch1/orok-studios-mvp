@@ -34,7 +34,7 @@ async function body(req) {
  }
  return JSON.parse(value||'{}');
 }
-export function createReviewServer({workflow,runDiscovery,releaseEmail,xAuth,logOAuthDiagnostic=message=>console.info(message),health=()=>({ok:true})}) {
+export function createReviewServer({workflow,runDiscovery,releaseEmail,xAuth,publishing={email:{enabled:true},x:{enabled:false,reason:'X publishing is disabled.'}},logOAuthDiagnostic=message=>console.info(message),health=()=>({ok:true})}) {
  if(!(workflow instanceof ReviewWorkflow)) throw Error('WORKFLOW_REQUIRED');
  return createServer(async(req,res)=>{
   let isCallback=false,stage='REQUEST',failure;
@@ -49,7 +49,7 @@ export function createReviewServer({workflow,runDiscovery,releaseEmail,xAuth,log
    const url=new URL(req.url,'http://localhost');
    if(req.method==='GET' && url.pathname==='/health') return json(res,200,health());
    if(req.method==='GET' && url.pathname==='/review/access') {
-    res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src https://emerging-markets-radar.onrender.com; frame-src 'self' about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});
+    res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: https:; frame-src 'self' about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});
     return res.end(reviewPage);
    }
    if(req.method==='GET' && url.pathname==='/api/review/x/callback'){
@@ -99,7 +99,7 @@ export function createReviewServer({workflow,runDiscovery,releaseEmail,xAuth,log
      sessionCookie(input.campaignId)+'='+encodeURIComponent(session.id+'.'+session.secret)+'; HttpOnly; Secure; SameSite=Strict; Path=/api/review; Max-Age='+Math.floor(OWNER_SESSION_TTL_MS/1000),
      'emradar_v3_csrf='+randomBytes(24).toString('hex')+'; Secure; SameSite=Strict; Path=/; Max-Age='+Math.floor(OWNER_SESSION_TTL_MS/1000)
     ]);
-    return json(res,200,view);
+    return json(res,200,{...view,publishing});
    }
    stage='CSRF';
    const csrf=cookie(req,'emradar_v3_csrf');

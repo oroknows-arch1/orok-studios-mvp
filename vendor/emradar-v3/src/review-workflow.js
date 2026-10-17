@@ -93,10 +93,21 @@ export class ReviewWorkflow {
   await this.authenticate(campaignId,sessionId,secret);
   const campaign=(await this.store.adapter.read(campaignId))?.value;
   if(!campaign || campaign.phase!=='PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
-  return {campaignId,scan:campaign.scan,entries:Object.values(campaign.assets).filter(({asset})=>asset.kind==='X'||(()=>{try{recipientPolicy.assertVerifiedAsset(asset,campaign.destinations.find(d=>d.id===asset.destination_id));return true;}catch{return false;}})()).map(({asset,fingerprint})=>({
-   asset,fingerprint,groupKey:asset.kind==='EMAIL'?identicalEmailGroupKey(asset):null,decision:campaign.decisions[asset.destination_id]??null,
-   delivery:campaign.deliveries[asset.destination_id]??null
-  }))};
+  const describe=(entry,{historical=false,label='',decision=null}={})=>{
+   const {asset,fingerprint}=entry;
+   const destination=campaign.destinations.find(d=>d.id===asset.destination_id);
+   let recipientReady=true;
+   if(asset.kind==='EMAIL'){try{recipientPolicy.assertVerifiedAsset(asset,destination);}catch{recipientReady=false;}}
+   return {asset,fingerprint,historical,label,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
+    groupKey:!historical&&asset.kind==='EMAIL'?identicalEmailGroupKey(asset):null,
+    decision:historical?decision:campaign.decisions[asset.destination_id]??null,
+    delivery:historical?null:campaign.deliveries[asset.destination_id]??null};
+  };
+  const history=[];
+  for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft'}));
+  for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
+  for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
+  return {campaignId,scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint) {
   await this.authenticate(campaignId,sessionId,secret);
@@ -115,7 +126,6 @@ export class ReviewWorkflow {
    let count=0;
    for(const {asset,fingerprint} of Object.values(state.assets)){
     if(asset.kind!=='EMAIL' || identicalEmailGroupKey(asset)!==groupKey) continue;
-    recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));
     if(state.deliveries[asset.destination_id]) throw Error('DECISION_AFTER_DISTRIBUTION');
     // Existing individual decisions are authoritative.
     if(state.decisions[asset.destination_id]) continue;

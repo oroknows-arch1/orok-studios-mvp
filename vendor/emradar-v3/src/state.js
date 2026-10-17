@@ -79,7 +79,8 @@ export class CampaignStore {
       if (!state || state.phase !== 'PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
       const item = state.assets[destinationId];
       if (!item || item.fingerprint !== fingerprint || !['APPROVE','REJECT'].includes(decision)) throw Error('INVALID_DECISION');
-      if(item.asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));
+      // Editorial decisions are independent of delivery readiness. Recipient
+      // verification remains mandatory in claimDelivery and transport checks.
       if (state.deliveries[destinationId]) throw Error('DECISION_AFTER_DISTRIBUTION');
       state.decisions[destinationId] = {authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId};
       return state;

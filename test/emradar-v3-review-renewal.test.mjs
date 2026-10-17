@@ -62,7 +62,8 @@ test('HTTP reopening uses per-campaign secure persistent cookies and never sends
  const exchange=await request('exchange',{campaignId:'campaign',token});assert.equal(exchange.status,200);
  const cookies=exchange.headers.getSetCookie();assert(cookies[0].includes('HttpOnly; Secure; SameSite=Strict'));assert(cookies[0].includes('Max-Age=2592000'));assert.match(cookies[0],/^emradar_v3_session_[a-f0-9]{16}=/);
  const cookie=cookies.map(c=>c.split(';')[0]).join('; ');
- const view=await request('view',{campaignId:'campaign'},cookie);assert.equal(view.status,200);assert.equal((await view.json()).entries[0].decision.decision,'APPROVE');
+ const view=await request('view',{campaignId:'campaign'},cookie);assert.equal(view.status,200);const preview=await view.json();assert.equal(preview.entries[0].decision.decision,'APPROVE');assert.equal(preview.publishing.x.enabled,false);
+ const page=await fetch('http://127.0.0.1:'+server.address().port+'/review/access');assert.equal(page.status,200);assert.match(page.headers.get('content-security-policy'),/img-src 'self' data: https:/);assert.match(page.headers.get('content-security-policy'),/frame-src 'self'/);
  assert.equal((await request('exchange',{campaignId:'campaign',token},cookie)).status,403);
  assert.equal((await request('view',{campaignId:'second'},cookie)).status,403);
  assert.equal((await request('release',{campaignId:'campaign',destinationId:'x'},cookie)).status,403);assert.equal(releases,0);assert.equal(f.notifications.length,1);

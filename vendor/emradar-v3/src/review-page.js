@@ -11,6 +11,7 @@ button{border:1px solid #123f53;background:white;color:#123f53;padding:10px 14px
 button:disabled{opacity:.4}
 button:focus-visible{outline:3px solid #e0a825}
 small{color:#52636d}
+.review-graphic{display:block;max-width:100%;height:auto;margin:16px 0}
 </style></head><body><header><h1>EMRADAR · Publication Review</h1><p>Approval saves your decision. Use the separate release control to distribute approved content.</p></header>
 <p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><button id="connect-x" type="button" disabled>Connect X</button><button id="check-x" type="button" disabled>Check X connection</button><main id="entries"></main>
 <script>
@@ -37,18 +38,19 @@ async function refresh(){
   else counts.undecided++;
  }
  const renderedGroups=new Set();
- for(const item of view.entries){
-  const {asset,fingerprint,groupKey,decision,delivery}=item;
+ for(const item of [...view.entries,...(view.history??[])]){
+  const {asset,fingerprint,groupKey,decision,delivery,historical}=item;
   const card=document.createElement('article');
-  card.append(text('h2',asset.destination_id),text('small','Status: '+(decision?.decision||'Awaiting decision')+(delivery?' · Delivery: '+delivery.status:'')));
+  card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
+  card.append(text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
   if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.to?'Recipient: '+asset.to+' · Verification: '+(asset.contact_status||'unknown'):'Recipient unavailable'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
-  if(delivery?.receipt)card.append(text('p','Mail receipt: '+(delivery.receipt.provider_id||'unconfirmed')+' · Sent folder: '+(delivery.receipt.sent_folder?.status||'no filing receipt')));
+  if(delivery?.receipt)card.append(text('p',asset.kind==='X'?'X receipt: '+(delivery.receipt.provider_id||'unconfirmed'):'Mail receipt: '+(delivery.receipt.provider_id||'unconfirmed')+' · Sent folder: '+(delivery.receipt.sent_folder?.status||'no filing receipt')));
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
-  if(asset.kind==='EMAIL' && asset.brand_version==='connected-earth-v1' && asset.html){
+  if(asset.kind==='EMAIL' && asset.html){
    const preview=document.createElement('iframe');preview.title='Reviewed email with EMRADAR letterhead';preview.setAttribute('sandbox','');preview.style='width:100%;height:900px;border:1px solid #d9e2e7';preview.srcdoc=asset.html;card.append(preview);
   }
-  if(!delivery){
+  if(!delivery&&!historical){
    const edit=text('button','Edit draft');
    edit.addEventListener('click',async()=>{
     const revised=prompt('Edit draft text',asset.body);
@@ -71,21 +73,37 @@ async function refresh(){
    }
   }
   if(asset.kind==='X'&&!delivery)card.append(text('p','Approval does not publish this post. Release checks the account, graphic and publication history before posting.'));
-  if(asset.kind==='X' && asset.visual_url){
-   const link=document.createElement('a');const visual=new URL(asset.visual_url,location.origin);if(visual.protocol==='https:'){link.href=visual.href;link.rel='noopener noreferrer';link.target='_blank';link.textContent='View accompanying graphic';card.append(link);}
+  if(asset.kind==='X'){
+   const mime=asset.visual_mime;
+   const stored=asset.visual_base64&&['image/png','image/jpeg','image/webp','image/gif'].includes(mime)?'data:'+mime+';base64,'+asset.visual_base64:null;
+   let source=stored;
+   if(!source&&asset.visual_url){
+    try{const url=new URL(asset.visual_url,location.origin);if((url.protocol==='https:'&&!url.username&&!url.password)||['image/png','image/jpeg','image/webp','image/gif'].some(type=>asset.visual_url.startsWith('data:'+type+';base64,')))source=url.href;}catch{}
+   }
+   if(source){
+    const image=document.createElement('img');image.className='review-graphic';image.alt='Actual graphic accompanying the proposed X post';image.src=source;
+    image.addEventListener('error',()=>{card.append(text('p','The saved graphic could not be displayed. The draft remains available for review.'));});
+    card.append(image);
+   }else card.append(text('p','No displayable graphic is saved with this X draft.'));
   }
-  if((asset.kind==='X'||(asset.kind==='EMAIL'&&asset.to))&&decision?.decision==='APPROVE'&&!delivery){
-   const isX=asset.kind==='X';
+  if(!historical){
+   const isX=asset.kind==='X',capability=view.publishing?.[isX?'x':'email'];
+   const unavailable=delivery?'A delivery has already been recorded. It will not be repeated.':
+    (!isX&&(!asset.to||item.recipient_ready===false))?'A verified recipient is required for delivery. Editorial review remains available.':
+    capability?.enabled===false?(capability.reason||'Publishing is unavailable. Editorial review remains available.'):
+    decision?.decision!=='APPROVE'?'Approve this draft before releasing it.':null;
+   if(unavailable)card.append(text('p',unavailable));
    const send=text('button',isX?'Publish approved X post':'Send approved email');
+   send.disabled=!!unavailable;
    send.addEventListener('click',async()=>{
     if(!confirm(isX?'Publish this exact approved text and graphic to the configured X account?':'Send this exact approved email to '+asset.to+'?'))return;
     send.disabled=true;
     try{await api('release',{campaignId:campaign,destinationId:asset.destination_id});await refresh();status.textContent=isX?'X accepted the post. Its receipt is saved with this asset.':'Mail accepted. The receipt and Sent-folder result are shown with this email.';}
-    catch(e){await refresh();status.textContent='Send was blocked or its result is uncertain. Check the saved delivery record before trying again.';}
+    catch(e){await refresh();status.textContent='Release was blocked or its result is uncertain. Check the saved delivery record before trying again.';}
    });
    card.append(send);
   }
-  for(const choice of ['APPROVE','REJECT']){
+  if(!historical)for(const choice of ['APPROVE','REJECT']){
    const button=text('button',choice==='APPROVE'?'Approve':'Reject');
    button.disabled=!!delivery;
    button.addEventListener('click',async()=>{
@@ -95,7 +113,7 @@ async function refresh(){
    });
    card.append(button);
   }
-  if(groupKey && !renderedGroups.has(groupKey) && view.entries.filter(e=>e.groupKey===groupKey).length>1 && view.entries.some(e=>e.groupKey===groupKey && !e.decision && !e.delivery)){
+  if(!historical && groupKey && !renderedGroups.has(groupKey) && view.entries.filter(e=>e.groupKey===groupKey).length>1 && view.entries.some(e=>e.groupKey===groupKey && !e.decision && !e.delivery)){
    renderedGroups.add(groupKey);
    for(const choice of ['APPROVE','REJECT']){
     const button=text('button',choice==='APPROVE'?'Approve identical undecided emails':'Reject identical undecided emails');
@@ -105,7 +123,7 @@ async function refresh(){
   }
   main.append(card);
  }
- status.textContent='Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.';
+ status.textContent='Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
 }
 (async()=>{
  try{
