@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "objective_id": "emradar-v3-complete-existing-campaign",
-  "status": "IN_PROGRESS",
+  "status": "COMPLETE",
   "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
   "objective": "Complete the existing V3 marketing campaign through a complete functioning PUBLICATION_REVIEW with owner access, without external distribution.",
   "constraints": {
@@ -11,13 +11,13 @@
     "preserve_existing_assets_history_and_decisions": true
   },
   "verified_checkpoint": {
-    "verified_at": "2026-10-18T01:39:41+11:00",
+    "verified_at": "2026-10-18T01:45:00+11:00",
     "repository": "oroknows-arch1/orok-studios-mvp",
-    "github_main_sha": "214b0bc7e749e30b1578cd141b817539a049d557",
+    "github_main_sha": "bdd6ccddb02c6f57a0e1f2df481d3597b54a5b6c",
     "render_workspace_id": "tea-d79k6muuk2gs73eesr2g",
     "render_service_id": "srv-d79k9os50q8c73fkeqig",
-    "render_live_deploy_id": "dep-db9n45u1egvs73cuhhfg",
-    "render_live_sha": "214b0bc7e749e30b1578cd141b817539a049d557",
+    "render_live_deploy_id": "dep-db9ohoflk1mc73c5673g",
+    "render_live_sha": "bdd6ccddb02c6f57a0e1f2df481d3597b54a5b6c",
     "postgres_id": "dpg-d9caf3j7uimc73d41n1g-a",
     "campaign_phase": "PUBLICATION_REVIEW",
     "campaign_version": 43,
@@ -27,21 +27,22 @@
     "delivery_count": 0,
     "owner_review_status": "NOTIFIED",
     "owner_review_version": 2,
-    "recovery_checkpoint": "STARTED",
+    "owner_review_expires_at": "2026-10-19T01:03:58+11:00",
+    "legacy_recovery_checkpoint": "STARTED (preserved; superseded by the verified complete campaign state)",
     "external_distribution_observed": 0
   },
   "acceptance_conditions": [
-    {"id": "persistent_harness", "status": "IMPLEMENTED", "evidence": "AGENTS.md, docs/development-objective.json, npm run harness:verify, and CI enforcement"},
+    {"id": "persistent_harness", "status": "VERIFIED", "evidence": "Commit bdd6ccddb02c6f57a0e1f2df481d3597b54a5b6c; AGENTS.md, docs/development-objective.json, npm run harness:verify, and CI enforcement"},
     {"id": "targeted_tests", "status": "PASS", "evidence": "27/27 passed: development harness, campaign recovery, autonomous discovery, and owner review preview"},
-    {"id": "production_deploy_verified", "status": "VERIFIED_BASELINE", "evidence": "Render deploy dep-db9n45u1egvs73cuhhfg is live on 214b0bc7e749e30b1578cd141b817539a049d557; verify the harness deploy after push."},
-    {"id": "genuine_publications_verified", "status": "PENDING", "evidence": null},
-    {"id": "editorial_contacts_verified", "status": "PENDING", "evidence": null},
-    {"id": "publication_specific_proposals", "status": "PENDING", "evidence": null},
-    {"id": "complete_publication_review", "status": "PENDING", "evidence": null},
-    {"id": "owner_review_access", "status": "PENDING", "evidence": null},
+    {"id": "production_deploy_verified", "status": "VERIFIED", "evidence": "Render deploy dep-db9ohoflk1mc73c5673g is live on bdd6ccddb02c6f57a0e1f2df481d3597b54a5b6c; /health returned HTTP 200."},
+    {"id": "genuine_publications_verified", "status": "VERIFIED", "evidence": "Two active editorial publications: The Jakarta Post and The Wall Street Journal Asia."},
+    {"id": "editorial_contacts_verified", "status": "VERIFIED", "evidence": "Two public editorial/newsroom contacts are source-bound and contact_verified=true; addresses are retained only in production state."},
+    {"id": "publication_specific_proposals", "status": "VERIFIED", "evidence": "Two EMAIL assets have subject/body and verified recipients; the preserved X asset has text and graphic."},
+    {"id": "complete_publication_review", "status": "VERIFIED", "evidence": "Production review_completion.complete=true, verified_publications=2, editorial_emails=2, x_ready=true, missing_destination_ids=[]."},
+    {"id": "owner_review_access", "status": "VERIFIED", "evidence": "Review status NOTIFIED with canonical owner recipient and provider receipt; public review entry returned HTTP 200."},
     {"id": "external_distribution", "status": "PROHIBITED_PENDING_OWNER_APPROVAL", "evidence": "No editorial delivery or X publication is authorized."}
   ],
-  "next_action": "Verify the repository harness, commit and push it, verify the automatic Render deploy, then inspect the bounded production discovery checkpoint and resume only the existing campaign if the durable checkpoint permits it.",
+  "next_action": "Owner opens the existing private review invitation for campaign v3-df5b240c718018880410c03a4c392d64 and approves, rejects, or revises each asset. Do not distribute anything without those explicit saved decisions.",
   "stop_conditions": [
     "Genuine security or permission requirement",
     "Owner approval decision",
