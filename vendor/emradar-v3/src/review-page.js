@@ -12,7 +12,7 @@ button:disabled{opacity:.4}
 button:focus-visible{outline:3px solid #e0a825}
 small{color:#52636d}
 </style></head><body><header><h1>EMRADAR · Publication Review</h1><p>Approval saves your decision. Use the separate release control to distribute approved content.</p></header>
-<p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><main id="entries"></main>
+<p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><button id="connect-x" type="button" disabled>Connect X</button><button id="check-x" type="button" disabled>Check X connection</button><main id="entries"></main>
 <script>
 'use strict';
 let campaign,invitationToken;
@@ -122,6 +122,19 @@ async function refresh(){
    if(!exchanged.expiresAt)throw Error('SESSION_MISSING');
    await refresh();
   }
+  const connectX=document.getElementById('connect-x'),checkX=document.getElementById('check-x');
+  connectX.disabled=false;checkX.disabled=false;
+  connectX.addEventListener('click',async()=>{
+   connectX.disabled=true;
+   try{const result=await api('x/connect',{campaignId:campaign});const url=new URL(result.authorization_url);if(url.origin!=='https://x.com'||url.pathname!=='/i/oauth2/authorize')throw Error();location.assign(url.href);}
+   catch{status.textContent='X connection is unavailable. Your review and approvals are preserved.';connectX.disabled=false;}
+  });
+  checkX.addEventListener('click',async()=>{
+   checkX.disabled=true;
+   try{const result=await api('x/status',{campaignId:campaign});status.textContent='X connected: @'+result.username+'. Publishing still requires separate release.';}
+   catch{status.textContent='X connection could not be verified. Use Connect X if reconnection is needed.';}
+   finally{checkX.disabled=false;}
+  });
   const discover=document.getElementById('discover');discover.disabled=false;
   discover.addEventListener('click',async()=>{
    discover.disabled=true;status.textContent='Discovering evidence-matched destinations and preparing review drafts…';

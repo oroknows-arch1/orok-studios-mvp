@@ -11,7 +11,7 @@ async function main(){
   const {rows}=await pool.query('SELECT payload FROM v3_campaign_state WHERE campaign_id=$1',[campaignId]);
   const state=rows[0]?.payload,entry=state?.assets?.x;
   if(!entry||entry.asset.kind!=='X')throw Error('V3_X_ASSET_REQUIRED');
-  const identity=await x.verifyIdentity({allowRefresh:process.argv.includes('--allow-refresh-after-cutover')});
+  const identity=await x.verifyIdentity({allowRefresh:false});
   const result=await x.inspect({asset:entry.asset,scan:state.scan});
   console.log(JSON.stringify({status:'VERIFIED_READ_ONLY',campaign_id:campaignId,...identity,...result}));
  }finally{await x.close();await pool.end();}

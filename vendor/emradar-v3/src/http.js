@@ -22,7 +22,7 @@ async function body(req) {
  }
  return JSON.parse(value||'{}');
 }
-export function createReviewServer({workflow,runDiscovery,releaseEmail,health=()=>({ok:true})}) {
+export function createReviewServer({workflow,runDiscovery,releaseEmail,xAuth,health=()=>({ok:true})}) {
  if(!(workflow instanceof ReviewWorkflow)) throw Error('WORKFLOW_REQUIRED');
  return createServer(async(req,res)=>{
   try {
@@ -32,8 +32,15 @@ export function createReviewServer({workflow,runDiscovery,releaseEmail,health=()
     res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src https://emerging-markets-radar.onrender.com; frame-src 'self' about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});
     return res.end(reviewPage);
    }
+   if(req.method==='GET' && url.pathname==='/api/review/x/callback'){
+    // A same-origin POST restores Strict session-cookie delivery after the
+    // cross-site redirect. No code/state is interpolated into HTML or logged.
+    const nonce=randomBytes(24).toString('base64');
+    res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; script-src 'nonce-"+nonce+"'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"});
+    return res.end('<!doctype html><meta name="referrer" content="no-referrer"><title>Connect X</title><p id="status">Completing your X connection…</p><script nonce="'+nonce+'">(async()=>{const query=new URLSearchParams(location.search);const input={state:query.get("state"),code:query.get("code"),error:query.get("error")};history.replaceState(null,"",location.pathname);const csrf=decodeURIComponent((document.cookie.split("; ").find(x=>x.startsWith("emradar_v3_csrf="))||"").split("=").slice(1).join("="));try{const r=await fetch("/api/review/x/callback",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-emradar-csrf":csrf},body:JSON.stringify(input)});const result=await r.json();if(!r.ok)throw Error();location.replace(result.review_url);}catch{document.getElementById("status").textContent="X could not be connected. Reopen your private review in this browser and try Connect X again. Nothing was published.";}})();</script>');
+   }
    if(req.method!=='POST') return json(res,404,{error:'NOT_FOUND'});
-   if(!['/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
+   if(!['/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
    if(req.headers.origin && req.headers.origin!==workflow.baseUrl) return json(res,403,{error:'ORIGIN_DENIED'});
    const input=await body(req);
    if(url.pathname==='/api/review/request-access'){
@@ -49,6 +56,12 @@ export function createReviewServer({workflow,runDiscovery,releaseEmail,health=()
      'emradar_v3_csrf='+encodeURIComponent(csrf)+'; Secure; SameSite=Strict; Path=/; Max-Age='+Math.floor(OWNER_SESSION_TTL_MS/1000)
     ]);
     return json(res,200,{expiresAt:session.expiresAt});
+   }
+   let oauthContext;
+   if(url.pathname==='/api/review/x/callback'){
+    if(!xAuth)return json(res,503,{error:'X_CONNECTION_UNAVAILABLE'});
+    oauthContext=await xAuth.context(input.state);
+    input.campaignId=oauthContext.campaign_id;
    }
    const value=cookie(req,sessionCookie(input.campaignId))||cookie(req,'emradar_v3_session');
    if(!value) return json(res,403,{error:'ACCESS_DENIED'});
@@ -66,6 +79,15 @@ export function createReviewServer({workflow,runDiscovery,releaseEmail,health=()
    }
    const csrf=cookie(req,'emradar_v3_csrf');
    if(!csrf || req.headers['x-emradar-csrf']!==csrf) return json(res,403,{error:'CSRF_DENIED'});
+   if(url.pathname.startsWith('/api/review/x/')){
+    if(!xAuth)return json(res,503,{error:'X_CONNECTION_UNAVAILABLE'});
+    if(req.headers.origin!==workflow.baseUrl)return json(res,403,{error:'ORIGIN_DENIED'});
+    await workflow.authenticate(input.campaignId,session.id,session.secret);
+    if(url.pathname==='/api/review/x/connect')return json(res,200,await xAuth.start({campaignId:input.campaignId,sessionId:session.id}));
+    if(url.pathname==='/api/review/x/status')return json(res,200,{status:'CONNECTED',...await xAuth.verifyAccount(await xAuth.current({allowRefresh:true}))});
+    if(oauthContext.session_id!==session.id)return json(res,403,{error:'ACCESS_DENIED'});
+    return json(res,200,await xAuth.complete({state:input.state,code:input.code,error:input.error,campaignId:input.campaignId,sessionId:session.id}));
+   }
    if(url.pathname==='/api/review/release'){
     if(typeof releaseEmail!=='function')return json(res,503,{error:'RELEASE_UNAVAILABLE'});
     await workflow.authenticate(input.campaignId,session.id,session.secret);

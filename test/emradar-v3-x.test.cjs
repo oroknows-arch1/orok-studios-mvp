@@ -2,18 +2,19 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
-const {createV3X,graphic,AUTH_KEYS}=require('../src/emradar-v3-x.cjs');
+const {createV3X,graphic}=require('../src/emradar-v3-x.cjs');
 const {createV3PreparedIntegration}=require('../src/emradar-v3-integration.cjs');
 const {createV3Release}=require('../src/emradar-v3-release.cjs');
 const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jq1sAAAAASUVORK5CYII=';
 const bytes=Buffer.from(png,'base64'),sha=content=>createHash('sha256').update(content).digest('hex');
 const asset=()=>({campaign_id:'campaign',destination_id:'x',kind:'X',body:'Exact approved evidence and possibilities.',visual_base64:png,visual_mime:'image/png',visual_sha256:sha(bytes),visual_url:'data:image/png;base64,'+png});
-const config=()=>({EMRADAR_V3_X_READ_ENABLED:'true',EMRADAR_V3_X_PUBLISH_ENABLED:'true',EMRADAR_V3_X_REFRESH_OWNER:'v3-after-legacy-shutdown',X_ACCOUNT_ID:'123',X_CLIENT_ID:'test-client',X_CLIENT_SECRET:'test-secret',KEY_VALUE_URL:'rediss://default:test-only@store.example:6379'});
+const config=()=>({...envConfig(),EMRADAR_V3_X_PUBLISH_ENABLED:'true'});
+const {envConfig,memoryPg}=require('./fixtures/v3-x-postgres.cjs');
 const scope='tweet.read tweet.write users.read media.write offline.access';
 function transport(options={}){
- const env=options.env||config(),calls=[],records=new Map([[AUTH_KEYS[0],JSON.stringify({access_token:'test-access',refresh_token:'test-refresh',expires_at:options.expired?900000:9000000,scope})]]),dbCalls=[];
- const client={isOpen:true,on(){},get:async key=>records.get(key),set:async(key,value)=>records.set(key,value)};
- const pool={connect:async()=>({query:async sql=>{dbCalls.push(sql);},release(){dbCalls.push('release');}})};
+ const env=options.env||config(),calls=[],db=memoryPg(env.X_CLIENT_ID?env:config());
+ db.seed({access_token:'test-access',refresh_token:'test-refresh',expires_at:options.expired?900000:9000000,scope,account_id:'123'});
+ const pool=db.pool;
  const fetcher=async(url,init={})=>{
   calls.push({url,method:init.method||'GET',body:init.body});
   if(options.respond){const custom=await options.respond(url,init,calls);if(custom)return custom;}
@@ -29,51 +30,20 @@ function transport(options={}){
   else throw Error('UNEXPECTED_TEST_ENDPOINT');
   return {ok:true,status:200,json:async()=>data};
  };
- const x=createV3X({env,pool,createClient:()=>client,clock:()=>1000000,sleep:async()=>{},fetcher});
- return {x,env,calls,records,dbCalls,client,pool};
+ const x=createV3X({env,pool,clock:()=>1000000,sleep:async()=>{},fetcher});
+ return {x,env,calls,db,pool};
 }
 const response=data=>({ok:true,status:200,json:async()=>data});
 const prepare=f=>f.x.prepare({asset:asset(),scan:{snapshot_date:'2026-10-10'}});
 
-test('default construction and disabled release perform no connection, refresh or publication',async()=>{
+test('default construction and disabled release never connect or post',async()=>{
  let accessed=0;
- const x=createV3X({createClient:()=>{accessed++;throw Error('NO_CONNECT');},fetcher:async()=>{accessed++;}});
+ const x=createV3X({pool:{query:async()=>{accessed++;throw Error('NO_CONNECT');}},fetcher:async()=>{accessed++;}});
  await assert.rejects(x.prepare({asset:asset()}),/PUBLISH_DISABLED/);
- await assert.rejects(x.verifyIdentity(),/READ_DISABLED/);assert.equal(accessed,0);
- for(const owner of [undefined,'legacy','v3']){
-  const f=transport({env:{...config(),EMRADAR_V3_X_REFRESH_OWNER:owner}});
-  await assert.rejects(prepare(f),/LEGACY_SHUTDOWN_REQUIRED/);assert.equal(f.calls.length,0);
- }
+ await assert.rejects(x.verifyIdentity(),/ACCOUNT_CONFIG_REQUIRED/);assert.equal(accessed,0);
 });
 
-test('read-only account verification never refreshes, even after cutover flag is configured',async()=>{
- const f=transport({expired:true});
- await assert.rejects(f.x.verifyIdentity(),/REFRESH_DISABLED/);
- assert.equal(f.calls.length,0);assert.equal(f.dbCalls.length,0);
-});
-
-test('after explicit cutover only: refresh under shared lock, preserve auth history and persist new tokens',async()=>{
- const f=transport({expired:true});
- await prepare(f);
- assert.equal(f.calls.filter(c=>c.url.endsWith('/oauth2/token')).length,1);
- assert.match(f.dbCalls[0],/pg_advisory_lock/);assert.match(f.dbCalls[1],/pg_advisory_unlock/);
- const saved=JSON.parse(f.records.get(AUTH_KEYS[0]));
- assert.equal(saved.refresh_token,'test-next-refresh');assert.equal(saved.refresh_attempt,undefined);
- await prepare(f);assert.equal(f.calls.filter(c=>c.url.endsWith('/oauth2/token')).length,1);
-});
-
-test('ambiguous refresh persists a guard and is never repeated after interruption',async()=>{
- const f=transport({expired:true,respond:async url=>{if(url.endsWith('/oauth2/token'))throw Error('test timeout');}});
- await assert.rejects(prepare(f),/REFRESH_OUTCOME_UNKNOWN/);
- assert(JSON.parse(f.records.get(AUTH_KEYS[0])).refresh_attempt);
- const restarted=createV3X({env:f.env,pool:f.pool,createClient:()=>f.client,clock:()=>1000000,fetcher:async()=>{throw Error('MUST_NOT_RETRY_REFRESH');}});
- await assert.rejects(restarted.prepare({asset:asset(),scan:{snapshot_date:'2026-10-10'}}),/REFRESH_OUTCOME_UNKNOWN/);
- assert.equal(f.calls.length,1);
-});
-
-test('TLS, account identity, byte hash and exact graphic are checked before uploading',async()=>{
- const f=transport({env:{...config(),KEY_VALUE_URL:'redis://store.internal:6379'}});
- await assert.rejects(prepare(f),/TLS_AUTH_REQUIRED/);
+test('account identity, byte hash and exact graphic are checked before uploading',async()=>{
  const wrong=transport({respond:async url=>url.endsWith('/users/me')?response({data:{id:'999'}}):null});
  await assert.rejects(prepare(wrong),/ACCOUNT_MISMATCH/);assert.equal(wrong.calls.length,1);
  assert.throws(()=>graphic({...asset(),visual_base64:Buffer.from('changed graphic').toString('base64')}),/DIGEST_MISMATCH/);
@@ -175,14 +145,14 @@ test('lost post response is durably ambiguous and never repeated',async()=>{
 
 
 test('owner handle can pin the existing account without a separate numeric-ID lookup; inspection never writes',async()=>{
- const f=transport({env:{...config(),X_ACCOUNT_ID:undefined,X_ACCOUNT_USERNAME:'test_owner'}}),before=[...f.records];
+ const f=transport({env:{...config(),X_ACCOUNT_ID:undefined,X_ACCOUNT_USERNAME:'test_owner'}}),before=f.db.record();
  const result=await f.x.inspect({asset:asset(),scan:{snapshot_date:'2026-10-10'}});
  assert.equal(result.account_id,'123');assert.equal(result.reconciliation.status,'VERIFIED_NOT_PUBLISHED');
- assert.equal(f.calls.some(c=>c.method!=='GET'),false);assert.deepEqual([...f.records],before);
+ assert.equal(f.calls.some(c=>c.method!=='GET'),false);assert.deepEqual(f.db.record(),before);
 });
 
 test('missing media scope blocks preparation and truncated or inconsistent history cannot establish non-publication',async()=>{
- const f=transport();const auth=JSON.parse(f.records.get(AUTH_KEYS[0]));auth.scope='tweet.read users.read';f.records.set(AUTH_KEYS[0],JSON.stringify(auth));
+ const f=transport();const auth=f.db.read();auth.scope='tweet.read users.read';f.db.seed(auth);
  await assert.rejects(prepare(f),/SCOPES_REQUIRED/);assert.equal(f.calls.length,0);
  const incomplete=transport({respond:async url=>url.includes('/users/123/tweets')?response({meta:{result_count:1}}):null});
  await assert.rejects(prepare(incomplete),/HISTORY_UNKNOWN/);

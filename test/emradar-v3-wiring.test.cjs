@@ -21,3 +21,13 @@ test('isolated V3 wiring constructs route without opening SMTP or querying datab
  assert.equal(smtpCalls,0);
  assert.equal(dbCalls,0);
 });
+
+test('V3 activation adds native auth tables without requiring X config or contacting providers',async()=>{
+ const statements=[];
+ const integration=createV3IsolatedWiring({pool:{query:async sql=>{statements.push(sql);return {rows:[],rowCount:0};}},token:'test'.repeat(12),reviewOrigin:'https://review.example.org',env:{},createTransport:()=>{throw Error('NO_SMTP');},fetcher:async()=>{throw Error('NO_X');}});
+ await integration.initialize();
+ assert.equal(statements.length,4);
+ assert(statements.every(sql=>sql.startsWith('CREATE TABLE IF NOT EXISTS v3_')));
+ assert(statements.some(sql=>sql.includes('v3_x_authorization')));
+ assert(statements.some(sql=>sql.includes('v3_x_oauth_states')));
+});
