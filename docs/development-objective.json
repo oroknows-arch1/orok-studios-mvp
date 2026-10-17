@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "objective_id": "emradar-v3-complete-existing-campaign",
+  "status": "IN_PROGRESS",
+  "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
+  "objective": "Complete the existing V3 marketing campaign through a complete functioning PUBLICATION_REVIEW with owner access, without external distribution.",
+  "constraints": {
+    "start_new_campaign": false,
+    "rebuild_working_components": false,
+    "external_distribution_without_owner_approval": false,
+    "preserve_existing_assets_history_and_decisions": true
+  },
+  "verified_checkpoint": {
+    "verified_at": "2026-10-18T01:39:41+11:00",
+    "repository": "oroknows-arch1/orok-studios-mvp",
+    "github_main_sha": "214b0bc7e749e30b1578cd141b817539a049d557",
+    "render_workspace_id": "tea-d79k6muuk2gs73eesr2g",
+    "render_service_id": "srv-d79k9os50q8c73fkeqig",
+    "render_live_deploy_id": "dep-db9n45u1egvs73cuhhfg",
+    "render_live_sha": "214b0bc7e749e30b1578cd141b817539a049d557",
+    "postgres_id": "dpg-d9caf3j7uimc73d41n1g-a",
+    "campaign_phase": "PUBLICATION_REVIEW",
+    "campaign_version": 43,
+    "destination_count": 3,
+    "asset_count": 3,
+    "decision_count": 0,
+    "delivery_count": 0,
+    "owner_review_status": "NOTIFIED",
+    "owner_review_version": 2,
+    "recovery_checkpoint": "STARTED",
+    "external_distribution_observed": 0
+  },
+  "acceptance_conditions": [
+    {"id": "persistent_harness", "status": "IMPLEMENTED", "evidence": "AGENTS.md, docs/development-objective.json, npm run harness:verify, and CI enforcement"},
+    {"id": "targeted_tests", "status": "PASS", "evidence": "27/27 passed: development harness, campaign recovery, autonomous discovery, and owner review preview"},
+    {"id": "production_deploy_verified", "status": "VERIFIED_BASELINE", "evidence": "Render deploy dep-db9n45u1egvs73cuhhfg is live on 214b0bc7e749e30b1578cd141b817539a049d557; verify the harness deploy after push."},
+    {"id": "genuine_publications_verified", "status": "PENDING", "evidence": null},
+    {"id": "editorial_contacts_verified", "status": "PENDING", "evidence": null},
+    {"id": "publication_specific_proposals", "status": "PENDING", "evidence": null},
+    {"id": "complete_publication_review", "status": "PENDING", "evidence": null},
+    {"id": "owner_review_access", "status": "PENDING", "evidence": null},
+    {"id": "external_distribution", "status": "PROHIBITED_PENDING_OWNER_APPROVAL", "evidence": "No editorial delivery or X publication is authorized."}
+  ],
+  "next_action": "Verify the repository harness, commit and push it, verify the automatic Render deploy, then inspect the bounded production discovery checkpoint and resume only the existing campaign if the durable checkpoint permits it.",
+  "stop_conditions": [
+    "Genuine security or permission requirement",
+    "Owner approval decision",
+    "Defined spending limit",
+    "Failure that cannot be recovered safely"
+  ]
+}
+

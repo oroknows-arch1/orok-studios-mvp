@@ -5,6 +5,7 @@
   "main": "app.js",
   "scripts": {
     "test": "node --test",
+    "harness:verify": "node scripts/verify-development-harness.cjs",
     "start": "node server.js",
     "db:migrate": "node src/publishing/db/cli.js migrate",
     "db:status": "node src/publishing/db/cli.js status",
