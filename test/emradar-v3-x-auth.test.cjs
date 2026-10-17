@@ -102,22 +102,22 @@ test('expired read-only inspection never refreshes; ambiguous renewal remains gu
  assert.equal(f.calls.length,1);
 });
 
-async function httpFixture(t){
+async function httpFixture(t,options={}){
  const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
  const {createOwnerSession}=await import('../vendor/emradar-v3/src/owner-sessions.js');
  const {createReviewServer}=await import('../vendor/emradar-v3/src/http.js');
- const f=fixture(),owner=createOwnerSession('campaign',{now:f.clock()});
+ const f=fixture(options),diagnostics=[],owner=createOwnerSession('campaign',{now:f.clock()});
  const campaign={phase:'PUBLICATION_REVIEW',assets:{x:{approved:'preserved'}},decisions:{x:{decision:'APPROVE'}},deliveries:{email:{status:'ACCEPTED'}}};
  const record={owner_session:{id:'owner-session',...owner.record}};
  const adapter={read:async key=>({value:structuredClone(key==='review:campaign'?record:campaign)}),compareAndSwap:async()=>{throw Error('NO_CAMPAIGN_WRITES');}};
  const workflow=new ReviewWorkflow({store:{adapter},adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:f.env.EMRADAR_V3_REVIEW_ORIGIN,clock:f.clock});
- const server=createReviewServer({workflow,xAuth:f.auth,releaseEmail:async()=>{throw Error('NO_RELEASE');}});
+ const server=createReviewServer({workflow,xAuth:f.auth,logOAuthDiagnostic:line=>diagnostics.push(line),releaseEmail:async()=>{throw Error('NO_RELEASE');}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
  const base='http://127.0.0.1:'+server.address().port;
  const suffix=createHash('sha256').update('campaign').digest('hex').slice(0,16);
  const cookie='emradar_v3_session_'+suffix+'=owner-session.'+owner.secret+'; emradar_v3_csrf=csrf';
  const request=(path,body={},headers={})=>fetch(base+'/api/review/x/'+path,{method:'POST',headers:{'content-type':'application/json',origin:f.env.EMRADAR_V3_REVIEW_ORIGIN,cookie,'x-emradar-csrf':'csrf',...headers},body:JSON.stringify(body)});
- return {...f,record,campaign,base,request};
+ return {...f,record,campaign,base,request,diagnostics};
 }
 
 test('Connect X requires real owner cookie, CSRF and same origin; callback remains tied to that owner session',async t=>{
@@ -139,7 +139,7 @@ test('callback bridge handles Strict cookies without consuming state on GET or i
  const f=await httpFixture(t),url=await begin(f),state=url.searchParams.get('state');
  const response=await fetch(f.base+'/api/review/x/callback?state='+state+'&code=test-sensitive-code');
  assert.equal(response.status,200);assert.equal(response.headers.get('referrer-policy'),'no-referrer');assert.match(response.headers.get('content-security-policy'),/script-src 'nonce-/);
- const html=await response.text();assert(!html.includes(state));assert(!html.includes('test-sensitive-code'));assert.match(html,/history.replaceState/);assert.match(html,/credentials:"same-origin"/);
+ const html=await response.text();new (require('node:vm').Script)(html.match(/<script nonce="[^"]+">([\s\S]*)<\/script>/)[1]);assert(!html.includes(state));assert(!html.includes('test-sensitive-code'));assert.match(html,/history.replaceState/);assert.match(html,/credentials:"same-origin"/);
  assert.equal(f.calls.length,0);assert.equal((await f.auth.context(state)).session_id,'owner-session');
 });
 
@@ -150,4 +150,44 @@ test('revoked and expired owner sessions cannot complete OAuth or renew tokens',
  assert.equal((await f.request('status',{campaignId:'campaign'})).status,403);assert.equal(f.calls.length,0);
  f.record.owner_session.revoked_at=null;f.record.owner_session.expires_at=f.clock()-1;
  assert.equal((await f.request('callback',{state,code:'test-code'})).status,403);assert.equal(f.calls.length,0);
+});
+
+
+test('callback failures expose only safe stage/reference and closed provider classifications',async t=>{
+ const cases=[
+  {stage:'TOKEN_EXCHANGE',respond:async url=>url.endsWith('/oauth2/token')?{ok:false,status:401,json:async()=>({error:'invalid_client',error_description:'PRIVATE_PROVIDER_DESCRIPTION'})}:null,reason:'V3_X_TOKEN_EXCHANGE_UNCONFIRMED',provider:401},
+  {stage:'TOKEN_REQUIREMENTS',respond:async url=>url.endsWith('/oauth2/token')?{ok:true,status:200,json:async()=>({access_token:'PRIVATE_ACCESS_TOKEN',refresh_token:'PRIVATE_REFRESH_TOKEN',expires_in:7200,scope:'users.read'})}:null,reason:'V3_X_SCOPES_REQUIRED'},
+  {stage:'ACCOUNT_VERIFICATION',respond:async url=>url.endsWith('/users/me')?{ok:true,status:200,json:async()=>({data:{id:'999',username:'PRIVATE_UNEXPECTED_ACCOUNT'}})}:null,reason:'V3_X_ACCOUNT_MISMATCH',provider:200},
+  {stage:'TOKEN_EXCHANGE',respond:async url=>{if(url.endsWith('/oauth2/token'))throw Error('PRIVATE_NETWORK_ERROR');},reason:'V3_X_TOKEN_EXCHANGE_UNCONFIRMED'},
+  {stage:'TOKEN_EXCHANGE',respond:async url=>url.endsWith('/oauth2/token')?{ok:false,status:400,json:async()=>({error:'PRIVATE_UNRECOGNIZED_PROVIDER_ERROR'})}:null,reason:'V3_X_TOKEN_EXCHANGE_UNCONFIRMED',provider:400}
+ ];
+ for(const example of cases){
+  const f=await httpFixture(t,{respond:example.respond}),url=await begin(f),state=url.searchParams.get('state');
+  const pending=[...f.db.states.values()][0],verifier=f.db.decrypt(pending.encrypted_pending,'oauth:'+createHash('sha256').update(state).digest('hex')).verifier;
+  const response=await f.request('callback',{state,code:'PRIVATE_OAUTH_CODE'}),body=await response.json();
+  assert.equal(response.status,400);assert.equal(body.oauth_stage,example.stage);assert.match(body.diagnostic_id,/^[0-9a-f-]{36}$/);
+  assert.equal(f.diagnostics.length,1);
+  const entry=JSON.parse(f.diagnostics[0].slice('V3_X_OAUTH_CALLBACK_FAILURE '.length));
+  assert.equal(entry.stage,example.stage);assert.equal(entry.reason,example.reason);assert.equal(entry.diagnostic_id,body.diagnostic_id);assert.equal(entry.provider_status,example.provider);
+  if(example.provider===401)assert.equal(entry.provider_error,'invalid_client');else assert.equal(entry.provider_error,undefined);
+  assert.deepEqual(Object.keys(entry).sort(),['event','stage','reason','status','diagnostic_id',...(example.provider?['provider_status']:[]),...(example.provider===401?['provider_error']:[])].sort());
+  const output=JSON.stringify({body,logs:f.diagnostics});
+  for(const secret of [state,verifier,f.record.owner_session.secret_hash,'PRIVATE_','test-access-secret','test-refresh-secret','test-secret'])assert(!output.includes(secret));
+  assert.equal(f.db.record(),null);assert([...f.db.states.values()][0].consumed_at);
+ }
+});
+
+test('callback diagnostics distinguish decryption, database persistence and security gates without raw errors',async t=>{
+ for(const stage of ['STATE_DECRYPT','TOKEN_PERSISTENCE','CSRF','SESSION_COOKIE','OWNER_SESSION']){
+  const f=await httpFixture(t),url=await begin(f),state=url.searchParams.get('state');
+  if(stage==='TOKEN_PERSISTENCE'){const connect=f.db.pool.connect;f.db.pool.connect=async()=>{const db=await connect(),query=db.query;db.query=async(sql,args)=>{if(sql.startsWith('INSERT INTO v3_x_authorization'))throw Error('PRIVATE_SQL_ERROR');return query(sql,args);};return db;};}
+  if(stage==='STATE_DECRYPT'){const pending=[...f.db.states.values()][0];pending.encrypted_pending.tag=Buffer.alloc(16).toString('base64');}
+  if(stage==='OWNER_SESSION')f.record.owner_session.revoked_at=f.clock();
+  const headers=stage==='CSRF'?{'x-emradar-csrf':''}:stage==='SESSION_COOKIE'?{cookie:''}:{};
+  const response=await f.request('callback',{state,code:'PRIVATE_OAUTH_CODE'},headers),body=await response.json();
+  assert.equal(body.oauth_stage,stage);assert.equal(f.diagnostics.length,1);
+  const output=JSON.stringify({body,logs:f.diagnostics});assert(!output.includes('PRIVATE_'));assert(!output.includes(state));assert(!output.includes('test-access-secret'));
+  assert.equal(f.db.record(),null);
+  if(['CSRF','SESSION_COOKIE','OWNER_SESSION'].includes(stage)){assert.equal(f.calls.length,0);assert.equal([...f.db.states.values()][0].consumed_at,null);}
+ }
 });

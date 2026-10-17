@@ -1,7 +1,7 @@
 'use strict';
 const {randomBytes,createHash,createCipheriv,createDecipheriv}=require('node:crypto');
 const SCOPES=['tweet.read','tweet.write','users.read','media.write','offline.access'];
-const fail=code=>{throw Error('V3_X_'+code);};
+const fail=(code,details={})=>{throw Object.assign(Error('V3_X_'+code),details);};
 const hash=value=>createHash('sha256').update(value).digest('hex');
 function assertScopes(auth){const scopes=new Set(String(auth.scope||'').split(' '));if(SCOPES.some(scope=>!scopes.has(scope)))fail('SCOPES_REQUIRED');}
 
@@ -64,8 +64,8 @@ function createV3XAuth({env={},pool,fetcher=fetch,clock=()=>Date.now()}={}){
   try{
    response=await fetcher('https://api.x.com/2/oauth2/token',{method:'POST',redirect:'error',signal:AbortSignal.timeout(15000),headers,body:new URLSearchParams({...body,client_id:env.X_CLIENT_ID})});
    data=await response.json();
-  }catch{fail('TOKEN_EXCHANGE_UNCONFIRMED');}
-  if(!response.ok||!data?.access_token||!Number.isFinite(Number(data.expires_in))||Number(data.expires_in)<=60)fail('TOKEN_EXCHANGE_UNCONFIRMED');
+  }catch{fail('TOKEN_EXCHANGE_UNCONFIRMED',{oauthProviderStatus:response?.status});}
+  if(!response.ok||!data?.access_token||!Number.isFinite(Number(data.expires_in))||Number(data.expires_in)<=60)fail('TOKEN_EXCHANGE_UNCONFIRMED',{oauthProviderStatus:response.status,oauthProviderError:data?.error});
   return data;
  }
  function normalized(token,previous={}){
@@ -78,8 +78,8 @@ function createV3XAuth({env={},pool,fetcher=fetch,clock=()=>Date.now()}={}){
   try{
    response=await fetcher('https://api.x.com/2/users/me',{redirect:'error',signal:AbortSignal.timeout(15000),headers:{authorization:'Bearer '+auth.access_token}});
    result=await response.json();
-  }catch{fail('ACCOUNT_VERIFICATION_FAILED');}
-  if(!response.ok||result.errors?.length||!/^\d+$/.test(result.data?.id||'')||(env.X_ACCOUNT_ID&&result.data.id!==env.X_ACCOUNT_ID)||(env.X_ACCOUNT_USERNAME&&String(result.data.username).toLowerCase()!==env.X_ACCOUNT_USERNAME.toLowerCase()))fail('ACCOUNT_MISMATCH');
+  }catch{fail('ACCOUNT_VERIFICATION_FAILED',{oauthProviderStatus:response?.status});}
+  if(!response.ok||result.errors?.length||!/^\d+$/.test(result.data?.id||'')||(env.X_ACCOUNT_ID&&result.data.id!==env.X_ACCOUNT_ID)||(env.X_ACCOUNT_USERNAME&&String(result.data.username).toLowerCase()!==env.X_ACCOUNT_USERNAME.toLowerCase()))fail('ACCOUNT_MISMATCH',{oauthProviderStatus:response.status});
   return {account_id:result.data.id,username:result.data.username};
  }
  async function current({allowRefresh=false}={}){
@@ -121,20 +121,37 @@ function createV3XAuth({env={},pool,fetcher=fetch,clock=()=>Date.now()}={}){
   return {authorization_url:'https://x.com/i/oauth2/authorize?'+query};
  }
  async function complete({state,code,error,campaignId,sessionId}){
-  const {callback}=config(),digest=stateHash(state);
-  return locked(async db=>{
-   const {rows}=await db.query('UPDATE v3_x_oauth_states SET consumed_at=$2 WHERE state_hash=$1 AND consumed_at IS NULL AND expires_at>$2 AND campaign_id=$3 AND session_id=$4 RETURNING encrypted_pending',[digest,new Date(clock()),campaignId,sessionId]);
-   if(!rows[0])fail('OAUTH_STATE_INVALID');
-   const pending=open(rows[0].encrypted_pending,'oauth:'+digest);
-   if(pending.campaignId!==campaignId||pending.sessionId!==sessionId)fail('OAUTH_STATE_INVALID');
-   if(error)fail('OAUTH_DENIED');
-   if(typeof code!=='string'||!code.length||code.length>4096)fail('OAUTH_CODE_INVALID');
-   const auth=normalized(await exchange({grant_type:'authorization_code',code,redirect_uri:callback,code_verifier:pending.verifier}));
-   const account=await verifyAccount(auth);Object.assign(auth,account);
-   await save(auth,db);
-   return {status:'CONNECTED',...account,review_url:'/review/access?campaign='+encodeURIComponent(campaignId)};
-  });
+  let stage='CONFIGURATION';
+  try{
+   const {callback}=config(),digest=stateHash(state);
+   stage='DATABASE_LOCK';
+   return await locked(async db=>{
+    stage='STATE_CONSUME';
+    const {rows}=await db.query('UPDATE v3_x_oauth_states SET consumed_at=$2 WHERE state_hash=$1 AND consumed_at IS NULL AND expires_at>$2 AND campaign_id=$3 AND session_id=$4 RETURNING encrypted_pending',[digest,new Date(clock()),campaignId,sessionId]);
+    if(!rows[0])fail('OAUTH_STATE_INVALID');
+    stage='STATE_DECRYPT';
+    const pending=open(rows[0].encrypted_pending,'oauth:'+digest);
+    if(pending.campaignId!==campaignId||pending.sessionId!==sessionId)fail('OAUTH_STATE_INVALID');
+    stage='CALLBACK_INPUT';
+    if(error)fail('OAUTH_DENIED');
+    if(typeof code!=='string'||!code.length||code.length>4096)fail('OAUTH_CODE_INVALID');
+    stage='TOKEN_EXCHANGE';
+    const token=await exchange({grant_type:'authorization_code',code,redirect_uri:callback,code_verifier:pending.verifier});
+    stage='TOKEN_REQUIREMENTS';
+    const auth=normalized(token);
+    stage='ACCOUNT_VERIFICATION';
+    const account=await verifyAccount(auth);Object.assign(auth,account);
+    stage='TOKEN_PERSISTENCE';
+    await save(auth,db);
+    return {status:'CONNECTED',...account,review_url:'/review/access?campaign='+encodeURIComponent(campaignId)};
+   });
+  }catch(error){
+   // Internal metadata only. The HTTP boundary emits only closed allowlists.
+   if(error&&typeof error==='object')error.oauthStage=stage;
+   throw error;
+  }
  }
+
  return {initialize,current,start,context,complete,verifyAccount};
 }
 module.exports={createV3XAuth,assertScopes,SCOPES};
