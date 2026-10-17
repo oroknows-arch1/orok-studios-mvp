@@ -21,7 +21,8 @@ test('reopening the emailed link tries the saved session before attempting singl
  const start=reviewPage.slice(reviewPage.indexOf('(async()=>{'));
  assert(start.indexOf('try{await refresh();}')<start.indexOf("api('exchange'"));
  assert.match(reviewPage,/Send this exact approved email/);
- assert.match(reviewPage,/X publishing is not connected to V3/);
+ assert.match(reviewPage,/Publish approved X post/);
+ assert.match(reviewPage,/Publish this exact approved text and graphic/);
 });
 function fixture(){
  const records=new Map(),notifications=[];let now=1000000;

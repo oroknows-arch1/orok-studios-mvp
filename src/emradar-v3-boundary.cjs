@@ -2,10 +2,10 @@
 // Pure CommonJS V3 contract checks for the paid API. Inert until mounted.
 // Caller-provided approval is not proof: a trusted durable-state verifier
 // must independently validate the saved asset, decision and claimed delivery.
-function createV3Boundary({verifyNotification,verifyApprovedDelivery,sendOwnerReview,sendApprovedEmail,notificationReservation,sendReservation}={}){
+function createV3Boundary({verifyNotification,verifyApprovedDelivery,sendOwnerReview,sendApprovedEmail,prepareApprovedX,notificationReservation,sendReservation}={}){
  if([verifyNotification,verifyApprovedDelivery,sendOwnerReview,sendApprovedEmail].some(x=>typeof x!=='function'))throw Error('V3_TRUSTED_DEPENDENCIES_REQUIRED');
  if([notificationReservation,sendReservation].some(x=>typeof x?.reserve!=='function'||typeof x?.record!=='function'))throw Error('V3_DURABLE_RESERVATIONS_REQUIRED');
- return async ({operation,payload})=>{
+ return async ({operation,payload,preparedX})=>{
   if(payload?.version!=='EMRADAR_V3')throw Error('V3_VERSION_REQUIRED');
   if(operation==='owner-notification'){
    if(payload.kind!=='OWNER_REVIEW'||payload.to!=='sean@emradar.net'||typeof payload.campaign_id!=='string'||typeof payload.private_review_url!=='string')throw Error('V3_NOTIFICATION_INVALID');
@@ -24,15 +24,19 @@ function createV3Boundary({verifyNotification,verifyApprovedDelivery,sendOwnerRe
    return {accepted:true,provider_id:result.provider_id,recipient:payload.to,campaign_id:payload.campaign_id};
   }
   if(operation==='approved-delivery'){
-   if(payload.kind!=='APPROVED_DELIVERY'||payload.asset?.kind!=='EMAIL'||typeof payload.idempotency_key!=='string'||!/^[a-f0-9]{64}$/.test(payload.idempotency_key))throw Error('V3_DELIVERY_INVALID');
+   if(payload.kind!=='APPROVED_DELIVERY'||!['EMAIL','X'].includes(payload.asset?.kind)||typeof payload.idempotency_key!=='string'||!/^[a-f0-9]{64}$/.test(payload.idempotency_key))throw Error('V3_DELIVERY_INVALID');
    await verifyApprovedDelivery(payload);
+   const isX=payload.asset.kind==='X';
+   if(isX&&typeof prepareApprovedX!=='function')throw Error('V3_X_PUBLISH_DISABLED');
+   const prepared=isX?(preparedX||await prepareApprovedX(payload)):null;
+   if(isX&&prepared.asset_sha256!==payload.approval.asset_sha256)throw Error('V3_X_PREPARED_ASSET_MISMATCH');
    await sendReservation.reserve({idempotency_key:payload.idempotency_key,campaign_id:payload.campaign_id,destination_id:payload.destination_id,asset_sha256:payload.approval?.asset_sha256});
    let result;
-   try{result=await sendApprovedEmail(payload);}
+   try{result=isX?await prepared.publish():await sendApprovedEmail(payload);}
    catch(error){await sendReservation.record({idempotency_key:payload.idempotency_key});throw error;}
    await sendReservation.record({idempotency_key:payload.idempotency_key,provider_id:result?.accepted===true?result?.receipt_id:undefined});
-   if(result?.accepted!==true||!result.receipt_id)throw Error('V3_SMTP_OUTCOME_UNCONFIRMED');
-   return {accepted:true,receipt_id:result.receipt_id,sent_folder:result.sent_folder,smtp_response:result.smtp_response};
+   if(result?.accepted!==true||!result.receipt_id)throw Error(isX?'V3_X_POST_OUTCOME_UNCONFIRMED':'V3_SMTP_OUTCOME_UNCONFIRMED');
+   return {...result,accepted:true,receipt_id:result.receipt_id};
   }
   throw Error('V3_UNKNOWN_OPERATION');
  };

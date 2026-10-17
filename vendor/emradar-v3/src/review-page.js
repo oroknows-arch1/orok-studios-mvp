@@ -70,16 +70,17 @@ async function refresh(){
     card.append(editSubject);
    }
   }
-  if(asset.kind==='X'&&!delivery)card.append(text('p','X publishing is not connected to V3. Approval has not posted this asset.'));
+  if(asset.kind==='X'&&!delivery)card.append(text('p','Approval does not publish this post. Release checks the account, graphic and publication history before posting.'));
   if(asset.kind==='X' && asset.visual_url){
    const link=document.createElement('a');const visual=new URL(asset.visual_url,location.origin);if(visual.protocol==='https:'){link.href=visual.href;link.rel='noopener noreferrer';link.target='_blank';link.textContent='View accompanying graphic';card.append(link);}
   }
-  if(asset.kind==='EMAIL'&&asset.to&&decision?.decision==='APPROVE'&&!delivery){
-   const send=text('button','Send approved email');
+  if((asset.kind==='X'||(asset.kind==='EMAIL'&&asset.to))&&decision?.decision==='APPROVE'&&!delivery){
+   const isX=asset.kind==='X';
+   const send=text('button',isX?'Publish approved X post':'Send approved email');
    send.addEventListener('click',async()=>{
-    if(!confirm('Send this exact approved email to '+asset.to+'?'))return;
+    if(!confirm(isX?'Publish this exact approved text and graphic to the configured X account?':'Send this exact approved email to '+asset.to+'?'))return;
     send.disabled=true;
-    try{await api('release',{campaignId:campaign,destinationId:asset.destination_id});await refresh();status.textContent='Mail accepted. The receipt and Sent-folder result are shown with this email.';}
+    try{await api('release',{campaignId:campaign,destinationId:asset.destination_id});await refresh();status.textContent=isX?'X accepted the post. Its receipt is saved with this asset.':'Mail accepted. The receipt and Sent-folder result are shown with this email.';}
     catch(e){await refresh();status.textContent='Send was blocked or its result is uncertain. Check the saved delivery record before trying again.';}
    });
    card.append(send);
