@@ -1,6 +1,6 @@
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {EDITORIAL_REFERENCE,isEditorialDestination,selectEditorialEvidence,validateEditorialStory,editorialPrompt} from './editorial-reference.js';
-import {emradarGraphicPrompt} from './graphic-standard.js';
+import {GRAPHIC_STANDARD,emradarGraphicPrompt} from './graphic-standard.js';
 // Reuse the OpenAI client already configured by the existing paid API.
 // No model calls occur at import or assembly time.
 import {createRequire} from 'node:module';
@@ -75,7 +75,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    const generated=await openai.images.generate({model:imageModel,prompt,size:'1024x1024'},{maxRetries:0,timeout:180000});
    const base64=generated.data?.[0]?.b64_json;
    if(typeof base64!=='string'||!base64.length)throw Error('V3_X_IMAGE_BYTES_REQUIRED');
-   return {base64};
+   return {base64,brand_version:GRAPHIC_STANDARD.version};
   }
  };
 }

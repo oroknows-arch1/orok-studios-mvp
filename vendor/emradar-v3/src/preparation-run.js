@@ -1,13 +1,12 @@
+import {isReviewPhase} from './contracts.js';
 import {createHash} from 'node:crypto';
 import {verifyPublishedScan} from './scan-intake.js';
 import {CampaignPreparation} from './preparation.js';
 import {normalizePublishedEvidence} from './scan-evidence-adapter.js';
 
-// Compose existing preparation workers. Providers are injected; this entry point
-// never issues a review notification, approves content or distributes anything.
-export function createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher}) {
- if(typeof researchEvidence!=='function' || typeof renderVisual!=='function' || typeof store?.mutate!=='function') throw Error('PREPARATION_RUN_DEPENDENCIES_REQUIRED');
- const preparation=new CampaignPreparation({store,discover,write,renderVisual:async input=>{
+
+export function createVerifiedVisualRenderer(renderVisual){
+ return async input=>{
   const visual=await renderVisual(input);
   const bytes=visual?.bytes instanceof Uint8Array?Buffer.from(visual.bytes):typeof visual?.base64==='string'?Buffer.from(visual.base64,'base64'):null;
   if(!bytes?.length) throw Error('X_VISUAL_BYTES_REQUIRED');
@@ -18,15 +17,23 @@ export function createPreparationRun({store,researchEvidence,discover,write,rend
   if(visual.sha256 && visual.sha256!==sha256) throw Error('X_VISUAL_DIGEST_MISMATCH');
   input.asset.visual_base64=bytes.toString('base64');
   input.asset.visual_mime=png?'image/png':'image/jpeg';
+  if(visual.brand_version)input.asset.visual_brand_version=visual.brand_version;
   return {sha256,url:'data:'+input.asset.visual_mime+';base64,'+input.asset.visual_base64};
- }});
+ };
+}
+
+// Compose existing preparation workers. Providers are injected; this entry point
+// never issues a review notification, approves content or distributes anything.
+export function createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher}) {
+ if(typeof researchEvidence!=='function' || typeof renderVisual!=='function' || typeof store?.mutate!=='function') throw Error('PREPARATION_RUN_DEPENDENCIES_REQUIRED');
+ const preparation=new CampaignPreparation({store,discover,write,renderVisual:createVerifiedVisualRenderer(renderVisual)});
  return async ({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,history=[]})=>{
   const verified=await verifyPublishedScan({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,fetcher});
   const {scan}=verified;
   const document=normalizePublishedEvidence(verified.document);
   const campaignId=await store.start(scan);
   let state=(await store.adapter.read(campaignId)).value;
-  if(state.phase==='PUBLICATION_REVIEW') return {campaignId,status:'ALREADY_PREPARED'};
+  if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
   if(!state.preparation_input) {
    const research=await researchEvidence({scan,document});
    if(!Array.isArray(research?.evidence)) throw Error('EVIDENCE_RESEARCH_RESULT_REQUIRED');

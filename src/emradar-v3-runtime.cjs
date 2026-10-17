@@ -171,11 +171,11 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const choose=async()=>selectNextPublishedScan({published:await published(),readCampaign:async id=>(await service.store.adapter.read(id))?.value});
   const refreshDirectory=async(selected)=>{
    if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY!=='true')throw Error('V3_AUTONOMOUS_DISCOVERY_DISABLED');
-   selected=selected??await choose();
+   selected=selected??(await published())[0];
    if(!selected)return {status:'NO_UNPROCESSED_SCAN',destination_count:0,editorial_count:0};
-   const verified=await verify(selected);
-   const destinations=await service.discover({scan:verified.scan,document:verified.document});
-   return {status:'DISCOVERY_COMPLETE',snapshotDate:selected.snapshotDate,destination_count:destinations.length,editorial_count:destinations.filter(d=>d.id!=='x').length};
+   const campaignId=campaignIdFor(selected),existing=(await service.store.adapter.read(campaignId))?.value;
+   if(['PUBLICATION_REVIEW','ASSETS_PREPARED'].includes(existing?.phase))return service.resumeIntelligentDiscovery(campaignId);
+   return runCampaign();
   };
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
@@ -195,7 +195,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     const review=(await adapter.read('review:'+campaignId))?.value;
     if(prior?.phase==='PUBLICATION_REVIEW'&&review){
      const completion=await service.reviewCompletion(campaignId);
-     return {campaignId,snapshotDate:selected.snapshotDate,status:completion.complete?'PUBLICATION_REVIEW':'V3_PUBLICATION_REVIEW_INCOMPLETE',...completion,notification:review.status};
+     if(completion.complete)return {campaignId,snapshotDate:selected.snapshotDate,status:'PUBLICATION_REVIEW',...completion,notification:review.status};
     }
     // Preparation owns evidence research and discovery, preserving their order
     // and resuming persisted destinations instead of repeating completed work.

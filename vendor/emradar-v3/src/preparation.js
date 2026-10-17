@@ -1,3 +1,4 @@
+import {isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 import {assertDestinations} from './contracts.js';
 
@@ -9,7 +10,7 @@ export class CampaignPreparation {
  async prepare({scan,document,history=[]}) {
   const campaignId=await this.store.start(scan);
   const existing=(await this.store.adapter.read(campaignId))?.value;
-  if(existing?.phase==='PUBLICATION_REVIEW') return {campaignId,status:'ALREADY_PREPARED'};
+  if(isReviewPhase(existing?.phase)) return {campaignId,status:'ALREADY_PREPARED'};
   if(existing?.phase!=='SCAN_VERIFIED' && existing?.phase!=='DESTINATIONS_SELECTED') throw Error('CAMPAIGN_PHASE_UNSUPPORTED');
   let destinations;
   if(existing.phase==='DESTINATIONS_SELECTED') destinations=existing.destinations;

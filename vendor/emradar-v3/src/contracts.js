@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key,canonical(value[key])])) : value;
 export const sha256 = value => createHash('sha256').update(typeof value === 'string' ? value : JSON.stringify(canonical(value))).digest('hex');
 export const MAX_DESTINATIONS = 30;
+export const isReviewPhase=phase=>['ASSETS_PREPARED','PUBLICATION_REVIEW'].includes(phase);
 export const STATES = Object.freeze(['SCAN_VERIFIED','DESTINATIONS_SELECTED','ASSETS_PREPARED','PUBLICATION_REVIEW','OWNER_DECIDED','DISTRIBUTING','RECEIPTS_RECORDED','OUTCOMES_RECONCILED','CLOSED']);
 export const DELIVERY = Object.freeze(['NOT_ATTEMPTED','ATTEMPTING','ACCEPTED','AMBIGUOUS','FAILED_DEFINITELY_UNSENT','CONFIRMED','REJECTED']);
 

@@ -1,3 +1,4 @@
+import {isReviewPhase} from './contracts.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {randomUUID,createHash,timingSafeEqual} from 'node:crypto';
 import {issueReviewAccess,consumeReviewAccess} from './review-access.js';
@@ -22,7 +23,7 @@ export class ReviewWorkflow {
  }
  async issue(campaignId) {
   const campaign=(await this.store.adapter.read(campaignId))?.value;
-  if(!campaign || campaign.phase!=='PUBLICATION_REVIEW') throw Error('CAMPAIGN_NOT_READY');
+  if(!campaign || !isReviewPhase(campaign.phase)) throw Error('CAMPAIGN_NOT_READY');
   const key='review:'+campaignId;
   const now=this.clock();
   const existing=(await this.adapter.read(key))?.value;
@@ -64,7 +65,7 @@ export class ReviewWorkflow {
  }
  async requestAccess(campaignId,{token,sessionId,sessionSecret}={}){
   const campaign=(await this.store.adapter.read(campaignId))?.value;
-  if(campaign?.phase!=='PUBLICATION_REVIEW')throw Error('REVIEW_NOT_OPEN');
+  if(!isReviewPhase(campaign?.phase))throw Error('REVIEW_NOT_OPEN');
   const current=(await this.adapter.read('review:'+campaignId))?.value;
   const equalHash=(expected,secret)=>{if(typeof expected!=='string'||typeof secret!=='string')return false;const a=Buffer.from(expected,'hex'),b=createHash('sha256').update(secret).digest();return a.length===b.length&&timingSafeEqual(a,b);};
   const session=current?.owner_session;
@@ -92,7 +93,7 @@ export class ReviewWorkflow {
  async view(campaignId,sessionId,secret) {
   await this.authenticate(campaignId,sessionId,secret);
   const campaign=(await this.store.adapter.read(campaignId))?.value;
-  if(!campaign || campaign.phase!=='PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
+  if(!campaign || !isReviewPhase(campaign.phase)) throw Error('REVIEW_NOT_OPEN');
   const describe=(entry,{historical=false,label='',decision=null}={})=>{
    const {asset,fingerprint}=entry;
    const destination=campaign.destinations.find(d=>d.id===asset.destination_id);
@@ -107,7 +108,7 @@ export class ReviewWorkflow {
   for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft'}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
-  return {campaignId,scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history};
+  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint) {
   await this.authenticate(campaignId,sessionId,secret);
@@ -122,7 +123,7 @@ export class ReviewWorkflow {
   if(!['APPROVE','REJECT'].includes(decision)) throw Error('INVALID_DECISION');
   if(typeof groupKey!=='string' || !groupKey) throw Error('INVALID_GROUP_KEY');
   return this.store.mutate(campaignId,state=>{
-   if(!state || state.phase!=='PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
+   if(!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
    let count=0;
    for(const {asset,fingerprint} of Object.values(state.assets)){
     if(asset.kind!=='EMAIL' || identicalEmailGroupKey(asset)!==groupKey) continue;

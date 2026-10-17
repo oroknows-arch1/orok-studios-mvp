@@ -1,3 +1,4 @@
+import {isReviewPhase} from './contracts.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import emailBrand from '../../../src/email-brand.cjs';
 import { randomUUID } from 'node:crypto';
@@ -60,7 +61,7 @@ export class CampaignStore {
   async extendReview(id,destinations,assets) {
     assertDestinations(destinations);
     return this.mutate(id,state=>{
-      if(!state || state.phase!=='PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
+      if(!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
       const existing=new Set(state.destinations.map(destination=>destination.id));
       const additions=new Map(destinations.filter(destination=>!existing.has(destination.id)).map(destination=>[destination.id,destination]));
       if(assets.length!==additions.size) throw Error('MISSING_DESTINATION_ASSET');
@@ -76,7 +77,7 @@ export class CampaignStore {
   }
   async decide(id, destinationId, decision, fingerprint) {
     return this.mutate(id, state => {
-      if (!state || state.phase !== 'PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
+      if (!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
       const item = state.assets[destinationId];
       if (!item || item.fingerprint !== fingerprint || !['APPROVE','REJECT'].includes(decision)) throw Error('INVALID_DECISION');
       // Editorial decisions are independent of delivery readiness. Recipient
@@ -94,7 +95,7 @@ export class CampaignStore {
       if (typeof value!=='string' || !value.trim() || value.length>50000) throw Error('INVALID_REVISION_TEXT');
     }
     return this.mutate(id,state=>{
-      if (!state || state.phase!=='PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
+      if (!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
       const entry=state.assets[destinationId];
       if (!entry || entry.fingerprint!==fingerprint) throw Error('STALE_ASSET_REVISION');
       if (state.deliveries[destinationId]) throw Error('REVISION_AFTER_DISTRIBUTION');

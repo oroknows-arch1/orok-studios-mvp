@@ -30,7 +30,7 @@ test('one graphic standard supports different research categories without Free S
 test('production provider uses the shared standard and existing model/image byte contract without changing saved assets',async()=>{
  const input=structuredClone(saved),before=structuredClone(input),requests=[];
  const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{throw Error('NO_TEXT_REGENERATION');}}},images:{generate:async(request,options)=>{requests.push({request,options});return {data:[{b64_json:'cHJldmlldyBvbmx5'}]};}}}});
- assert.deepEqual(await providers.renderVisual(input),{base64:'cHJldmlldyBvbmx5'});
+ assert.deepEqual(await providers.renderVisual(input),{base64:'cHJldmlldyBvbmx5',brand_version:GRAPHIC_STANDARD.version});
  assert.equal(requests.length,1);assert.equal(requests[0].request.prompt,emradarGraphicPrompt(input));assert.equal(requests[0].request.size,'1024x1024');assert.equal(requests[0].request.model,'gpt-image-1');assert.equal(requests[0].options.maxRetries,0);assert.deepEqual(input,before);
  assert.equal(GRAPHIC_STANDARD.version,'emradar-connected-world-v1');
 });

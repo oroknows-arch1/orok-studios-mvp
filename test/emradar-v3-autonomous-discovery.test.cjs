@@ -62,13 +62,13 @@ test('directory selection preserves individual scan evidence links',async()=>{
  assert.ok(selected.some(d=>d.id===h.saved[0].id));
 });
 
-test('reuses already verified evidence-linked outlet without paid search',async()=>{
+test('reuses ten verified publications without repeating paid research',async()=>{
  const h=harness([]);
  h.openai.responses.create=async()=>{throw Error('SEARCH_MUST_NOT_RUN')};
  const existing={...require('./fixtures/v3-verified-recipient.cjs')('existing-1',document.evidence),id:'existing-1',destination_class:'EDITORIAL_PUBLICATION',active:true,contact_verified:true,editorial_fit_verified:true,contact:{...require('./fixtures/v3-verified-recipient.cjs')().contact,email:'editor@journal.example',published_excerpt:'Editor: editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13'},verification:{...require('./fixtures/v3-verified-recipient.cjs')().verification,evidence_ids:['e1'],scan_evidence_digest:createHash('sha256').update(JSON.stringify(document.evidence.map(e=>[e.id,e.fact,e.source_url]))).digest('hex')}};
  const {createAutonomousOutletDiscovery}=await load();
- const links=await createAutonomousOutletDiscovery(h)({document,outlets:[existing]});
- assert.equal(links.length,1);assert.equal(links[0].outlet_id,'existing-1');assert.equal(h.saved.length,0);
+ const links=await createAutonomousOutletDiscovery(h)({document,outlets:Array.from({length:10},(_,i)=>({...existing,id:'existing-'+i,contact:{...existing.contact,email:'editor'+i+'@journal.example',published_excerpt:'Editor: editor'+i+'@journal.example'}}))});
+ assert.equal(links.length,10);assert.equal(links[0].outlet_id,'existing-0');assert.equal(h.saved.length,0);
 });
 
 test('same evidence ID with changed facts cannot reuse prior scan links',async()=>{

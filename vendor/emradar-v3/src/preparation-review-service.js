@@ -1,3 +1,5 @@
+import {GRAPHIC_STANDARD} from './graphic-standard.js';
+import {assetFingerprint} from './contracts.js';
 import {EDITORIAL_REFERENCE} from './editorial-reference.js';
 import {cleanUnverifiedRecipients} from './verified-recipient-recovery.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
@@ -13,10 +15,10 @@ import {createEditorialContactResearch} from './editorial-contact-research.js';
 import {lookup} from 'node:dns/promises';
 import {pinnedHtml} from './autonomous-outlet-discovery.js';
 import {createAutonomousOutletDiscovery} from './autonomous-outlet-discovery.js';
-import {createPreparationRun} from './preparation-run.js';
+import {createPreparationRun,createVerifiedVisualRenderer} from './preparation-run.js';
 import {ReviewWorkflow} from './review-workflow.js';
 import {createPublicationReviewHandoff} from './publication-review-handoff.js';
-import {sha256,MAX_DESTINATIONS} from './contracts.js';
+import {sha256,MAX_DESTINATIONS,isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 
 export function selectPersistedDraftDestinations({candidates,document,existingIds=[]}) {
@@ -33,13 +35,13 @@ export function selectPersistedDraftDestinations({candidates,document,existingId
 }
 
 export function assessPublicationReview({state,candidates}) {
- if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)return {complete:false,verified_publications:0,editorial_emails:0,x_ready:false,missing_destination_ids:[]};
+ if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)return {complete:false,verified_publications:0,editorial_emails:0,x_ready:false,missing_destination_ids:[]};
  const evidence=state.preparation_input.document.evidence.filter(item=>item?.verified===true&&item?.id);
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
- const publications=(candidates??[]).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&candidate?.active===true&&recipientPolicy.verifiedDestination(candidate)&&candidate?.verification?.scan_evidence_digest===scanDigest);
+ const publications=[...new Map([...(state.destinations??[]),...(candidates??[])].filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&candidate?.active===true&&recipientPolicy.verifiedDestination(candidate)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>[candidate.id,candidate])).values()].slice(0,MAX_DESTINATIONS-1);
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
- const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL').map(asset=>asset.destination_id));
+ const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL'&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
  const missing=publications.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
  const invalid=assets.some(asset=>{if(asset.kind!=='EMAIL')return false;try{recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));return false;}catch{return true;}});
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
@@ -66,10 +68,25 @@ export async function createPreparationReviewService({
   directory,linkEvidence:autonomousDiscovery?async({document,outlets})=>createAutonomousOutletDiscovery({openai,directory,fetcher})({document,outlets}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
  });
  const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
+ const renderVerifiedVisual=createVerifiedVisualRenderer(renderVisual);
+ const ensureBrandedX=async campaignId=>{
+  const state=(await adapter.read(campaignId))?.value,entry=state?.assets?.x;
+  if(!entry||entry.asset.visual_brand_version===GRAPHIC_STANDARD.version||state.decisions?.x||state.deliveries?.x)return;
+  const asset=structuredClone(entry.asset);
+  const visual=await renderVerifiedVisual({asset,document:state.preparation_input.document,scan:state.scan});
+  asset.visual_sha256=visual.sha256;asset.visual_url=visual.url;
+  // Injected providers may omit metadata; the shared branded provider owns the standard.
+  asset.visual_brand_version=GRAPHIC_STANDARD.version;
+  await store.mutate(campaignId,current=>{
+   if(current.assets.x.fingerprint!==entry.fingerprint||current.decisions?.x||current.deliveries?.x)throw Error('X_REVIEW_CHANGED_DURING_PREPARATION');
+   current.editorial_versions??={};current.editorial_versions.x??=[];current.editorial_versions.x.push(structuredClone(entry));
+   current.assets.x={asset,fingerprint:assetFingerprint(asset)};current.events.push({type:'X_BRANDED_VISUAL_PREPARED'});return current;
+  });
+ };
  const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin});
  const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS,verifiedPublicationsOnly=false,existingDrafts={}}={})=>{
   const state=(await adapter.read(campaignId))?.value;
-  if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
+  if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
   const destinations=selectPersistedDraftDestinations({candidates:(await directory.list()).filter(candidate=>!verifiedPublicationsOnly||candidate.verification?.status==='VERIFIED'),document:state.preparation_input.document,existingIds:[...state.destinations.map(item=>item.id),...Object.keys(state.decisions??{}),...Object.keys(state.deliveries??{})]});
   const evidenceIds=new Set(state.preparation_input.document.evidence.filter(item=>item.verified===true).map(item=>item.id));
   const assets=[];
@@ -83,17 +100,40 @@ export async function createPreparationReviewService({
   }
   return {campaignId,status:'PUBLICATION_REVIEW',editorial_drafts:assets.length,notification:'EXISTING_REVIEW_SESSION'};
  };
- const resumeIntelligentDiscovery=async campaignId=>{
+ const ensureOwnerReview=async campaignId=>{
+  const existing=(await adapter.read('review:'+campaignId))?.value;
+  if(existing){
+   if(['NOTIFIED','CONSUMED'].includes(existing.status))return {campaignId,status:'NOTIFIED',existing:true};
+   throw Error('REVIEW_NOTIFICATION_UNCONFIRMED');
+  }
+  return workflow.issue(campaignId);
+ };
+ const saveCompletion=async campaignId=>{
+  const completion=await reviewCompletion(campaignId);
+  await store.mutate(campaignId,current=>{
+   const phase=completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED';
+   if(current.phase!==phase)current.events.push({type:completion.complete?'PUBLICATION_REVIEW_READY':'PREPARATION_INCOMPLETE'});
+   current.phase=phase;current.review_completion=completion;return current;
+  });
+  return completion;
+ };
+ const resumeIntelligentDiscovery=async (campaignId,{notifyOwner=true}={})=>{
   const state=(await adapter.read(campaignId))?.value;
-  if(!state||state.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
-  await discover({scan:state.scan,document:state.preparation_input.document,history:[]});
-  const resumed=await resumeEditorialDrafts(campaignId);
-  return {...resumed,...await reviewCompletion(campaignId)};
+  if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
+  await saveCompletion(campaignId);
+  let resumed,completion;
+  try{
+   await ensureBrandedX(campaignId);
+   await discover({scan:state.scan,document:state.preparation_input.document,history:[]});
+   resumed=await resumeEditorialDrafts(campaignId);
+  }finally{completion=await saveCompletion(campaignId);}
+  const notification=completion.complete&&notifyOwner?await ensureOwnerReview(campaignId):null;
+  return {...resumed,status:completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED',...completion,notification:notification?.status??'NOT_READY'};
  };
  const recoverVerifiedRecipients=async campaignId=>{
   const cleanup=await cleanUnverifiedRecipients({pool,campaignId});
   const state=(await adapter.read(campaignId))?.value;
-  if(state?.phase!=='PUBLICATION_REVIEW'||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
+  if(!isReviewPhase(state?.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
   const before={x:sha256(state.assets.x),decisions:sha256(state.decisions),evidence:sha256(state.preparation_input),deliveries:sha256(state.deliveries)};
   await createAutonomousOutletDiscovery({openai,directory})({document:state.preparation_input.document,outlets:await directory.list(),candidateHints:cleanup.hints});
   const result=await resumeEditorialDrafts(campaignId,{existingDrafts:cleanup.assets});
@@ -106,11 +146,15 @@ export async function createPreparationReviewService({
  const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
  return {store,directory,workflow,prepare,discover,recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
-  await resumeEditorialDrafts(result.campaignId,{verifiedPublicationsOnly:true});
-  const completion=await reviewCompletion(result.campaignId);
+  let completion=await saveCompletion(result.campaignId);
+  if(!completion.complete){
+   if(result.status==='ALREADY_PREPARED')await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});
+   else await resumeEditorialDrafts(result.campaignId,{verifiedPublicationsOnly:true});
+   completion=await saveCompletion(result.campaignId);
+  }
   if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
-  return result;
- },workflow})};
+  return {...result,status:'PUBLICATION_REVIEW',...completion};
+ },workflow:{issue:ensureOwnerReview}})};
 }
 
 // Convenience composition for the paid API's existing OpenAI connection.
