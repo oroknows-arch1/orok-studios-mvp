@@ -40,8 +40,20 @@ export class OutletDirectory {
   );
   return record.id;
  }
+ async upsertPublication(record) {
+  if(!record || typeof record.id!=='string' || !record.id.trim()) throw Error('OUTLET_ID_REQUIRED');
+  if(!recipientPolicy.verifiedPublication(record))throw Error('V3_VERIFIED_PUBLICATION_REQUIRED');
+  const prior=await this.pool.query('SELECT record FROM v3_outlet_directory WHERE outlet_id=$1',[record.id]);
+  const existing=prior.rows[0]?.record;
+  if(existing?.opted_out||existing?.do_not_contact||existing?.contact?.opted_out||existing?.contact?.do_not_contact)
+   record={...record,opted_out:existing.opted_out,do_not_contact:existing.do_not_contact,contact:existing.contact};
+  if(recipientPolicy.verifiedDestination(existing)&&!recipientPolicy.verifiedDestination(record))return record.id;
+  await this.pool.query('INSERT INTO v3_outlet_directory(outlet_id,record) VALUES($1,$2::jsonb) ON CONFLICT(outlet_id) DO UPDATE SET record=EXCLUDED.record,updated_at=now()',[record.id,JSON.stringify(record)]);
+  return record.id;
+ }
  async list() {
   const {rows}=await this.pool.query('SELECT record FROM v3_outlet_directory ORDER BY outlet_id');
-  return rows.map(row=>row.record).filter(recipientPolicy.verifiedDestination);
+  return rows.map(row=>row.record).filter(recipientPolicy.verifiedPublication);
  }
+ async listContactVerified(){return (await this.list()).filter(recipientPolicy.verifiedDestination);}
 }

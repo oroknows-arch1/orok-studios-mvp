@@ -38,15 +38,16 @@ export function assessPublicationReview({state,candidates}) {
  if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)return {complete:false,verified_publications:0,editorial_emails:0,x_ready:false,missing_destination_ids:[]};
  const evidence=state.preparation_input.document.evidence.filter(item=>item?.verified===true&&item?.id);
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
- const publications=[...new Map([...(state.destinations??[]),...(candidates??[])].filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&candidate?.active===true&&recipientPolicy.verifiedDestination(candidate)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>[candidate.id,candidate])).values()].slice(0,MAX_DESTINATIONS-1);
+ const publications=[...new Map([...(state.destinations??[]),...(candidates??[])].filter(candidate=>recipientPolicy.verifiedPublication(candidate)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>[candidate.id,candidate])).values()].slice(0,MAX_DESTINATIONS-1);
+ const recipients=publications.filter(recipientPolicy.verifiedDestination);
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
  const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL'&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
- const missing=publications.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
+ const missing=recipients.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
  const invalid=assets.some(asset=>{if(asset.kind!=='EMAIL')return false;try{recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));return false;}catch{return true;}});
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
  const xReady=Boolean(x?.body&&(x.visual_url||x.visual_base64));
- return {complete:publications.length>0&&missing.length===0&&!invalid&&xReady,verified_publications:publications.length,editorial_emails:emailIds.size,x_ready:xReady,missing_destination_ids:missing};
+ return {complete:recipients.length>0&&missing.length===0&&!invalid&&xReady,verified_publications:publications.length,verified_contacts:recipients.length,unresolved_contacts:publications.length-recipients.length,editorial_emails:emailIds.size,x_ready:xReady,missing_destination_ids:missing};
 }
 
 // Explicit assembly of existing V3 workers. Call only after provider and
@@ -139,7 +140,7 @@ export async function createPreparationReviewService({
   const result=await resumeEditorialDrafts(campaignId,{existingDrafts:cleanup.assets});
   const after=(await adapter.read(campaignId))?.value;
   if(before.x!==sha256(after.assets.x)||before.decisions!==sha256(after.decisions)||before.evidence!==sha256(after.preparation_input)||before.deliveries!==sha256(after.deliveries))throw Error('RECIPIENT_RECOVERY_PRESERVATION_FAILED');
-  const active=await directory.list();
+  const active=typeof directory.listContactVerified==='function'?await directory.listContactVerified():(await directory.list()).filter(recipientPolicy.verifiedDestination);
   if(active.some(item=>!recipientPolicy.verifiedDestination(item))||after.destinations.some(item=>item.id!=='x'&&!recipientPolicy.verifiedDestination(item)))throw Error('RECIPIENT_RECOVERY_INVARIANT_FAILED');
   return {...result,directory_removed:cleanup.directory_removed,campaign_destinations_removed:cleanup.campaign_destinations_removed,verified_recipients:active.length,owner_decisions_preserved:true,x_unchanged:true,external_distribution:0};
  };

@@ -28,6 +28,10 @@ export async function cleanUnverifiedRecipients({pool,campaignId}){
   let directory_removed=0,campaign_destinations_removed=0;const hints=[],assets={};
   for(const {outlet_id,record} of outlets){
    if(recipientPolicy.verifiedDestination(record))continue;
+   // Publication legitimacy and contact readiness are independent. Keep proven
+   // publications in the active directory so later bounded research can upgrade
+   // them without repeating discovery or losing opt-outs/history.
+   if(recipientPolicy.verifiedPublication(record)){hints.push(record);continue;}
    if(record.verification?.scan_evidence_digest)hints.push(record);
    await client.query('INSERT INTO v3_recipient_audit(audit_key,snapshot) VALUES($1,$2::jsonb) ON CONFLICT DO NOTHING',['directory:'+outlet_id,JSON.stringify(record)]);
    await client.query('DELETE FROM v3_outlet_directory WHERE outlet_id=$1',[outlet_id]);directory_removed++;

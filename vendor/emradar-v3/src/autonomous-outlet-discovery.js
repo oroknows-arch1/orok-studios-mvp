@@ -53,13 +53,14 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
   let parsed;try{parsed=JSON.parse(plainText(answer));}catch(error){console.error('V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC '+JSON.stringify({...safeResponseShape(answer),parse_error_name:error?.name??null}));throw Error('DISCOVERY_SEARCH_JSON_INVALID');}if(!Array.isArray(parsed?.candidates))throw Error('DISCOVERY_SEARCH_CANDIDATES_REQUIRED');
   const allowed=new Set(searchEvidence.map(e=>e.id)),formationIds=new Set(context.formations.map(x=>x.id)),industryNames=new Set(context.industries),sourceHosts=new Set(evidence.filter(e=>/government|ministry|department|authority|secretariat/i.test(e.source??'')).map(e=>publicHttps(e.source_url)).filter(Boolean).map(u=>host(u.hostname))),seen=new Set(reusable.map(o=>o.contact.email.toLowerCase())),hosts=new Set(),existing=typeof directory.list==='function'?await directory.list():outlets,known=new Map(existing.filter(o=>o?.id).map(o=>[o.id,o]));
 
-  const counts={proposed:parsed.candidates.length,considered:0,missing_fields:0,invalid_url_or_dns:0,source_institution:0,no_verified_evidence_link:0,no_market_relationship:0,publication_proof_failed:0,contact_fetch_failed:0,invalid_email_or_duplicate:0,email_not_on_page:0,no_editorial_context:0,verified_contacts:0,reused_contacts:0,unresolved:0};
+  const counts={proposed:parsed.candidates.length,considered:0,missing_fields:0,invalid_url_or_dns:0,source_institution:0,no_verified_evidence_link:0,no_market_relationship:0,publication_proof_failed:0,verified_publications:0,contact_fetch_failed:0,invalid_email_or_duplicate:0,email_not_on_page:0,no_editorial_context:0,verified_contacts:0,reused_contacts:0,unresolved_contacts:0,unresolved:0};
   const sourceUrls=response=>[...(response.output??[]).filter(x=>x.type==='web_search_call').flatMap(x=>x.action?.sources??[]).map(x=>x.url),...(response.output??[]).flatMap(x=>x.content??[]).flatMap(x=>x.annotations??[]).filter(x=>x.type==='url_citation').map(x=>x.url)].filter(Boolean);
   for(const item of parsed.candidates.slice(0,limit)){
    const website=publicHttps(item?.website),key=website?host(website.hostname):null;
    if(key&&hosts.has(key))continue;if(key)hosts.add(key);
    counts.considered++;
    const journal={publication:String(item?.name??'Unnamed candidate').slice(0,180),website:website?.origin??null,scan_digest:scanDigest,industry_relevance:item?.relationship_reason??null,industries:item?.industries??[],evidence_ids:item?.evidence_ids??[],attempted_at:new Date().toISOString(),status:'UNRESOLVED',contact:null,failures:[],pages:[]};
+   let publicationPersisted=false;
    try{
     if(Date.now()-started>=maxRunMs)throw Error('RESEARCH_RUN_BUDGET_EXHAUSTED');
     if(!item?.name?.trim()||!item?.relationship_reason?.trim()){counts.missing_fields++;throw Error('CANDIDATE_FIELDS_MISSING');}
@@ -82,7 +83,12 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
      result={primary:prior.contact,alternatives:prior.contact.alternatives??[],pages:[],failures:[],source_kind:prior.verification.method};
      proofSource=prior.verification.publication_proof_url;counts.reused_contacts++;
     }else{
-     try{proofHtml=await read(proofUrl);if(!/(?:news|article|analysis|journal|magazine|editorial|reporting|stories|insights|podcast|episode|discussion|forum|community|newsletter|markets|business|finance|research|about)/i.test(proofHtml))throw Error('PUBLICATION_MARKERS_MISSING');}catch(error){proofFailure=error.message;journal.failures.push({url:proofUrl.href,reason:error.message});}
+     try{
+      proofHtml=await read(proofUrl);if(!/(?:news|article|analysis|journal|magazine|editorial|reporting|stories|insights|podcast|episode|discussion|forum|community|newsletter|markets|business|finance|research|about)/i.test(proofHtml))throw Error('PUBLICATION_MARKERS_MISSING');
+      const publication={...base,publication_verified:true,contact_verified:false,delivery_eligible:false,contact_status:'UNRESOLVED',discovery_status:'PUBLICATION_VERIFIED_CONTACT_UNRESOLVED',contact:null,verification:{publication_method:'live_publication_page',publication_status:'VERIFIED',publication_proof_url:proofSource,publication_page_sha256:digest(proofHtml),evidence_ids:ids,scan_evidence_digest:scanDigest}};
+      if(typeof directory.upsertPublication==='function')await directory.upsertPublication(publication);
+      publicationPersisted=true;counts.verified_publications++;journal.publication_verified=true;journal.publication_verification=publication.verification;
+     }catch(error){proofFailure=error.message;journal.failures.push({url:proofUrl.href,reason:error.message});}
      result=await research({website:website.href,publication:base.name,topics:industries,sourceUrls:[item.contact_url,proofUrl.href].filter(Boolean)});
      journal.pages.push(...result.pages);journal.failures.push(...result.failures);journal.contact_observations=(result.contacts??[]).slice(0,50).map(({email,purpose,eligible,rejection_reason,source_url})=>({email,purpose,eligible,rejection_reason,source_url}));
      let alternatives=[item.directory_source_url,item.publisher_source_url].filter(Boolean);
@@ -117,13 +123,18 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
     }
     const contact=result.primary,email=contact.email.toLowerCase();
     if(seen.has(email)){counts.invalid_email_or_duplicate++;throw Error('DUPLICATE_RECIPIENT');}
-    const discovered={...base,editorial_fit_verified:true,contact_verified:true,discovery_status:'VERIFIED',contact:{...contact,alternatives:result.alternatives},verification:{method:result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_editorial_contact_page',status:'VERIFIED',source_url:contact.source_url,publication_proof_url:proofSource,publication_page_sha256:proofHtml?digest(proofHtml):prior.verification.publication_page_sha256,evidence_ids:ids,scan_evidence_digest:scanDigest}};
+    const publicationMethod=result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_publication_page';
+    const publicationHash=proofHtml?digest(proofHtml):prior?.verification?.publication_page_sha256;
+    const publicationVerified=Boolean(publicationHash);
+    const discovered={...base,publication_verified:publicationVerified,editorial_fit_verified:true,contact_verified:true,discovery_status:'VERIFIED',contact:{...contact,alternatives:result.alternatives},verification:{method:result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_editorial_contact_page',status:'VERIFIED',source_url:contact.source_url,...(publicationVerified?{publication_method:publicationMethod,publication_status:'VERIFIED',publication_page_sha256:publicationHash}:{}),publication_proof_url:proofSource,evidence_ids:ids,scan_evidence_digest:scanDigest}};
     recipientPolicy.assertVerifiedDestination(discovered);
     await directory.upsert(discovered);counts.verified_contacts++;seen.add(email);
+    if(!publicationPersisted)counts.verified_publications++;
     journal.status='VERIFIED';journal.contact=discovered.contact;journal.verification=discovered.verification;journal.verified_at=new Date().toISOString();journal.retry_eligible_at=null;
     for(const evidence_id of ids){const source=evidence.find(e=>e.id===evidence_id);links.push({approved:true,outlet_id:id,evidence_id,record_id:source.record_id,source_url:source.source_url});}
    }catch(error){
     counts.unresolved++;journal.reason=/^[A-Z0-9_]+$/.test(error?.message)?error.message:'CANDIDATE_RESEARCH_FAILED';
+    if(publicationPersisted){journal.status='PUBLICATION_VERIFIED_CONTACT_UNRESOLVED';counts.unresolved_contacts++;}
     journal.retry_eligible_at??=new Date(Date.now()+(/DNS|TIMEOUT|SEARCH_FAILED/.test(journal.reason)?1800000:21600000)).toISOString();
     console.info('V3_CONTACT_RESEARCH_STOP '+JSON.stringify({publication:journal.publication,website:journal.website,status:journal.reason,failures:journal.failures}));
    }finally{

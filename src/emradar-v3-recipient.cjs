@@ -37,9 +37,21 @@ function directoryContact(record){
   isDirectoryIdentityText(p.identity_excerpt);
 }
 function isCommercialContactContext(text){return typeof text==='string'&&/\bfor commodity offers\b|\b(?:sales|trading|supplier) (?:enquiries|inquiries)\b|\brequest (?:a )?(?:quote|quotation)\b/i.test(text);}
+function verifiedPublication(record){
+ const v=record?.verification;
+ let website,proof;
+ try{website=new URL(record?.website);proof=new URL(v?.publication_proof_url);}catch{return false;}
+ const sameHost=website.hostname.replace(/^www\./,'')===proof.hostname.replace(/^www\./,'');
+ const directoryProof=(v?.publication_method==='published_editorial_directory'||v?.method==='published_editorial_directory')&&record?.contact?.directory_attribution?.publication_url&&authoritativeUrl(record.contact.directory_attribution.publication_url,record.website);
+ const legacy=record?.publication_verified!==true&&record?.contact_verified===true&&v?.status==='VERIFIED';
+ const explicit=record?.publication_verified===true&&v?.publication_status==='VERIFIED'&&/^[a-f0-9]{64}$/.test(v?.publication_page_sha256??'')&&
+  Array.isArray(record?.relationship?.formation_ids)&&record.relationship.formation_ids.length>0&&Array.isArray(record?.relationship?.industries)&&record.relationship.industries.length>0&&typeof record?.relationship?.reason==='string'&&record.relationship.reason.trim().length>0;
+ return record?.active===true&&record.editorial_fit_verified===true&&['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(record.destination_class)&&website.protocol==='https:'&&
+  (legacy||explicit)&&(sameHost||directoryProof)&&Array.isArray(v?.evidence_ids)&&v.evidence_ids.length>0&&/^[a-f0-9]{64}$/.test(v?.scan_evidence_digest??'');
+}
 function verifiedDestination(record){
  const c=record?.contact,v=record?.verification;
- return record?.active===true&&record.editorial_fit_verified===true&&record.contact_verified===true&&validRecipient(c?.email)&&
+ return verifiedPublication(record)&&record.contact_verified===true&&validRecipient(c?.email)&&
  ((v?.method==='live_editorial_contact_page'&&authoritativeContact(record)&&authoritativeUrl(v?.publication_proof_url,record.website))||directoryContact(record))&&v?.status==='VERIFIED'&&
  ['editorial','submissions','named_editor','general'].includes(c.purpose)&&
  typeof c.published_excerpt==='string'&&c.published_excerpt.toLowerCase().includes(c.email.toLowerCase())&&/^[a-f0-9]{64}$/.test(c.page_sha256??'')&&
@@ -61,4 +73,4 @@ async function checkPersistedRecipient(pool,asset,state){
  assertVerifiedAsset(asset,current);
  return assertRecipientAllowed(asset,destination,...rows.map(row=>row.record));
 }
-module.exports={isCommercialContactContext,isDirectoryIdentityText,validRecipient,assertRecipientAllowed,checkPersistedRecipient,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset};
+module.exports={isCommercialContactContext,isDirectoryIdentityText,validRecipient,assertRecipientAllowed,checkPersistedRecipient,verifiedPublication,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset};
