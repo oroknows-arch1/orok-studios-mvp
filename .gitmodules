@@ -1,0 +1,3 @@
+[submodule "vendor/emradar-v3-authoritative"]
+	path = vendor/emradar-v3-authoritative
+	url = https://github.com/oroknows-arch1/emradar-marketing-engine-v3.git

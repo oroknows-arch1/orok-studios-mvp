@@ -9,6 +9,11 @@ on:
       - 'docs/development-objective.json'
       - 'scripts/verify-development-harness.cjs'
       - 'test/development-harness.test.cjs'
+      - 'test/v3-source-integration.test.cjs'
+      - 'docs/v3-source-integration.json'
+      - 'scripts/verify-v3-source-integration.cjs'
+      - '.gitmodules'
+      - 'vendor/emradar-v3-authoritative'
       - 'vendor/emradar-v3/**'
       - 'test/emradar-v3-*.test.cjs'
       - '.github/workflows/emradar-v3-isolated.yml'
@@ -19,6 +24,11 @@ on:
       - 'docs/development-objective.json'
       - 'scripts/verify-development-harness.cjs'
       - 'test/development-harness.test.cjs'
+      - 'test/v3-source-integration.test.cjs'
+      - 'docs/v3-source-integration.json'
+      - 'scripts/verify-v3-source-integration.cjs'
+      - '.gitmodules'
+      - 'vendor/emradar-v3-authoritative'
       - 'test/emradar-v3-*.test.cjs'
       - '.github/workflows/emradar-v3-isolated.yml'
   workflow_dispatch:
@@ -45,11 +55,14 @@ jobs:
       V3_TEST_DATABASE_URL: postgresql://v3_test:v3_test_only@localhost:5432/v3_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci
       - run: npm run harness:verify
+      - run: npm run harness:v3
       - run: node --test test/development-harness.test.cjs
       - run: node test/setup-v3-postgres.cjs
       - run: node --test test/emradar-v3-*.test.cjs

@@ -2,12 +2,14 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const {verifyV3SourceIntegration} = require('./verify-v3-source-integration.cjs');
 
 const root = path.resolve(__dirname, '..');
 const agentsPath = path.join(root, 'AGENTS.md');
 const objectivePath = path.join(root, 'docs', 'development-objective.json');
 
 function verifyDevelopmentHarness() {
+  const source = verifyV3SourceIntegration();
   const agents = fs.readFileSync(agentsPath, 'utf8');
   const checkpoint = JSON.parse(fs.readFileSync(objectivePath, 'utf8'));
   const requiredRules = [
@@ -28,7 +30,7 @@ function verifyDevelopmentHarness() {
   if (!Array.isArray(checkpoint.acceptance_conditions) || checkpoint.acceptance_conditions.length < 8) throw new Error('HARNESS_ACCEPTANCE_INCOMPLETE');
   const distribution = checkpoint.acceptance_conditions.find(item => item.id === 'external_distribution');
   if (distribution?.status !== 'PROHIBITED_PENDING_OWNER_APPROVAL') throw new Error('HARNESS_DISTRIBUTION_GUARD_MISSING');
-  return {status: 'HARNESS_VERIFIED', objective_id: checkpoint.objective_id, campaign_id: checkpoint.campaign_id};
+  return {status: 'HARNESS_VERIFIED', objective_id: checkpoint.objective_id, campaign_id: checkpoint.campaign_id, v3_source:{repository:source.repository,commit:source.commit}};
 }
 
 if (require.main === module) console.log(JSON.stringify(verifyDevelopmentHarness()));
