@@ -207,7 +207,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   // One bounded verification of this discovery revision, using the existing
   // latest campaign. No notification, release, scan or content regeneration.
-  const discoveryTestKey='v3-intelligent-discovery-test:v3';
+  const discoveryTestKey='v3-publication-first-discovery:2026-10-18-v1';
   const latestResearchScan=(await published().catch(()=>[]))[0];
   const researchCampaignId=latestResearchScan?campaignIdFor(latestResearchScan):null;
   const researchState=researchCampaignId?(await service.store.adapter.read(researchCampaignId))?.value:null;
