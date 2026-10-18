@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "objective_id": "emradar-v3-publication-first-discovery-repair",
-  "status": "COMPLETE",
+  "objective_id": "emradar-v3-final-marketing-signoff",
+  "status": "IN_PROGRESS",
   "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
-  "objective": "Repair V3 publication discovery so publication legitimacy and editorial-contact readiness persist independently, then resume the existing campaign through PUBLICATION_REVIEW without external distribution.",
+  "objective": "Finish existing EMRADAR V3 marketing: sufficient evidence-verified destinations, automatic scan-to-review, fresh private owner invitation, owner-approved distribution, receipts and feedback. Freeze unrelated work.",
   "constraints": {
     "start_new_campaign": false,
     "rebuild_working_components": false,
@@ -64,29 +64,168 @@
     }
   },
   "acceptance_conditions": [
-    {"id": "publication_contact_decoupling", "status": "VERIFIED", "evidence": "Publication proof now persists through OutletDirectory.upsertPublication before contact research; verifiedPublication and verifiedDestination are independent predicates."},
-    {"id": "evidence_led_matching", "status": "VERIFIED", "evidence": "Discovery requires verified scan evidence, formation IDs, supported industries, ecosystem links, an explicit causal relationship reason, public HTTPS/DNS, and retrieved publication proof."},
-    {"id": "unresolved_contact_persistence", "status": "VERIFIED", "evidence": "PUBLICATION_VERIFIED_CONTACT_UNRESOLVED records remain in v3_outlet_directory and v3_contact_research with retry eligibility; cleanup preserves verified publications."},
-    {"id": "verified_recipient_restriction", "status": "VERIFIED", "evidence": "Addressed EMAIL assets still require a source-bound verified editorial recipient; unresolved publications produce no addressed draft."},
-    {"id": "safety_regressions", "status": "PASS", "evidence": "75/75 bounded publication, contact, recipient, distribution, X and campaign tests passed; 7/7 bounded runtime tests passed. Duplicate, opt-out, unsafe address/host, owner approval and ambiguous-delivery protections remain enforced."},
-    {"id": "persistent_harness", "status": "VERIFIED", "evidence": "npm run harness:verify passed before runtime changes and before every implementation commit."},
-    {"id": "production_deploy_verified", "status": "VERIFIED", "evidence": "Render deploy dep-dba197dg1s2s73atlipg is live on 011cf2e7713e20b6d17f595ee32fed3ea4cf61f5; service startup and V3 activation preflight succeeded."},
-    {"id": "existing_campaign_resumed", "status": "VERIFIED", "evidence": "The targeted durable recovery completed for v3-df5b240c718018880410c03a4c392d64 at campaign version 47 without notification or distribution."},
-    {"id": "complete_publication_review", "status": "VERIFIED", "evidence": "Production review_completion.complete=true, verified_publications=2, verified_contacts=2, unresolved_contacts=0, editorial_emails=2, x_ready=true, missing_destination_ids=[]."},
-    {"id": "owner_review_access", "status": "VERIFIED", "evidence": "The private review token is persisted, the owner session is unrevoked through 2026-11-17T02:40:35+11:00, and the canonical owner invitation was consumed."},
-    {"id": "historical_preservation", "status": "VERIFIED", "evidence": "Existing destinations=3, assets=3, decisions=0, deliveries=0 and X readiness were preserved; no external delivery occurred."},
-    {"id": "external_distribution", "status": "PROHIBITED_PENDING_OWNER_APPROVAL", "evidence": "No editorial email was sent and no X content was published."}
+    {
+      "id": "prior_discovery_repair",
+      "status": "VERIFIED",
+      "evidence": "See previous_objective and production_discovery_evidence."
+    },
+    {
+      "id": "destination_coverage",
+      "status": "PENDING",
+      "evidence": "Target 5-10 genuine relevant outlets per evidence-supported category; hard maximum 30 total; no invented evidence or recipients."
+    },
+    {
+      "id": "automated_scan_to_review",
+      "status": "PENDING",
+      "evidence": "Verify automatic intake, discovery, content, owner notification."
+    },
+    {
+      "id": "owner_review_invitation",
+      "status": "PENDING",
+      "evidence": "Fresh private owner review invitation to sean@emradar.net and successful owner access."
+    },
+    {
+      "id": "approved_distribution",
+      "status": "PENDING",
+      "evidence": "Owner-controlled approval and live delivery not yet verified."
+    },
+    {
+      "id": "receipts_and_feedback",
+      "status": "PENDING",
+      "evidence": "Actual provider receipts, idempotent recovery and closed feedback loop not yet verified."
+    },
+    {
+      "id": "historical_preservation",
+      "status": "VERIFIED",
+      "evidence": "Previous completed checkpoint preserved; do not restart campaign or change scanner."
+    },
+    {
+      "id": "safety_guards",
+      "status": "VERIFIED",
+      "evidence": "Prior 75 bounded discovery and safety tests and 7 runtime tests; do not infer live distribution."
+    },
+    {
+      "id": "external_distribution",
+      "status": "PROHIBITED_PENDING_OWNER_APPROVAL",
+      "evidence": "No email or X release without explicit owner approval."
+    }
   ],
   "remaining_blockers": [
-    "The bounded production run found no additional candidate that passed both retrieved publication legitimacy and scan-specific causal relationship checks.",
-    "Three candidates' official sites could not be independently retrieved; one candidate lacked a supported market relationship. They remain research history, not invented recipients or drafts.",
-    "Direct HTTP verification from the execution workspace was blocked by its restricted network policy; Render independently reports the deploy live and production database/service logs verify the workload outcome."
+    "Two verified editorial recipients insufficient for distribution target.",
+    "Recorded HTTP 403, CONTACT_RESPONSE_INVALID and DIRECTORY_READ_FAILED on credible candidate sites; improve independently attributable evidence retrieval.",
+    "Fresh private invitation and complete approval-distribution-receipts-feedback path not yet verified."
   ],
-  "next_action": "Owner may continue the existing private PUBLICATION_REVIEW session. Future bounded discovery can reuse persisted publication/contact research; do not distribute anything without explicit saved owner decisions.",
+  "next_action": "Reuse production research history; reproduce retrieval failure with cheapest decisive check; smallest bounded fix for verified destination coverage; resume existing campaign, send fresh private review invitation to sean@emradar.net, and verify owner-approved end-to-end distribution with receipts and feedback.",
   "stop_conditions": [
     "Genuine security or permission requirement",
     "Owner approval decision",
     "Defined spending limit",
     "Failure that cannot be recovered safely"
+  ],
+  "previous_objective": {
+    "objective_id": "emradar-v3-publication-first-discovery-repair",
+    "status": "COMPLETE",
+    "objective": "Repair V3 publication discovery so publication legitimacy and editorial-contact readiness persist independently, then resume the existing campaign through PUBLICATION_REVIEW without external distribution.",
+    "acceptance_conditions": [
+      {
+        "id": "publication_contact_decoupling",
+        "status": "VERIFIED",
+        "evidence": "Publication proof now persists through OutletDirectory.upsertPublication before contact research; verifiedPublication and verifiedDestination are independent predicates."
+      },
+      {
+        "id": "evidence_led_matching",
+        "status": "VERIFIED",
+        "evidence": "Discovery requires verified scan evidence, formation IDs, supported industries, ecosystem links, an explicit causal relationship reason, public HTTPS/DNS, and retrieved publication proof."
+      },
+      {
+        "id": "unresolved_contact_persistence",
+        "status": "VERIFIED",
+        "evidence": "PUBLICATION_VERIFIED_CONTACT_UNRESOLVED records remain in v3_outlet_directory and v3_contact_research with retry eligibility; cleanup preserves verified publications."
+      },
+      {
+        "id": "verified_recipient_restriction",
+        "status": "VERIFIED",
+        "evidence": "Addressed EMAIL assets still require a source-bound verified editorial recipient; unresolved publications produce no addressed draft."
+      },
+      {
+        "id": "safety_regressions",
+        "status": "PASS",
+        "evidence": "75/75 bounded publication, contact, recipient, distribution, X and campaign tests passed; 7/7 bounded runtime tests passed. Duplicate, opt-out, unsafe address/host, owner approval and ambiguous-delivery protections remain enforced."
+      },
+      {
+        "id": "persistent_harness",
+        "status": "VERIFIED",
+        "evidence": "npm run harness:verify passed before runtime changes and before every implementation commit."
+      },
+      {
+        "id": "production_deploy_verified",
+        "status": "VERIFIED",
+        "evidence": "Render deploy dep-dba197dg1s2s73atlipg is live on 011cf2e7713e20b6d17f595ee32fed3ea4cf61f5; service startup and V3 activation preflight succeeded."
+      },
+      {
+        "id": "existing_campaign_resumed",
+        "status": "VERIFIED",
+        "evidence": "The targeted durable recovery completed for v3-df5b240c718018880410c03a4c392d64 at campaign version 47 without notification or distribution."
+      },
+      {
+        "id": "complete_publication_review",
+        "status": "VERIFIED",
+        "evidence": "Production review_completion.complete=true, verified_publications=2, verified_contacts=2, unresolved_contacts=0, editorial_emails=2, x_ready=true, missing_destination_ids=[]."
+      },
+      {
+        "id": "owner_review_access",
+        "status": "VERIFIED",
+        "evidence": "The private review token is persisted, the owner session is unrevoked through 2026-11-17T02:40:35+11:00, and the canonical owner invitation was consumed."
+      },
+      {
+        "id": "historical_preservation",
+        "status": "VERIFIED",
+        "evidence": "Existing destinations=3, assets=3, decisions=0, deliveries=0 and X readiness were preserved; no external delivery occurred."
+      },
+      {
+        "id": "external_distribution",
+        "status": "PROHIBITED_PENDING_OWNER_APPROVAL",
+        "evidence": "No editorial email was sent and no X content was published."
+      }
+    ],
+    "production_discovery_evidence": {
+      "durable_recovery_key": "v3-publication-first-discovery:2026-10-18-v2-targeted",
+      "provider_search_calls": 1,
+      "candidates_proposed": 5,
+      "candidates_considered": 4,
+      "new_verified_publications": 0,
+      "new_verified_contacts": 0,
+      "new_addressed_drafts": 0,
+      "owner_notifications_sent": 0,
+      "external_distribution": 0,
+      "research_blockers": {
+        "NO_SUPPORTED_MARKET_RELATIONSHIP": 1,
+        "OFFICIAL_SITE_UNAVAILABLE": 3
+      },
+      "result": {
+        "status": "PUBLICATION_REVIEW",
+        "complete": true,
+        "verified_publications": 2,
+        "verified_contacts": 2,
+        "unresolved_contacts": 0,
+        "editorial_emails": 2,
+        "x_ready": true,
+        "missing_destination_ids": []
+      }
+    }
+  },
+  "execution_policy": {
+    "chat_first": true,
+    "exhaust_chat_tools_before_work": true,
+    "automatic_work_handoff": false,
+    "work_requires_explicit_owner_choice": true,
+    "work_prompt_format": "code_only_minimum_bounded",
+    "minimum_usage": true,
+    "one_objective": true
+  },
+  "source_repositories": [
+    "oroknows-arch1/orok-studios-mvp",
+    "oroknows-arch1/emradar-marketing",
+    "oroknows-arch1/emradar-marketing-engine-v3"
   ]
 }
