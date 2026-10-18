@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "objective_id": "emradar-v3-publication-first-discovery-repair",
+  "objective_id": "emradar-v3-vc-harness-source-integration",
   "status": "COMPLETE",
   "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
-  "objective": "Repair V3 publication discovery so publication legitimacy and editorial-contact readiness persist independently, then resume the existing campaign through PUBLICATION_REVIEW without external distribution.",
+  "objective": "Make the existing VC harness demonstrably develop, test and maintain the authorised EMRADAR Marketing V3 source while preserving the production runtime overlay and distribution boundary.",
   "constraints": {
     "start_new_campaign": false,
     "rebuild_working_components": false,
@@ -38,6 +38,35 @@
     "owner_session_expires_at": "2026-11-17T02:40:35+11:00",
     "external_distribution_observed": 0
   },
+  "source_integration": {
+    "verified_at": "2026-10-18T12:38:45+11:00",
+    "harness_commit": "e8972f68bfdadf6cbf8f420da5af348c947a513c",
+    "authoritative_repository": "oroknows-arch1/emradar-marketing-engine-v3",
+    "authoritative_commit": "d35b6b2b0f759c57eaac2379e4fbc3c8c04cf238",
+    "mechanism": "Pinned Git submodule plus fail-closed provenance, byte-identity and executable compatibility verification against the existing production runtime overlay.",
+    "source_path": "vendor/emradar-v3-authoritative",
+    "runtime_overlay_path": "vendor/emradar-v3",
+    "authorised_submodule_count": 1,
+    "exact_shared_files": [
+      "src/discovery.js",
+      "src/review-access.js"
+    ],
+    "commands": [
+      "npm run harness:verify",
+      "npm run harness:v3"
+    ],
+    "targeted_tests": {
+      "authoritative_source_and_compatibility": "9/9 passed (3 harness integration assertions plus 6 selected authoritative source files)",
+      "runtime_compatibility": "7/7 passed",
+      "recipient_safety": "7/7 passed",
+      "distribution_safety": "6/6 passed"
+    },
+    "production_runtime_changed": false,
+    "deployment_required": false,
+    "campaign_triggered": false,
+    "scanner_modified": false,
+    "external_distribution": 0
+  },
   "production_discovery_evidence": {
     "durable_recovery_key": "v3-publication-first-discovery:2026-10-18-v2-targeted",
     "provider_search_calls": 1,
@@ -64,12 +93,16 @@
     }
   },
   "acceptance_conditions": [
+    {"id": "authoritative_v3_source", "status": "VERIFIED", "evidence": "The harness contains a pinned Git submodule of oroknows-arch1/emradar-marketing-engine-v3 at d35b6b2b0f759c57eaac2379e4fbc3c8c04cf238; the verifier rejects any other remote, commit, dirty source tree or additional submodule URL."},
+    {"id": "executable_source_integration", "status": "VERIFIED", "evidence": "npm run harness:v3 executes real modules and selected tests from the authoritative checkout, then exercises behavior compatibility with the production runtime overlay. Success does not rely on documentation or vendored runtime files alone."},
+    {"id": "runtime_overlay_compatibility", "status": "VERIFIED", "evidence": "Shared discovery and review-access modules are byte-identical; scan contracts, canonical hashing, states, delivery states and discovery behavior are executed across both source and overlay."},
+    {"id": "repository_exclusion_boundary", "status": "VERIFIED", "evidence": "The integration verifier permits exactly one source submodule and its URL must be the authorised V3 repository."},
     {"id": "publication_contact_decoupling", "status": "VERIFIED", "evidence": "Publication proof now persists through OutletDirectory.upsertPublication before contact research; verifiedPublication and verifiedDestination are independent predicates."},
     {"id": "evidence_led_matching", "status": "VERIFIED", "evidence": "Discovery requires verified scan evidence, formation IDs, supported industries, ecosystem links, an explicit causal relationship reason, public HTTPS/DNS, and retrieved publication proof."},
     {"id": "unresolved_contact_persistence", "status": "VERIFIED", "evidence": "PUBLICATION_VERIFIED_CONTACT_UNRESOLVED records remain in v3_outlet_directory and v3_contact_research with retry eligibility; cleanup preserves verified publications."},
     {"id": "verified_recipient_restriction", "status": "VERIFIED", "evidence": "Addressed EMAIL assets still require a source-bound verified editorial recipient; unresolved publications produce no addressed draft."},
     {"id": "safety_regressions", "status": "PASS", "evidence": "75/75 bounded publication, contact, recipient, distribution, X and campaign tests passed; 7/7 bounded runtime tests passed. Duplicate, opt-out, unsafe address/host, owner approval and ambiguous-delivery protections remain enforced."},
-    {"id": "persistent_harness", "status": "VERIFIED", "evidence": "npm run harness:verify passed before runtime changes and before every implementation commit."},
+    {"id": "persistent_harness", "status": "VERIFIED", "evidence": "npm run harness:verify now includes fail-closed authoritative V3 source verification; CI initializes the pinned submodule and runs npm run harness:v3."},
     {"id": "production_deploy_verified", "status": "VERIFIED", "evidence": "Render deploy dep-dba197dg1s2s73atlipg is live on 011cf2e7713e20b6d17f595ee32fed3ea4cf61f5; service startup and V3 activation preflight succeeded."},
     {"id": "existing_campaign_resumed", "status": "VERIFIED", "evidence": "The targeted durable recovery completed for v3-df5b240c718018880410c03a4c392d64 at campaign version 47 without notification or distribution."},
     {"id": "complete_publication_review", "status": "VERIFIED", "evidence": "Production review_completion.complete=true, verified_publications=2, verified_contacts=2, unresolved_contacts=0, editorial_emails=2, x_ready=true, missing_destination_ids=[]."},
@@ -82,7 +115,7 @@
     "Three candidates' official sites could not be independently retrieved; one candidate lacked a supported market relationship. They remain research history, not invented recipients or drafts.",
     "Direct HTTP verification from the execution workspace was blocked by its restricted network policy; Render independently reports the deploy live and production database/service logs verify the workload outcome."
   ],
-  "next_action": "Owner may continue the existing private PUBLICATION_REVIEW session. Future bounded discovery can reuse persisted publication/contact research; do not distribute anything without explicit saved owner decisions.",
+  "next_action": "For future V3 development, change and test the pinned authoritative source first, then deliberately port only production-required changes into the runtime overlay and require harness:v3 compatibility evidence. No deployment or campaign action is pending from this integration task.",
   "stop_conditions": [
     "Genuine security or permission requirement",
     "Owner approval decision",
