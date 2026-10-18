@@ -225,7 +225,14 @@
   },
   "source_repositories": [
     "oroknows-arch1/orok-studios-mvp",
-    "oroknows-arch1/emradar-marketing",
     "oroknows-arch1/emradar-marketing-engine-v3"
-  ]
+  ],
+  "legacy_repository_policy": {
+    "repository": "oroknows-arch1/emradar-marketing",
+    "status": "EXCLUDED_PENDING_DELETION",
+    "may_be_used_as_v3_source": false,
+    "may_be_imported": false,
+    "owner_requested_deletion": true,
+    "delete_only_after_live_service_dependency_preflight": true
+  }
 }
