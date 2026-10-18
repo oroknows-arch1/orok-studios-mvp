@@ -26,6 +26,13 @@ function verifyDevelopmentHarness() {
   if (!['IN_PROGRESS', 'BLOCKED', 'COMPLETE'].includes(checkpoint.status)) throw new Error('HARNESS_STATUS_INVALID');
   if (!checkpoint.verified_checkpoint?.github_main_sha || !checkpoint.next_action) throw new Error('HARNESS_CHECKPOINT_INCOMPLETE');
   if (!Array.isArray(checkpoint.acceptance_conditions) || checkpoint.acceptance_conditions.length < 8) throw new Error('HARNESS_ACCEPTANCE_INCOMPLETE');
+  if (checkpoint.objective_id === 'emradar-v3-final-marketing-signoff') {
+    if (!agents.includes('Never initiate an automatic Work handoff')) throw new Error('HARNESS_CHAT_FIRST_RULE_MISSING');
+    if (checkpoint.execution_policy?.automatic_work_handoff !== false || checkpoint.execution_policy?.exhaust_chat_tools_before_work !== true) throw new Error('HARNESS_WORK_GATE_MISSING');
+    for (const id of ['destination_coverage','automated_scan_to_review','owner_review_invitation','approved_distribution','receipts_and_feedback']) {
+      if (!checkpoint.acceptance_conditions.some(item => item.id === id)) throw new Error('HARNESS_SIGNOFF_CONDITION_MISSING:'+id);
+    }
+  }
   const distribution = checkpoint.acceptance_conditions.find(item => item.id === 'external_distribution');
   if (distribution?.status !== 'PROHIBITED_PENDING_OWNER_APPROVAL') throw new Error('HARNESS_DISTRIBUTION_GUARD_MISSING');
   return {status: 'HARNESS_VERIFIED', objective_id: checkpoint.objective_id, campaign_id: checkpoint.campaign_id};
