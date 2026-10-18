@@ -15,7 +15,7 @@ test('activation refuses missing configuration before connecting',async()=>{
  }),/V3_ACTIVATION_CONFIG_REQUIRED/);
  assert.equal(connected,false);
 });
-test('activation initializes V3 tables and exposes preparation plus owner-notification only',async()=>{
+test('activation initializes V3 tables and exposes preparation plus guarded release routes',async()=>{
  const routes=[],sql=[],handlers=[];
  const pool={query:async q=>{sql.push(q);return {rows:[],rowCount:0};},end:async()=>{}};
  const env={EMRADAR_V3_PREPARATION_ENABLED:'true',EMRADAR_V3_DATABASE_URL:'postgres://example.invalid/db',EMRADAR_V3_API_TOKEN:'t'.repeat(40),EMRADAR_V3_REVIEW_ORIGIN:'https://review.example.org'};
@@ -26,10 +26,11 @@ test('activation initializes V3 tables and exposes preparation plus owner-notifi
  });
  assert.equal(result.enabled,true);
  assert.equal(typeof result.runCampaign,'function');
- assert.deepEqual(routes.map(r=>r[0]),['/emradar/v3/owner-notification','/emradar/v3/discover','/emradar/v3/prepare']);
- assert.equal(sql.length,4);
+ assert.deepEqual(routes.map(r=>r[0]),['/emradar/v3/owner-notification','/emradar/v3/release-email','/emradar/v3/discover','/emradar/v3/prepare']);
+ const createSql=sql.filter(q=>q.includes('CREATE TABLE IF NOT EXISTS v3_'));
+ assert(createSql.length>=7);
  assert.equal(handlers.length,1);
- assert(sql.every(q=>q.includes('CREATE TABLE IF NOT EXISTS v3_')));
+ for(const table of ['v3_campaign_state','v3_outlet_directory','v3_contact_research','v3_send_reservations','v3_owner_notification_reservations','v3_x_authorization','v3_x_oauth_states'])assert(createSql.some(q=>q.includes(table)));
 });
 test('selects newest unprocessed published scan and runs discovery before preparation',async()=>{
  const published=loadPublishedScans();

@@ -3,17 +3,20 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
 const {createV3PreparedIntegration}=require('../src/emradar-v3-integration.cjs');
+const verified=require('./fixtures/v3-verified-recipient.cjs');
 const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
 const hash=x=>crypto.createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
 function response(){return {statusCode:200,status(n){this.statusCode=n;return this;},json(x){this.body=x;return this;}};}
 test('V3 paid API prepared integration wires authenticated route, trusted persisted approval, reservation and simulated receipt',async()=>{
- const asset={campaign_id:'v3-integration',destination_id:'journal',kind:'EMAIL',body:'Evidence'};
+ const destination=verified('journal');
+ const asset={campaign_id:'v3-integration',destination_id:'journal',kind:'EMAIL',body:'Evidence',to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1']};
  const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
  const key=hash([asset.campaign_id,asset.destination_id,approval.asset_sha256]),events=[];
- const state={phase:'PUBLICATION_REVIEW',assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
+ const state={phase:'PUBLICATION_REVIEW',destinations:[destination],assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
  const reserved=new Set();
  const pool={query:async(sql,args)=>{
   if(sql.startsWith('SELECT payload'))return {rows:[{payload:state}]};
+  if(sql.startsWith('SELECT record'))return {rows:[{record:destination}]};
   if(sql.includes('INSERT INTO v3_send_reservations')){events.push('reserve');if(reserved.has(args[0]))return {rowCount:0};reserved.add(args[0]);return {rowCount:1};}
   if(sql.includes('UPDATE v3_send_reservations')){events.push('record');return {rowCount:1};}
   return {rowCount:1};
