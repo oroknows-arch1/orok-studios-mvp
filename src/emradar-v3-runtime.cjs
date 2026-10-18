@@ -120,7 +120,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
  const databaseUrl=env.EMRADAR_V3_DATABASE_URL||env.DATABASE_URL;
  if(!databaseUrl||!env.EMRADAR_V3_API_TOKEN||!env.EMRADAR_V3_REVIEW_ORIGIN)
   throw Error('V3_ACTIVATION_CONFIG_REQUIRED');
- if(!openai?.chat?.completions?.create||!openai?.images?.generate)throw Error('V3_OPENAI_PROVIDER_REQUIRED');
+ if(!openai?.chat?.completions?.create)throw Error('V3_OPENAI_PROVIDER_REQUIRED');
  if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'&&typeof openai?.responses?.create!=='function')
   throw Error('V3_DISCOVERY_SEARCH_PROVIDER_REQUIRED');
  if(typeof setReviewHandler!=='function')throw Error('V3_REVIEW_HTTP_REQUIRED');

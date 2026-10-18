@@ -37,7 +37,19 @@ function verifyV3SourceIntegration() {
     if (sourceSha256 !== overlaySha256) throw new Error('V3_SHARED_FILE_DIVERGED:' + relative);
     shared[relative] = sourceSha256;
   }
-  return {status:'V3_SOURCE_INTEGRATED',repository:manifest.repository,commit:manifest.commit,path:manifest.path,runtime_overlay:manifest.runtime_overlay,authorised_submodules:submoduleUrls.length,shared};
+  const authoritativeStandards={};
+  for(const relative of manifest.authoritative_standard_files??[]){
+    const sourceFile=path.join(source,relative);
+    if(!fs.existsSync(sourceFile))throw new Error('V3_AUTHORITATIVE_STANDARD_MISSING:'+relative);
+    authoritativeStandards[relative]=digest(sourceFile);
+  }
+  for(const relative of ['src/editorial-reference.js','src/graphic-standard.js']){
+    const expected=`export * from '../../emradar-v3-authoritative/${relative}';\n`;
+    if(fs.readFileSync(path.join(overlay,relative),'utf8')!==expected)throw new Error('V3_AUTHORITATIVE_STANDARD_DIVERGED:'+relative);
+  }
+  const provider=fs.readFileSync(path.join(overlay,'src/openai-preparation-providers.js'),'utf8');
+  if(!provider.includes("from '../../emradar-v3-authoritative/src/graphic-renderer.js'"))throw new Error('V3_AUTHORITATIVE_GRAPHIC_RENDERER_NOT_USED');
+  return {status:'V3_SOURCE_INTEGRATED',repository:manifest.repository,commit:manifest.commit,path:manifest.path,runtime_overlay:manifest.runtime_overlay,authorised_submodules:submoduleUrls.length,shared,authoritativeStandards};
 }
 
 if (require.main === module) console.log(JSON.stringify(verifyV3SourceIntegration()));

@@ -1,0 +1,25 @@
+{
+  "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
+  "campaign_phase": "PUBLICATION_REVIEW",
+  "destination": "The Jakarta Post",
+  "generation_count": 2,
+  "campaign_state_modified": false,
+  "diagnostic_sha256": "65d0e71fe49ea877df283d0b3a11fe43fd9ae14530da73c5542115ca741d0ee5",
+  "first_draft": {
+    "subject": "Indonesia’s MSCI review: the governance question behind the selloff",
+    "analytical_finding": "The review is turning transparency about who owns shares and how many can actually trade into a test of Indonesia’s access to emerging-market index allocations.",
+    "validation_result": "V3_ANALYTICAL_FINDING_REQUIRED"
+  },
+  "verified_draft": {
+    "subject": "Indonesia’s MSCI review: when market transparency affects index access",
+    "body": "I’m Sean Walker, working on EMRADAR, a system that tracks emerging market formations from evidence in the real economy.\n\nWe’ve been examining Indonesia’s equity-market access since MSCI proposed moving it from Emerging Market to Standalone status while retaining its restrictions. What stood out was OJK’s response—planned ownership disclosures and a higher free-float roadmap—alongside the sharp selloff reported by Reuters.\n\nMSCI’s review shifts ownership disclosure and the amount of stock actually available to trade from domestic reform questions into possible conditions for Indonesia’s continued place in emerging-market indexes. Given The Jakarta Post’s coverage of the review and its market impact, I’d like to propose an article examining what OJK’s plans could change beyond the immediate selloff. MSCI has not made a final decision, and whether the reforms will be implemented and independently verified remains open.\n\nWould this be of interest to The Jakarta Post? If useful, I can send a concise sourced draft for review.",
+    "analytical_finding": "MSCI’s review shifts ownership disclosure and the amount of stock actually available to trade from domestic reform questions into possible conditions for Indonesia’s continued place in emerging-market indexes.",
+    "limitations": "MSCI has not made a final decision, and whether the reforms will be implemented and independently verified remains open.",
+    "story_evidence_ids": [
+      "indonesia-equity-market-accessibility-crisis:0",
+      "indonesia-equity-market-accessibility-crisis:1",
+      "indonesia-equity-market-accessibility-crisis:2"
+    ],
+    "validation_result_after_inflection_fix": "PASS"
+  }
+}

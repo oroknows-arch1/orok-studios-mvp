@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<rect width="1024" height="1024" fill="#031728"/>
+<circle cx="860" cy="210" r="250" fill="none" stroke="#0862f7" stroke-width="3" opacity=".22"/>
+<circle cx="860" cy="210" r="160" fill="none" stroke="#d9a441" stroke-width="2" opacity=".18"/>
+<path d="M650 85 L790 155 L930 105 M720 285 L860 210 L995 320 M790 155 L720 285 M930 105 L860 210" fill="none" stroke="#0862f7" stroke-width="3" opacity=".32"/>
+<g fill="#0862f7" opacity=".72"><circle cx="650" cy="85" r="7"/><circle cx="790" cy="155" r="7"/><circle cx="930" cy="105" r="7"/><circle cx="720" cy="285" r="7"/><circle cx="860" cy="210" r="7"/><circle cx="995" cy="320" r="7"/></g>
+<rect x="54" y="44" width="916" height="936" rx="28" fill="none" stroke="#ffffff" stroke-width="2" opacity=".12"/>
+<text x="72" y="92" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="48" font-weight="800" letter-spacing="1">EMRADAR</text>
+<text x="74" y="122" fill="#0862f7" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" letter-spacing="3">WORLD CHANGE. CONNECTED.</text>
+<rect x="72" y="148" width="124" height="6" rx="3" fill="#0862f7"/>
+<text fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="800"><tspan x="72" y="214">Indonesia: MSCI consults on</tspan><tspan x="72" y="284">reclassification</tspan></text>
+<text fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="500"><tspan x="72" y="380">MSCI is consulting on moving Indonesia from</tspan><tspan x="72" y="428">Emerging Market to Standalone, with a decision</tspan><tspan x="72" y="476">targeted by end-June 2027. OJK plans disclosure</tspan><tspan x="72" y="524">and free-float reforms. Reuters reported an 11.6%</tspan><tspan x="72" y="572">index fall and cited bank estimates of US$3–6bn in</tspan><tspan x="72" y="620">potential passive outflows. No reclassification</tspan><tspan x="72" y="668">decision has been made.</tspan></text>
+<text fill="#aebbd0" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="600"><tspan x="72" y="758">Sources: MSCI · 2026-10-15 | Otoritas Jasa Keuangan ·</tspan><tspan x="72" y="788">2026-10-16 | Reuters · 2026-10-16</tspan></text>
+<text x="72" y="950" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700">emradar.net</text>
+</svg>

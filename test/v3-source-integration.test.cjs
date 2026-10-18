@@ -13,9 +13,10 @@ test('VC harness pins and verifies the authorised V3 source checkout', () => {
   const result = verifyV3SourceIntegration();
   assert.equal(result.status, 'V3_SOURCE_INTEGRATED');
   assert.equal(result.repository, 'oroknows-arch1/emradar-marketing-engine-v3');
-  assert.equal(result.commit, 'd35b6b2b0f759c57eaac2379e4fbc3c8c04cf238');
+  assert.equal(result.commit, '2530d0f33085805e844548c2846e1acff66f0fae');
   assert.equal(result.authorised_submodules, 1);
   assert.deepEqual(Object.keys(result.shared).sort(), ['src/discovery.js','src/review-access.js']);
+  assert.deepEqual(Object.keys(result.authoritativeStandards).sort(),['src/editorial-reference.js','src/graphic-renderer.js','src/graphic-standard.js']);
 });
 
 test('source boundary excludes every unapproved repository integration', () => {

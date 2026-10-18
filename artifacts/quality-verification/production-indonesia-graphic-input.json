@@ -1,0 +1,41 @@
+{
+  "asset": {
+    "kind": "X",
+    "subject": "Indonesia: MSCI consults on reclassification",
+    "body": "MSCI is consulting on moving Indonesia from Emerging Market to Standalone, with a decision targeted by end-June 2027. OJK plans disclosure and free-float reforms. Reuters reported an 11.6% index fall and cited bank estimates of US$3–6bn in potential passive outflows. No reclassification decision has been made.",
+    "story_record_id": "indonesia-equity-market-accessibility-crisis",
+    "evidence_ids": [
+      "indonesia-equity-market-accessibility-crisis:0",
+      "indonesia-equity-market-accessibility-crisis:1",
+      "indonesia-equity-market-accessibility-crisis:2"
+    ]
+  },
+  "document": {
+    "evidence": [
+      {
+        "id": "indonesia-equity-market-accessibility-crisis:0",
+        "record_id": "indonesia-equity-market-accessibility-crisis",
+        "verified": true,
+        "fact": "MSCI launched a consultation to reclassify Indonesia from Emerging Market to Standalone, retaining restrictions and targeting a final decision by the end of June 2027.",
+        "source": "MSCI",
+        "date": "2026-10-15"
+      },
+      {
+        "id": "indonesia-equity-market-accessibility-crisis:1",
+        "record_id": "indonesia-equity-market-accessibility-crisis",
+        "verified": true,
+        "fact": "OJK responded with planned disclosures above 1%, investor classification, holding-company reporting and a higher free-float roadmap.",
+        "source": "Otoritas Jasa Keuangan",
+        "date": "2026-10-16"
+      },
+      {
+        "id": "indonesia-equity-market-accessibility-crisis:2",
+        "record_id": "indonesia-equity-market-accessibility-crisis",
+        "verified": true,
+        "fact": "Reuters reported an 11.6% index fall, roughly US$65 billion of value erased and bank estimates of US$3-6 billion in passive outflows.",
+        "source": "Reuters",
+        "date": "2026-10-16"
+      }
+    ]
+  }
+}
