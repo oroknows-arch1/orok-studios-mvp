@@ -75,7 +75,6 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
     if(prior?.opted_out||prior?.do_not_contact||prior?.contact?.opted_out||prior?.contact?.do_not_contact)throw Error('PUBLICATION_OPTED_OUT');
     if(reusable.some(outlet=>outlet.id===id)){journal.status='VERIFIED';journal.contact=prior.contact;journal.verification=prior.verification;journal.retry_eligible_at=null;counts.reused_contacts++;continue;}
     const past=history.find(record=>record.website&&host(new URL(record.website).hostname)===key);
-    if(past?.status==='UNRESOLVED'&&Date.parse(past.retry_eligible_at)>Date.now()){journal.retry_eligible_at=past.retry_eligible_at;throw Error('RESEARCH_RETRY_DEFERRED');}
     const base={id,name:item.name.trim().slice(0,180),category:String(item.category??'').trim().slice(0,80),destination_class:['podcast','social_media','public_forum','business_information','newsletter','industry_association'].includes(item.publication_type)?'INFORMATION_CHANNEL':'EDITORIAL_PUBLICATION',publication_type:item.publication_type,website:website.origin,active:true,relationship:{formation_ids,industries,ecosystem_formation_ids,reason:item.relationship_reason.trim().slice(0,500)}};
     let proofHtml,proofSource=proofUrl.href,result,proofFailure=null;
     const fresh=recipientPolicy.verifiedDestination(prior)&&Date.now()-Date.parse(prior.contact.checked_at)<30*86400000;
@@ -89,6 +88,7 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
       if(typeof directory.upsertPublication==='function')await directory.upsertPublication(publication);
       publicationPersisted=true;counts.verified_publications++;journal.publication_verified=true;journal.publication_verification=publication.verification;
      }catch(error){proofFailure=error.message;journal.failures.push({url:proofUrl.href,reason:error.message});}
+     if(past?.status!=='VERIFIED'&&Date.parse(past?.retry_eligible_at)>Date.now()){journal.retry_eligible_at=past.retry_eligible_at;throw Error('RESEARCH_RETRY_DEFERRED');}
      result=await research({website:website.href,publication:base.name,topics:industries,sourceUrls:[item.contact_url,proofUrl.href].filter(Boolean)});
      journal.pages.push(...result.pages);journal.failures.push(...result.failures);journal.contact_observations=(result.contacts??[]).slice(0,50).map(({email,purpose,eligible,rejection_reason,source_url})=>({email,purpose,eligible,rejection_reason,source_url}));
      let alternatives=[item.directory_source_url,item.publisher_source_url].filter(Boolean);
