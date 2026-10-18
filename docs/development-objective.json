@@ -11,17 +11,17 @@
     "preserve_existing_assets_history_and_decisions": true
   },
   "verified_checkpoint": {
-    "verified_at": "2026-10-18T11:38:00+11:00",
+    "verified_at": "2026-10-18T07:43:16Z",
     "repository": "oroknows-arch1/orok-studios-mvp",
-    "github_main_sha": "011cf2e7713e20b6d17f595ee32fed3ea4cf61f5",
+    "github_main_sha": "098818c8c6858bd0d59bbc63381bae33677d61d1",
     "render_workspace_id": "tea-d79k6muuk2gs73eesr2g",
     "render_service_id": "srv-d79k9os50q8c73fkeqig",
-    "render_live_deploy_id": "dep-dba197dg1s2s73atlipg",
-    "render_live_sha": "011cf2e7713e20b6d17f595ee32fed3ea4cf61f5",
+    "render_live_deploy_id": "dep-dba22hqvcj2c739qkgv0",
+    "render_live_sha": "098818c8c6858bd0d59bbc63381bae33677d61d1",
     "postgres_id": "dpg-d9caf3j7uimc73d41n1g-a",
     "campaign_phase": "PUBLICATION_REVIEW",
     "campaign_version_before": 45,
-    "campaign_version_after": 47,
+    "campaign_version_after": 49,
     "publication_count_before": 2,
     "publication_count_after": 2,
     "new_publications_verified_independently": 0,
@@ -66,6 +66,34 @@
     "campaign_triggered": false,
     "scanner_modified": false,
     "external_distribution": 0
+  },
+  "october_18_quality_correction": {
+    "status": "LOCALLY_VERIFIED_NOT_DEPLOYED",
+    "failure_campaign_id": "v3-d83c24859c18659fda4b707fb982fe10",
+    "failure_campaign_version": 25,
+    "target_campaign_id": "v3-df5b240c718018880410c03a4c392d64",
+    "target_campaign_version": 49,
+    "root_causes": [
+      "Editorial validation required linked evidence and uncertainty but did not require a distinct evidence-supported analytical finding.",
+      "X generation received evidence from multiple formations and persisted all destination evidence IDs instead of the selected story evidence.",
+      "Generated graphic bytes were validated, but rendered text readability and unsupported visual claims were not inspected before PUBLICATION_REVIEW persistence."
+    ],
+    "corrected_behaviour": {
+      "kenya_editorial": "Rejects the case-count paraphrase and accepts only a pitch that states the supported frontline-protection constraint while retaining the unknown exposure route and PPE sufficiency.",
+      "bangladesh_x": "Uses one formation, states the supported immunisation-system failure boundary, retains incomplete-review uncertainty, and excludes unrelated Kenya evidence.",
+      "graphic_gate": "Limits reader-facing copy and fails closed on faint, tiny, crowded, clipped, garbled or unsupported output before state can advance to PUBLICATION_REVIEW.",
+      "discovery_continuation": "A bounded regression proves the worker skips an unsuitable source and verifies the next eligible editorial publication."
+    },
+    "targeted_tests": [
+      "test/emradar-v3-october18-quality.test.mjs",
+      "test/emradar-v3-graphic-standard.test.mjs",
+      "test/emradar-v3-autonomous-discovery.test.cjs",
+      "test/emradar-v3-contact-research.test.mjs"
+    ],
+    "owner_decisions_changed": 0,
+    "external_distribution": 0,
+    "scanner_modified": false,
+    "production_deployed": false
   },
   "production_discovery_evidence": {
     "durable_recovery_key": "v3-publication-first-discovery:2026-10-18-v2-targeted",

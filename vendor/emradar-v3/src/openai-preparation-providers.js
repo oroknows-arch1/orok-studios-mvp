@@ -52,11 +52,11 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    if(!evidence.length)throw Error('V3_DESTINATION_EVIDENCE_REQUIRED');
    const isX=destination.id==='x';
    const type=isX?'X':correspondenceType(destination);
-   const story=type==='EDITORIAL_OUTREACH'?selectEditorialEvidence(document,allowed):null;
+   const story=['EDITORIAL_OUTREACH','X'].includes(type)?selectEditorialEvidence(document,allowed):null;
    const writerEvidence=story?.evidence??evidence;
    const draft=await complete(
-    type==='EDITORIAL_OUTREACH'?editorialPrompt:type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write a standalone factual EMRADAR X post grounded only in supplied facts. Preserve uncertainty. Return JSON with nonempty strings body and subject. No claims beyond supplied evidence.',
-    {channel:type,...(story?{editorial_reference:EDITORIAL_REFERENCE,story_record_id:story.record_id,editorial_angle:editorialAngle??null}:{}),destination:{id:destination.id,category:destination.category,name:destination.name??destination.id,relationship:destination.relationship},evidence:writerEvidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
+    type==='EDITORIAL_OUTREACH'?editorialPrompt:type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write one standalone analytical EMRADAR X post about the supplied single formation. Return JSON strings subject, body, analytical_finding, limitations, plus story_evidence_ids. The analytical_finding must appear verbatim in body and explain the evidence-supported mechanism, constraint or change rather than paraphrasing reported figures. The limitations field must appear verbatim in body. Preserve uncertainty and do not invent conclusions. Use only supplied evidence and analysis_context.',
+    {channel:type,...(story?{editorial_reference:type==='EDITORIAL_OUTREACH'?EDITORIAL_REFERENCE:undefined,story_record_id:story.record_id,analysis_context:story.analysis_context,editorial_angle:editorialAngle??null}:{}),destination:{id:destination.id,category:destination.category,name:destination.name??destination.id,relationship:destination.relationship},evidence:writerEvidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]}
    );
    const deliveryEligible=destination.contact_verified===true && destination.delivery_eligible!==false && Boolean(destination.contact?.email);
    if(type==='EDITORIAL_OUTREACH'){
@@ -68,13 +68,17 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    }
    if(type==='SOURCE_ENQUIRY')return sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible});
    if(typeof draft.body!=='string'||!draft.body.trim()||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
-   return {campaign_id:campaignId,destination_id:destination.id,kind:'X',body:draft.body,subject:draft.subject,from:brand.identity.address,evidence_ids:evidence.map(e=>e.id)};
+   validateEditorialStory(draft,story);
+   return {campaign_id:campaignId,destination_id:destination.id,kind:'X',body:draft.body,subject:draft.subject,from:brand.identity.address,evidence_ids:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)).map(e=>e.id),story_record_id:story.record_id,analytical_finding:draft.analytical_finding,evidence_limitations:draft.limitations};
   },
   renderVisual:async({asset,document})=>{
    const prompt=emradarGraphicPrompt({asset,document});
    const generated=await openai.images.generate({model:imageModel,prompt,size:'1024x1024'},{maxRetries:0,timeout:180000});
    const base64=generated.data?.[0]?.b64_json;
    if(typeof base64!=='string'||!base64.length)throw Error('V3_X_IMAGE_BYTES_REQUIRED');
+   const inspection=await openai.chat.completions.create({model,response_format:{type:'json_object'},messages:[{role:'system',content:'Inspect this finished square editorial graphic. Return JSON {"readable":boolean,"unsupported_claims":boolean,"reason":string}. readable is true only when every reader-facing text element is sharp, correctly spelled, high-contrast and comfortably legible at phone-feed size; reject faint, tiny, crowded, clipped or garbled text. unsupported_claims is true if the image adds a number, causal claim, forecast or conclusion absent from the supplied caption.'},{role:'user',content:[{type:'text',text:JSON.stringify({caption:asset.body})},{type:'image_url',image_url:{url:'data:image/png;base64,'+base64,detail:'high'}}]}],max_completion_tokens:512},{maxRetries:0,timeout:90000});
+   let quality;try{quality=JSON.parse(inspection.choices?.[0]?.message?.content);}catch{throw Error('V3_X_VISUAL_QUALITY_INVALID');}
+   if(quality?.readable!==true||quality?.unsupported_claims!==false)throw Error('V3_X_VISUAL_QUALITY_FAILED');
    return {base64,brand_version:GRAPHIC_STANDARD.version};
   }
  };

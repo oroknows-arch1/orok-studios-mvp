@@ -28,6 +28,16 @@ test('rejects private IP hosts and non-editorial contacts',async()=>{
  const h=harness(candidates,'News and analysis. Sales team editor@journal.example');const {createAutonomousOutletDiscovery}=await load();
  assert.equal((await createAutonomousOutletDiscovery(h)({document})).length,0);assert.equal(h.saved.length,0);
 });
+test('continues discovery after an unsuitable candidate and verifies the next eligible publication',async()=>{
+ const h=harness([
+  {name:'Unsuitable source',category:'government source',website:'https://source.example',contact_url:'https://source.example/contact',email:'',evidence_ids:['e1']},
+  {name:'Independent Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}
+ ]);
+ h.contactReader=async url=>url.hostname==='journal.example'?'News and analysis. Editorial newsroom: editor@journal.example':'Government source';
+ const {createAutonomousOutletDiscovery}=await load();
+ const links=await createAutonomousOutletDiscovery(h)({document});
+ assert.equal(h.saved.length,1);assert.equal(h.saved[0].name,'Independent Journal');assert.equal(h.saved[0].contact_verified,true);assert.equal(links.length,1);
+});
 test('pinned HTTPS lookup satisfies Node all-address requests',async()=>{
  const {pinnedLookup}=await load();
  const all=await new Promise((resolve,reject)=>pinnedLookup('8.8.8.8')('journal.example',{all:true},(error,value)=>error?reject(error):resolve(value)));

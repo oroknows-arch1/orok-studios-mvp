@@ -9,7 +9,7 @@ const saved=JSON.parse(readFileSync(new URL('./fixtures/v3-free-state-graphic.js
 test('Free State brief retains source qualifiers, dates and geography under the deployed brand',()=>{
  const before=structuredClone(saved),prompt=emradarGraphicPrompt(saved);
  assert(prompt.includes('#031728'));assert(prompt.includes('#0862f7'));assert(prompt.includes('Segoe UI'));assert(prompt.includes('WORLD CHANGE. CONNECTED.'));
- for(const evidence of saved.document.evidence){assert(prompt.includes(evidence.fact));assert(prompt.includes(evidence.source_url));assert(prompt.includes(evidence.date));}
+ for(const evidence of saved.document.evidence){assert(prompt.includes(evidence.fact));assert(!prompt.includes(evidence.source_url));assert(prompt.includes(evidence.source));assert(prompt.includes(evidence.date));}
  assert(prompt.includes('Free State, South Africa'));assert(prompt.includes('Finance documents'));assert(prompt.includes('targets up to 8,000 EVs annually'));
  assert.match(prompt,/A shared programme may be shown as a grouping, not proof that one project powers or finances another/);
  assert.match(prompt,/never present them as achieved production/);assert.deepEqual(saved,before);
@@ -29,7 +29,7 @@ test('one graphic standard supports different research categories without Free S
 });
 test('production provider uses the shared standard and existing model/image byte contract without changing saved assets',async()=>{
  const input=structuredClone(saved),before=structuredClone(input),requests=[];
- const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{throw Error('NO_TEXT_REGENERATION');}}},images:{generate:async(request,options)=>{requests.push({request,options});return {data:[{b64_json:'cHJldmlldyBvbmx5'}]};}}}});
+ const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({choices:[{message:{content:'{"readable":true,"unsupported_claims":false,"reason":"clear"}'}}]})}},images:{generate:async(request,options)=>{requests.push({request,options});return {data:[{b64_json:'cHJldmlldyBvbmx5'}]};}}}});
  assert.deepEqual(await providers.renderVisual(input),{base64:'cHJldmlldyBvbmx5',brand_version:GRAPHIC_STANDARD.version});
  assert.equal(requests.length,1);assert.equal(requests[0].request.prompt,emradarGraphicPrompt(input));assert.equal(requests[0].request.size,'1024x1024');assert.equal(requests[0].request.model,'gpt-image-1');assert.equal(requests[0].options.maxRetries,0);assert.deepEqual(input,before);
  assert.equal(GRAPHIC_STANDARD.version,'emradar-connected-world-v1');
