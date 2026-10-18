@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {GRAPHIC_STANDARD,emradarGraphicPrompt} from '../vendor/emradar-v3/src/graphic-standard.js';
 import {createOpenAiPreparationProviders} from '../vendor/emradar-v3/src/openai-preparation-providers.js';
@@ -43,7 +44,17 @@ test('authoritative composer includes only exact saved wording and linked verifi
  const input=structuredClone(saved);input.asset.subject='Free State EV investment';input.asset.kind='X';
  const {svg}=composeGraphicSvg(input);
  for(const value of [...input.asset.subject.split(/\s+/),...input.asset.body.split(/\s+/),'EMRADAR','WORLD CHANGE. CONNECTED.','emradar.net'])assert(svg.includes(value));
+ assert(svg.includes('2026-10-09'));
  assert(!svg.includes('99%'));assert(!svg.includes('reclassification'));assert(!svg.includes('image generation'));
+});
+test('owner-approved Indonesia graphic remains the deterministic V3 reference output',async()=>{
+ const input=JSON.parse(readFileSync(new URL('../artifacts/quality-verification/production-indonesia-graphic-input.json',import.meta.url)));
+ const approved=readFileSync(new URL('../artifacts/quality-verification/production-indonesia-graphic.png',import.meta.url));
+ const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({choices:[{message:{content:'{"readable":true,"unsupported_claims":false,"reason":"owner approved"}'}}]})}}}});
+ const rendered=Buffer.from((await providers.renderVisual(input)).base64,'base64');
+ const digest=value=>createHash('sha256').update(value).digest('hex');
+ assert.equal(digest(approved),'c60b5bf333dfd6d4820a3abe7ae38e363be1cefc93e96ed6b3219728056a163c');
+ assert.equal(digest(rendered),digest(approved));
 });
 test('missing source evidence retains the existing verification failure and never calls image generation',async()=>{
  let calls=0;const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{}}},images:{generate:async()=>{calls++;}}}});
