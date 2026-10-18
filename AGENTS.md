@@ -37,3 +37,12 @@ The active campaign is `v3-df5b240c718018880410c03a4c392d64`.
 preparation may continue through the existing bounded recovery path, but email
 delivery and X publication require separate explicit owner approval.
 
+
+## Final EMRADAR Marketing sign-off control
+
+- Exhaust Chat tools and existing verified state before considering Work. Never initiate an automatic Work handoff. Work is the owner's explicit choice only; any necessary Work prompt must be bounded, code-only and usage-optimal.
+- The sole active objective is `emradar-v3-final-marketing-signoff` in `docs/development-objective.json`. Previous objective evidence must remain preserved.
+- Finish V3 discovery coverage, automatic scan preparation, private review invitation to sean@emradar.net, owner approvals, authorised distribution, receipts, recovery and learning.
+- Aim for 5-10 credible outlets per evidence-supported category, maximum 30 destinations total; never fabricate publications, contacts or causal relationships to meet a quota.
+- Improve attributable publication evidence retrieval without weakening verified editorial-recipient restrictions.
+- No scanner changes, new campaign, architecture migration, Atlasoquence work or external distribution without owner approval.
