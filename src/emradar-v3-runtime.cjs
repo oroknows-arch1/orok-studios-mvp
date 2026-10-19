@@ -8,6 +8,7 @@ const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
 const SCAN_ORIGIN='https://emerging-markets-radar.onrender.com';
 const SCAN_INDEX_URL=SCAN_ORIGIN+'/data/archive-index.json';
+const FIXED_X_TEMPLATE_VERSION='emradar-formation-card-v1';
 const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
@@ -238,6 +239,20 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   const runPendingRegenerations=async({limit=50}={})=>{
    if(!Number.isInteger(limit)||limit<1||limit>50)throw Error('REGENERATION_BATCH_LIMIT_INVALID');
+   const failedTemplateCampaign='v3-5d73d453fb02fa0da4287e23834f92db';
+   const failedTemplateState=(await service.store.adapter.read(failedTemplateCampaign))?.value;
+   const failedTemplateAction=failedTemplateState?.review_actions?.x;
+   const failedTemplateAsset=failedTemplateState?.assets?.x?.asset;
+   if(failedTemplateState?.phase==='PUBLICATION_REVIEW'&&failedTemplateAction?.status==='FAILED'&&failedTemplateAction?.error_code==='V3_X_VISUAL_QUALITY_FAILED'&&failedTemplateAction?.feedback?.trim()&&!failedTemplateState.deliveries?.x&&!failedTemplateAction.template_recovery_attempted_at&&failedTemplateAsset?.visual_brand_version!==FIXED_X_TEMPLATE_VERSION){
+    await service.store.mutate(failedTemplateCampaign,current=>{
+     const action=current?.review_actions?.x,asset=current?.assets?.x?.asset;
+     if(current?.phase!=='PUBLICATION_REVIEW'||action?.status!=='FAILED'||action?.error_code!=='V3_X_VISUAL_QUALITY_FAILED'||!action?.feedback?.trim()||current.deliveries?.x||action.template_recovery_attempted_at||asset?.visual_brand_version===FIXED_X_TEMPLATE_VERSION)return current;
+     const attemptedAt=new Date().toISOString();
+     current.review_actions.x={...action,status:'PENDING',template_recovery_attempted_at:attemptedAt,updated_at:attemptedAt};
+     current.events??=[];current.events.push({type:'X_FIXED_TEMPLATE_REGENERATION_REQUEUED',destination_id:'x',request_id:action.request_id,template:FIXED_X_TEMPLATE_VERSION,at:attemptedAt});
+     return current;
+    });
+   }
    const {rows}=await pool.query(`SELECT s.campaign_id, a.key AS destination_id
     FROM v3_campaign_state s CROSS JOIN LATERAL jsonb_each(COALESCE(s.payload->'review_actions','{}'::jsonb)) a
     WHERE s.payload->>'phase'='PUBLICATION_REVIEW' AND a.value->>'status' IN ('PENDING','RUNNING','OWNER_REVIEW_PENDING')
