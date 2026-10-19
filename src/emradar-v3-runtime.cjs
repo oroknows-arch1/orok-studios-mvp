@@ -81,9 +81,20 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
   if(!authorized){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_UNAVAILABLE'});return null;}
   return {snapshotDate:date,expectedSha256,liveUrl:SCAN_ORIGIN+'/data/discovery.json',archiveUrl,publicationRecord,releaseAttestation};
  }));
- verified.sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
- Object.defineProperty(verified,'blocked',{value:blocked,enumerable:false});
- return verified;
+ const eligible=verified.filter(Boolean).sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
+ Object.defineProperty(eligible,'blocked',{value:blocked,enumerable:false});
+ return eligible;
+}
+function mergeCurrentPublishedScan(archived,current){
+ const candidates=new Map(archived.map(item=>[item.snapshotDate,item]));
+ for(const item of current){
+  const existing=candidates.get(item.snapshotDate);
+  if(existing&&existing.expectedSha256!==item.expectedSha256)throw Error('SCAN_ARCHIVE_IDENTITY_CONFLICT');
+  if(!existing)candidates.set(item.snapshotDate,item);
+ }
+ const merged=[...candidates.values()].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
+ Object.defineProperty(merged,'blocked',{value:archived.blocked??[],enumerable:false});
+ return merged;
 }
 // Historical archives are verified from the original published source, not local attestations.
 async function fetchHistoricalPublishedScan(snapshotDate){
@@ -251,7 +262,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   });
   const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
   const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
-  const published=()=>enumeratePublishedScans({fetcher});
+  const published=async()=>mergeCurrentPublishedScan(await enumeratePublishedScans({fetcher}),await refreshPublishedScans({fetcher}));
   const verify=async selected=>{
    const sourceFetcher=selected.bundledBytes?async url=>{
     if(url!==selected.archiveUrl)throw Error('UNTRUSTED_SCAN_URL');
@@ -392,4 +403,4 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   return {discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
+module.exports={restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

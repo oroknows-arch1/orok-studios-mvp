@@ -256,15 +256,19 @@
     "external_distribution": 0,
     "production_deployed": false,
     "october_19_daily_autonomous_loop": {
-      "status": "LOCALLY_VERIFIED_NOT_DEPLOYED",
-      "archive_recovery": "Chronological enumeration from /data/archive-index.json; exact checkpoint path, publication verification, and authorized downstream release attestation remain mandatory.",
-      "blocked_legacy_dates": ["2026-09-23", "2026-09-30"],
+      "status": "ROOT_CAUSE_DIAGNOSED_PATCH_VERIFIED_NOT_DEPLOYED",
+      "production_failure": "TypeError at src/emradar-v3-runtime.cjs:84 sorting null results from indexed scans without acceptable publication attestations; logged as V3_PREPARATION_FAILED.",
+      "secondary_current_scan_gap": "Production replaced the existing live-current scan candidate with historical attestation enumeration. The current 2026-10-19 live scan is PUBLISHED and live/archive byte verification passes, but its publication record is absent, so historical enumeration alone excluded it.",
+      "archive_recovery": "The public index responds 200. Eight dates (2026-10-07 through 2026-10-14) pass the existing publication/release gates and exact archived-byte verification. The 2026-10-19 live scan passes existing live/archive verification and is merged as a current candidate. Oldest-first selection and campaign identity deduplication are preserved.",
+      "blocked_archive_dates": ["2026-09-23", "2026-09-30", "2026-10-03", "2026-10-05", "2026-10-06", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"],
+      "blocked_archive_reasons": "2026-09-23 uses a non-checkpoint path; 2026-09-30 lacks paired records; 2026-10-03 and 2026-10-05 use unaccepted legacy attestor labels; 2026-10-06 and 2026-10-15 through 2026-10-17 have mismatched archive URL origins; 2026-10-18 lacks the required artifact digest in its publication record. Existing campaign dates remain preserved.",
+      "existing_campaign_dates": ["2026-10-10", "2026-10-12", "2026-10-13", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19"],
       "owner_feedback_regeneration": "Feedback is bound to the rejected asset fingerprint; one bounded worker creates a new revision and fresh idempotent owner review while preserving prior history.",
-      "targeted_tests": "37/37 PASS across affected non-network tests; loopback HTTP test could not bind in the sandbox (EPERM).",
+      "targeted_tests": "9/9 runtime tests pass after the null-filter and live-current merge regressions; harness:verify passes.",
       "scanner_modified": false,
       "campaign_state_mutated": false,
       "external_distribution": 0,
-      "production_deployed": false
+      "correction_deployed": false
     }
   },
   "acceptance_conditions": [
