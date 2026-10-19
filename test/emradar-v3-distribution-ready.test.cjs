@@ -29,9 +29,9 @@ async function fixture(){
   if(sql.startsWith('UPDATE v3_send_reservations')){const r=receipts.get(args[0]);if(r?.status!=='RESERVED')return {rowCount:0};Object.assign(r,{status:args[1],provider_id:args[2]});return {rowCount:1};}
   throw Error('UNEXPECTED_SQL');
  }};
- let sends=0;
- const integration=()=>createV3PreparedIntegration({pool,token:'test'.repeat(12),reviewOrigin:'https://review.example.org',sendOwnerReview:async()=>{throw Error('NO_OWNER_EMAIL');},sendApprovedEmail:async payload=>{sends++;if(payload.destination_id==='fails')throw Error('SMTP_REJECTED');return {accepted:true,receipt_id:'receipt-'+payload.destination_id,sent_folder:{status:'APPENDED',folder:'Sent',uid:7}};}});
- return {states,receipts,suppressed,add,integration,sends:()=>sends};
+ let sends=0;const sentPayloads=[];
+ const integration=()=>createV3PreparedIntegration({pool,token:'test'.repeat(12),reviewOrigin:'https://review.example.org',sendOwnerReview:async()=>{throw Error('NO_OWNER_EMAIL');},sendApprovedEmail:async payload=>{sends++;sentPayloads.push(structuredClone(payload));if(payload.destination_id==='fails')throw Error('SMTP_REJECTED');return {accepted:true,receipt_id:'receipt-'+payload.destination_id,sent_folder:{status:'APPENDED',folder:'Sent',uid:7}};}});
+ return {states,receipts,suppressed,add,integration,sends:()=>sends,sentPayloads};
 }
 
 test('owner-approved verified address proceeds, receipt is recorded, duplicate fails after integration restart',async()=>{
@@ -40,6 +40,21 @@ test('owner-approved verified address proceeds, receipt is recorded, duplicate f
  assert.equal(result.accepted,true);assert.equal(result.sent_folder.status,'APPENDED');
  assert.deepEqual(f.receipts.get(payload.idempotency_key),{campaign_id:'campaign',destination_id:'editor',status:'ACCEPTED',provider_id:'receipt-editor'});
  await assert.rejects(f.integration().handle({operation:'approved-delivery',payload}),/V3_SEND_ALREADY_RESERVED/);assert.equal(f.sends(),1);
+});
+
+test('owner-approved recipient override delivers the exact reviewed recipient and copy once',async()=>{
+ const {sha256}=await import('../vendor/emradar-v3/src/contracts.js');
+ const f=await fixture(),payload=f.add('epoch'),state=f.states.get('campaign'),destination=state.destinations.find(item=>item.id==='epoch');
+ const asset={...payload.asset,to:'press@epoch.ai',contact_status:'OWNER_OVERRIDE',delivery_eligible:false,recipient_owner_override:true,recipient_verification:{status:'OWNER_OVERRIDE',warning_code:'CONTACT_HTTP_403'}};
+ Object.assign(destination,{contact:{email:'press@epoch.ai',purpose:null,eligible:false},contact_verified:false,delivery_eligible:false,contact_status:'OWNER_OVERRIDE',recipient_owner_override:true});
+ const fingerprint=sha256(asset),approval={...payload.approval,asset_sha256:fingerprint},key=sha256(['campaign','epoch',fingerprint]);
+ state.assets.epoch={asset,fingerprint};state.decisions.epoch=approval;state.deliveries.epoch={status:'ATTEMPTING',idempotency_key:key};
+ Object.assign(payload,{asset,approval,idempotency_key:key});
+ const result=await f.integration().handle({operation:'approved-delivery',payload});
+ assert.equal(result.accepted,true);assert.equal(f.sentPayloads[0].asset.to,'press@epoch.ai');
+ assert.equal(f.sentPayloads[0].asset.subject,'Article idea');assert.equal(f.sentPayloads[0].asset.body,'Evidence and possibility');
+ await assert.rejects(f.integration().handle({operation:'approved-delivery',payload}),/V3_SEND_ALREADY_RESERVED/);
+ assert.equal(f.sends(),1);
 });
 
 test('unapproved, rejected, address-tampered and opted-out recipients cannot reach SMTP',async()=>{

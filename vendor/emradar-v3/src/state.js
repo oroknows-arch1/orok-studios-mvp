@@ -103,13 +103,15 @@ export class CampaignStore {
       return state;
     });
   }
-  async revise(id,destinationId,fingerprint,changes,verifiedDestination=null) {
+  async revise(id,destinationId,fingerprint,changes,verifiedDestination=null,recipientCheck=null) {
     if (!changes || typeof changes!=='object' || Array.isArray(changes)) throw Error('INVALID_REVISION');
     const allowed=['subject','body','to'];
     if (!Object.keys(changes).length || Object.keys(changes).some(key=>!allowed.includes(key))) throw Error('INVALID_REVISION_FIELDS');
     for (const [key,value] of Object.entries(changes)) {
       if(key==='to'){
-        if(!recipientPolicy.validRecipient(value)||!verifiedDestination||verifiedDestination.contact?.email?.toLowerCase()!==value.toLowerCase())throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+        if(!recipientPolicy.validRecipient(value))throw Error('V3_VALID_RECIPIENT_REQUIRED');
+        if(verifiedDestination&&verifiedDestination.contact?.email?.toLowerCase()!==value.toLowerCase())throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+        if(!verifiedDestination&&recipientCheck?.ownerOverride!==true)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
         continue;
       }
       if (typeof value!=='string' || !value.trim() || value.length>50000) throw Error('INVALID_REVISION_TEXT');
@@ -121,22 +123,37 @@ export class CampaignStore {
       if (state.deliveries[destinationId]) throw Error('REVISION_AFTER_DISTRIBUTION');
       const destinationIndex=state.destinations.findIndex(item=>item.id===destinationId);
       if(Object.hasOwn(changes,'to')){
-        if(entry.asset.kind!=='EMAIL'||destinationIndex<0||verifiedDestination.id!==destinationId)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
-        recipientPolicy.assertVerifiedDestination(verifiedDestination);
+        if(entry.asset.kind!=='EMAIL'||destinationIndex<0)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+        if(verifiedDestination){
+          if(verifiedDestination.id!==destinationId)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+          recipientPolicy.assertVerifiedDestination(verifiedDestination);
+        }else if(state.destinations[destinationIndex].opted_out||state.destinations[destinationIndex].do_not_contact||state.destinations[destinationIndex].contact?.opted_out||state.destinations[destinationIndex].contact?.do_not_contact)throw Error('V3_RECIPIENT_OPTED_OUT');
       }
       const revised={...entry.asset,...changes};
       if(Object.hasOwn(changes,'to')){
-        revised.contact_status='VERIFIED';revised.delivery_eligible=true;
-        revised.recipient_verification=structuredClone(verifiedDestination.contact);
+        if(verifiedDestination){
+          revised.contact_status='VERIFIED';revised.delivery_eligible=true;revised.recipient_verification=structuredClone(verifiedDestination.contact);
+          delete revised.recipient_owner_override;
+        }else{
+          revised.contact_status='OWNER_OVERRIDE';revised.delivery_eligible=false;
+          revised.recipient_owner_override=true;
+          revised.recipient_verification={status:'OWNER_OVERRIDE',warning_code:recipientCheck.warningCode??'CONTACT_VERIFICATION_FAILED'};
+        }
       }
       if(revised.brand_version)revised.html=emailBrand.render(revised.body);
       if (sha256(revised)===sha256(entry.asset)) return state;
-      if(Object.hasOwn(changes,'to'))recipientPolicy.assertVerifiedAsset(revised,verifiedDestination);
+      if(Object.hasOwn(changes,'to')&&verifiedDestination)recipientPolicy.assertVerifiedAsset(revised,verifiedDestination);
       const nextFingerprint=assetFingerprint(revised);
       const priorDecision=state.decisions[destinationId]?.decision??null;
       state.editorial_versions??={};state.editorial_versions[destinationId]??=[];
       state.editorial_versions[destinationId].push(structuredClone(entry));
-      if(Object.hasOwn(changes,'to'))state.destinations[destinationIndex]=structuredClone(verifiedDestination);
+      if(Object.hasOwn(changes,'to')){
+        if(verifiedDestination)state.destinations[destinationIndex]=structuredClone(verifiedDestination);
+        else{
+          const destination=state.destinations[destinationIndex];
+          state.destinations[destinationIndex]={...destination,contact:{email:changes.to,purpose:null,eligible:false,source_url:null,published_excerpt:null,page_sha256:null},contact_verified:false,delivery_eligible:false,contact_status:'OWNER_OVERRIDE',recipient_owner_override:true,recipient_verification_warning:recipientCheck.warningCode??'CONTACT_VERIFICATION_FAILED'};
+        }
+      }
       state.assets[destinationId]={asset:revised,fingerprint:nextFingerprint};
       delete state.decisions[destinationId];
       state.events.push({type:'ASSET_REVISED',destination_id:destinationId,id:randomUUID(),previous_fingerprint:fingerprint,new_fingerprint:nextFingerprint,previous_decision:priorDecision,changed_fields:Object.keys(changes)});
@@ -150,8 +167,10 @@ export class CampaignStore {
       if (!item) throw Error('UNKNOWN_DESTINATION');
       if(item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_NOT_SENDABLE');
       const prior = state.deliveries[destinationId];
-      if(item.asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));
+      const ownerRecipientOverride=item.asset.kind==='EMAIL'&&item.asset.recipient_owner_override===true;
+      if(item.asset.kind==='EMAIL'&&!ownerRecipientOverride)recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));
       const key = assertSendable({asset:item.asset,approval:state.decisions[destinationId],receipt:prior});
+      if(ownerRecipientOverride)recipientPolicy.assertSendableRecipient(item.asset,state.destinations.find(d=>d.id===destinationId),state.decisions[destinationId]);
       state.deliveries[destinationId] = {status:'ATTEMPTING',idempotency_key:key,claimed_at:new Date().toISOString()};
       return state;
     });

@@ -64,10 +64,19 @@ test('recipient editor exposes Save and Cancel and submits only the edited addre
  input.value='press@epoch.ai';await form.listeners.submit({preventDefault(){}});
  const revision=result.payloads.find(payload=>payload.changes?.to);
  assert.deepEqual(revision.changes,{to:'press@epoch.ai'});assert.equal(revision.fingerprint,'saved-fingerprint');
- assert(result.status.textContent.includes('previous approval was cleared'));
+ assert(result.status.textContent.includes('Previous approval cleared'));
  const cancelled=await render(view);await flatten(cancelled.entries).find(node=>node.textContent==='Edit recipient').listeners.click();
  const cancelForm=flatten(cancelled.entries).find(node=>node.tag==='form');await flatten(cancelForm).find(node=>node.textContent==='Cancel').listeners.click();
  assert.deepEqual(cancelled.calls,['/api/review/view']);
+});
+test('owner override warning is visible but does not block approval of the exact recipient',async()=>{
+ const asset={kind:'EMAIL',destination_id:'epoch',to:'press@epoch.ai',contact_status:'OWNER_OVERRIDE',recipient_owner_override:true,recipient_verification:{status:'OWNER_OVERRIDE',warning_code:'CONTACT_HTTP_403'},subject:'Saved subject',body:'Saved body'};
+ const result=await render({entries:[{asset,fingerprint:'override-fingerprint',recipient_ready:true,recipient_warning:'CONTACT_HTTP_403',destination:{name:'Epoch AI'}}],publishing:{email:{enabled:true}}});
+ const nodes=flatten(result.entries);
+ assert(nodes.some(node=>node.textContent.includes('Automated verification warning: CONTACT_HTTP_403')));
+ assert.equal(nodes.find(node=>node.textContent==='Approve').disabled,false);
+ assert(nodes.some(node=>node.textContent==='Send approved email'));
+ assert(nodes.some(node=>node.textContent==='Approve this draft before releasing it.'));
 });
 test('accepted email remains fully visible with receipt, with resend and post-delivery edits disabled',async()=>{
  const result=await render({entries:[{asset:{kind:'EMAIL',destination_id:'journal',to:'editor@example.org',subject:'Approved subject',body:'Already sent body'},decision:{decision:'APPROVE'},delivery:{status:'ACCEPTED',receipt:{provider_id:'message-id',sent_folder:{status:'FILED'}}}}]});

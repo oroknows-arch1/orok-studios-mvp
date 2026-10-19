@@ -44,8 +44,35 @@ test('verified recipient edit persists history, preserves copy, clears approval 
  await assert.rejects(f.store.claimDelivery('campaign','epoch'),/DELIVERY_ALREADY_ATTEMPTED_OR_AMBIGUOUS/);
 });
 
-test('an unverified recipient change cannot mutate the campaign',async()=>{
- const f=fixture(),before=structuredClone(f.state);
- await assert.rejects(f.store.revise('campaign','epoch',f.fingerprint,{to:'press@epoch.ai'}),/V3_VERIFIED_RECIPIENT_REQUIRED/);
- assert.deepEqual(f.state,before);
+test('owner override saves a syntactically valid address after verifier failure, warns, preserves copy and clears stale approval',async()=>{
+ const f=fixture(),workflow=new ReviewWorkflow({store:f.store,adapter:f.adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:'https://review.example',verifyRecipient:async()=>{throw Error('CONTACT_HTTP_403');}});
+ workflow.authenticate=async()=>true;
+ const result=await workflow.revise('campaign','session','secret','epoch',f.fingerprint,{to:'press@epoch.ai'});
+ const current=f.state.assets.epoch;
+ assert.equal(result.saved,true);assert.equal(result.recipient_warning,'CONTACT_HTTP_403');
+ assert.equal(current.asset.to,'press@epoch.ai');assert.equal(current.asset.subject,'Existing subject');assert.equal(current.asset.body,'Existing body\nRegards, Sean');
+ assert.equal(current.asset.contact_status,'OWNER_OVERRIDE');assert.equal(current.asset.recipient_owner_override,true);
+ assert.equal(current.asset.recipient_verification.warning_code,'CONTACT_HTTP_403');assert.equal(f.state.decisions.epoch,undefined);
+ assert.equal(f.state.destinations[0].contact.email,'press@epoch.ai');assert.equal(f.state.destinations[0].contact_verified,false);
+ assert.equal(f.state.editorial_versions.epoch[0].asset.to,'donate@epoch.ai');
+ const view=await workflow.view('campaign','session','secret');
+ assert.equal(view.entries[0].recipient_ready,true);assert.equal(view.entries[0].recipient_warning,'CONTACT_HTTP_403');
+ await assert.rejects(f.store.claimDelivery('campaign','epoch'),/OWNER_APPROVAL_REQUIRED/);
+ const stale={authority:'OWNER',decision:'APPROVE',asset_sha256:f.fingerprint,campaign_id:'campaign',destination_id:'epoch'};
+ await assert.rejects(Promise.resolve().then(()=>policy.assertSendableRecipient(current.asset,f.state.destinations[0],stale)),/V3_OWNER_APPROVAL_REQUIRED/);
+ await f.store.decide('campaign','epoch','APPROVE',current.fingerprint);
+ assert.equal(policy.assertSendableRecipient(current.asset,f.state.destinations[0],f.state.decisions.epoch),'press@epoch.ai');
+ await f.store.claimDelivery('campaign','epoch');
+ assert.equal(f.state.deliveries.epoch.status,'ATTEMPTING');
+ assert.equal(f.state.assets.epoch.asset.to,'press@epoch.ai');
+ await assert.rejects(f.store.claimDelivery('campaign','epoch'),/DELIVERY_ALREADY_ATTEMPTED_OR_AMBIGUOUS/);
+});
+
+test('owner override still rejects invalid syntax and opt-outs',async()=>{
+ const f=fixture(),workflow=new ReviewWorkflow({store:f.store,adapter:f.adapter,notify:async()=>{},baseUrl:'https://review.example',verifyRecipient:async()=>{throw Error('CONTACT_HTTP_403');}});
+ workflow.authenticate=async()=>true;
+ await assert.rejects(workflow.revise('campaign','session','secret','epoch',f.fingerprint,{to:'bad\r\nBcc: victim@example.org'}),/V3_VALID_RECIPIENT_REQUIRED/);
+ f.state.destinations[0].contact.opted_out=true;
+ await assert.rejects(workflow.revise('campaign','session','secret','epoch',f.fingerprint,{to:'press@epoch.ai'}),/V3_RECIPIENT_OPTED_OUT/);
+ assert.equal(f.state.assets.epoch.asset.to,'donate@epoch.ai');
 });

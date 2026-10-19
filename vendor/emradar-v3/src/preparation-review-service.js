@@ -94,10 +94,14 @@ export async function createPreparationReviewService({
   if(!campaign||!isReviewPhase(campaign.phase)||entry?.fingerprint!==fingerprint||entry?.asset?.kind!=='EMAIL'||campaign.deliveries?.[destinationId])throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
   const origin=new URL(destination.website).origin;
   const result=await contactResearch({website:destination.website,publication:destination.name,topics:destination.relationship?.industries??[],sourceUrls:['/about/press','/press','/contact'].map(path=>new URL(path,origin).href)});
-  const contact=result.contacts?.find(item=>item.email.toLowerCase()===email.toLowerCase()&&item.eligible===true);
-  if(!contact||!['editorial','submissions','named_editor','general'].includes(contact.purpose))throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+  const observed=result.contacts?.find(item=>item.email.toLowerCase()===email.toLowerCase());
+  const contact=observed?.eligible===true?observed:null;
+  if(!contact||!['editorial','submissions','named_editor','general'].includes(contact.purpose)){
+   const reason=observed?.rejection_reason??result.failures?.[0]?.reason??result.status??'CONTACT_PURPOSE_UNVERIFIED';
+   throw Error(/^[A-Z0-9_]+$/.test(reason)?reason:'CONTACT_PURPOSE_UNVERIFIED');
+  }
   const verified={...destination,contact:{...contact,alternatives:result.alternatives??[]},contact_verified:true,delivery_eligible:true,contact_status:'VERIFIED',verification:{...destination.verification,method:'live_editorial_contact_page',status:'VERIFIED',source_url:contact.source_url}};
-  recipientPolicy.assertVerifiedDestination(verified);
+  try{recipientPolicy.assertVerifiedDestination(verified);}catch{throw Error('CONTACT_POLICY_REJECTED');}
   await directory.upsert(verified);
   return verified;
  };

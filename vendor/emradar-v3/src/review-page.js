@@ -51,6 +51,7 @@ async function refresh(){
   if(!historical)for(const note of item.rejection_feedback??[])if(note.feedback)card.append(text('p','Owner feedback: '+note.feedback));
   if(asset.preparation_error)card.append(text('p','Needs revision: '+asset.preparation_error));
   if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.to?'Recipient: '+asset.to+' · Verification: '+(asset.contact_status||'unknown'):'Recipient unavailable'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
+  if(item.recipient_warning)card.append(text('p','Automated verification warning: '+item.recipient_warning+'. The owner-saved address remains available for review; approve this exact email before release.'));
   if(delivery?.receipt)card.append(text('p',asset.kind==='X'?'X receipt: '+(delivery.receipt.provider_id||'unconfirmed'):'Mail receipt: '+(delivery.receipt.provider_id||'unconfirmed')+' · Sent folder: '+(delivery.receipt.sent_folder?.status||'no filing receipt')));
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
@@ -81,7 +82,7 @@ async function refresh(){
     editRecipient.addEventListener('click',()=>{
      editRecipient.disabled=true;
      const form=document.createElement('form');
-     const label=text('label','Verified editorial email address ');
+     const label=text('label','Email recipient address ');
      const input=document.createElement('input');input.type='email';input.required=true;input.autocomplete='email';input.value=asset.to||'';input.setAttribute('aria-label','Recipient email address');
      const save=text('button','Save');save.type='submit';
      const cancel=text('button','Cancel');cancel.type='button';
@@ -89,8 +90,8 @@ async function refresh(){
      form.addEventListener('submit',async event=>{
       event.preventDefault();if(!input.reportValidity())return;
       save.disabled=true;cancel.disabled=true;
-      try{await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{to:input.value.trim()}});await refresh();status.textContent='Recipient saved and verified. The previous approval was cleared; approve the updated email before any release.';}
-      catch{status.textContent='Recipient was not saved. The address must be published for an editorial purpose on the publication’s official site.';save.disabled=false;cancel.disabled=false;}
+      try{const result=await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{to:input.value.trim()}});await refresh();status.textContent=result.recipient_warning?'Recipient saved with an automated verification warning ('+result.recipient_warning+'). Previous approval cleared; approve the updated email before release.':'Recipient saved and verified. Previous approval cleared; approve the updated email before release.';}
+      catch{status.textContent='Recipient was not saved. Check the address, then reload and retry.';save.disabled=false;cancel.disabled=false;}
      });
      label.append(input);form.append(label,save,cancel);card.append(form);input.focus();
     });

@@ -132,8 +132,7 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
     return json(res,200,{saved:true,regeneration_status:action?.status??null});
    }
    if(url.pathname==='/api/review/revise'){
-    await workflow.revise(input.campaignId,session.id,session.secret,input.destinationId,input.fingerprint,input.changes);
-    return json(res,200,{saved:true});
+    return json(res,200,await workflow.revise(input.campaignId,session.id,session.secret,input.destinationId,input.fingerprint,input.changes));
    }
    if(url.pathname==='/api/review/group'){
     await workflow.decideGroup(input.campaignId,session.id,session.secret,input.groupKey,input.decision);

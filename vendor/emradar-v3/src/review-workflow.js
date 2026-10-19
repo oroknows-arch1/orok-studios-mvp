@@ -103,9 +103,9 @@ export class ReviewWorkflow {
   const describe=(entry,{historical=false,label='',decision=null}={})=>{
    const {asset,fingerprint}=entry;
    const destination=campaign.destinations.find(d=>d.id===asset.destination_id);
-   let recipientReady=true;
-   if(asset.kind==='EMAIL'){try{recipientPolicy.assertVerifiedAsset(asset,destination);}catch{recipientReady=false;}}
+   const recipientReady=asset.kind!=='EMAIL'||recipientPolicy.recipientReadyForReview(asset,destination);
    return {asset,fingerprint,historical,label,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
+    recipient_warning:asset.recipient_verification?.status==='OWNER_OVERRIDE'?asset.recipient_verification.warning_code:null,
     groupKey:!historical&&asset.kind==='EMAIL'?identicalEmailGroupKey(asset):null,
     review_action:historical?null:campaign.review_actions?.[asset.destination_id]??null,
     rejection_feedback:historical?null:(campaign.review_feedback??[]).filter(item=>item.destination_id===asset.destination_id),
@@ -125,11 +125,18 @@ export class ReviewWorkflow {
  async revise(campaignId,sessionId,secret,destinationId,fingerprint,changes) {
   await this.authenticate(campaignId,sessionId,secret);
   let verifiedDestination=null;
+  let recipientCheck=null;
   if(Object.hasOwn(changes??{},'to')){
-   if(typeof this.verifyRecipient!=='function')throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
-   verifiedDestination=await this.verifyRecipient({campaignId,destinationId,fingerprint,email:changes.to});
+   try{
+    if(typeof this.verifyRecipient!=='function')throw Error('CONTACT_VERIFICATION_UNAVAILABLE');
+    verifiedDestination=await this.verifyRecipient({campaignId,destinationId,fingerprint,email:changes.to});
+   }catch(error){
+    const candidate=error?.message??'';
+    recipientCheck={ownerOverride:true,warningCode:/^[A-Z0-9_]{1,80}$/.test(candidate)?candidate:'CONTACT_VERIFICATION_FAILED'};
+   }
   }
-  return this.store.revise(campaignId,destinationId,fingerprint,changes,verifiedDestination);
+  await this.store.revise(campaignId,destinationId,fingerprint,changes,verifiedDestination,recipientCheck);
+  return {saved:true,recipient_warning:recipientCheck?.warningCode??null};
  }
  async decideGroup(campaignId,sessionId,secret,groupKey,decision) {
   await this.authenticate(campaignId,sessionId,secret);
