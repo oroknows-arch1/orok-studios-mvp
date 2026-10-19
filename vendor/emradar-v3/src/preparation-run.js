@@ -35,8 +35,9 @@ export function createPreparationRun({store,researchEvidence,discover,write,rend
   let state=(await store.adapter.read(campaignId)).value;
   if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
   if(!state.preparation_input) {
-   const research=await researchEvidence({scan,document});
-   if(!Array.isArray(research?.evidence)) throw Error('EVIDENCE_RESEARCH_RESULT_REQUIRED');
+   let research,warning=null;
+   try{research=await researchEvidence({scan,document});if(!Array.isArray(research?.evidence))throw Error('EVIDENCE_RESEARCH_RESULT_REQUIRED');}
+   catch(error){warning=/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'EVIDENCE_RESEARCH_FAILED';research={status:'NEEDS_REVISION',evidence:[],warning};}
    // Retain the original source and uncertainty verbatim. Research remains a
    // separate sourced record; it cannot overwrite an existing evidence identity.
    const evidence=new Map((document.evidence??[]).map(item=>[item.id,item]));
@@ -44,6 +45,7 @@ export function createPreparationRun({store,researchEvidence,discover,write,rend
    const input={...document,evidence:[...evidence.values()],research};
    state=await store.mutate(campaignId,current=>{
     if(!current.preparation_input) current.preparation_input={document:input};
+    if(warning)current.preparation_warnings=[...(current.preparation_warnings??[]),{stage:'EVIDENCE_RESEARCH',code:warning}];
     return current;
    });
   }

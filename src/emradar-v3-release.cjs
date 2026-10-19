@@ -6,7 +6,7 @@ function createV3Release({service,integration,pool}){
   await service.workflow.authenticate(campaignId,sessionId,sessionSecret);
   const state=(await service.store.adapter.read(campaignId))?.value;
   const entry=state?.assets?.[destinationId],approval=state?.decisions?.[destinationId];
-  if(state?.phase!=='PUBLICATION_REVIEW'||!['EMAIL','X'].includes(entry?.asset?.kind)||approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.asset_sha256!==entry.fingerprint||state.deliveries?.[destinationId])throw Error('V3_RELEASE_NOT_APPROVED');
+  if(state?.phase!=='PUBLICATION_REVIEW'||entry?.asset?.review_status==='NEEDS_REVISION'||!['EMAIL','X'].includes(entry?.asset?.kind)||approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.asset_sha256!==entry.fingerprint||state.deliveries?.[destinationId])throw Error('V3_RELEASE_NOT_APPROVED');
   const payload={version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:campaignId,destination_id:destinationId,asset:entry.asset,approval};
   // Disabled configuration, unknown publication history and invalid graphics
   // fail BEFORE a delivery claim. Preflight never uploads or posts anything.

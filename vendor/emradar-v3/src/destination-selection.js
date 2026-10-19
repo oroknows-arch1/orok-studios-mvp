@@ -27,9 +27,9 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
   if(!candidate?.id || seen.has(candidate.id)) continue;
   seen.add(candidate.id);
   const linked=(candidate.evidence_ids??[]).filter(id=>evidenceIds.has(id));
-  if(!linked.length || candidate.editorial_fit_verified!==true || candidate.active!==true || !recipientPolicy.verifiedDestination(candidate)) continue;
+  if(!linked.length || candidate.editorial_fit_verified!==true || candidate.active!==true || !recipientPolicy.verifiedPublication(candidate)) continue;
 
-  const email=candidate.contact.email.toLowerCase();if(emails.has(email))continue;emails.add(email);
+  const email=candidate.contact?.email?.toLowerCase();if(email&&emails.has(email))continue;if(email)emails.add(email);
   const previous=prior.get(candidate.id);
   if(previous?.do_not_contact===true || previous?.opted_out===true || previous?.status==='PENDING_REPLY') continue;
   const repeat=Boolean(previous?.last_scan_digest && candidate.scan_digest && previous.last_scan_digest===candidate.scan_digest);
@@ -40,7 +40,7 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
  }
  eligible.sort((a,b)=>b.relevance-a.relevance || a.last_contacted_at-b.last_contacted_at || a.id.localeCompare(b.id));
  const selected=eligible.slice(0,limit).map(({id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified,verification,active})=>({
-  id,name,category,website,publication_type,destination_class,relationship,verification,active,contact:contact_verified===true?contact:null,evidence:{ids:linked_evidence},contact_verified:contact_verified===true,editorial_fit_verified,delivery_eligible:contact_verified===true&&Boolean(contact?.email),draft_only:contact_verified!==true
+  id,name,category,website,publication_type,destination_class,relationship,verification,active,contact:contact_verified===true?contact:null,evidence:{ids:linked_evidence},contact_verified:contact_verified===true,editorial_fit_verified,delivery_eligible:contact_verified===true&&Boolean(contact?.email),draft_only:contact_verified!==true,review_status:contact_verified===true?'READY':'NEEDS_REVISION',preparation_warning:contact_verified===true?null:'VERIFIED_EDITORIAL_CONTACT_REQUIRED'
  }));
  return {selected,excluded_count:candidates.length-selected.length,selection_digest:sha256(selected)};
 }

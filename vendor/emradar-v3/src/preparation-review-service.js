@@ -26,9 +26,9 @@ export function selectPersistedDraftDestinations({candidates,document,existingId
  const evidenceIds=new Set(evidence.map(item=>item.id));
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
  const existing=new Set(existingIds),emails=new Set();
- return (candidates??[]).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&recipientPolicy.verifiedDestination(candidate)&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
+ return (candidates??[]).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&recipientPolicy.verifiedPublication(candidate)&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
   const ids=(candidate.verification.evidence_ids??[]).filter(id=>evidenceIds.has(id));
-  if(!ids.length||emails.has(candidate.contact.email.toLowerCase()))return null;emails.add(candidate.contact.email.toLowerCase());
+  const email=candidate.contact?.email?.toLowerCase();if(!ids.length||(email&&emails.has(email)))return null;if(email)emails.add(email);
   const deliveryEligible=candidate.contact_verified===true&&candidate.editorial_fit_verified===true&&Boolean(candidate.contact?.email)&&Boolean(candidate.contact?.source_url);
   return {...candidate,id:candidate.id,name:candidate.name,category:candidate.category,publication_type:candidate.publication_type,website:candidate.website,destination_class:candidate.destination_class,relationship:candidate.relationship,contact:deliveryEligible?candidate.contact:null,evidence:{ids},contact_verified:deliveryEligible,editorial_fit_verified:candidate.editorial_fit_verified===true,delivery_eligible:deliveryEligible,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',draft_only:!deliveryEligible};
  }).filter(Boolean).slice(0,Math.max(0,MAX_DESTINATIONS-existing.size));
@@ -44,10 +44,11 @@ export function assessPublicationReview({state,candidates}) {
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
  const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL'&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
  const missing=recipients.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
- const invalid=assets.some(asset=>{if(asset.kind!=='EMAIL')return false;try{recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));return false;}catch{return true;}});
+ const incomplete=assets.filter(asset=>asset.review_status==='NEEDS_REVISION');
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
  const xReady=Boolean(x?.body&&(x.visual_url||x.visual_base64));
- return {complete:recipients.length>0&&missing.length===0&&!invalid&&xReady,verified_publications:publications.length,verified_contacts:recipients.length,unresolved_contacts:publications.length-recipients.length,editorial_emails:emailIds.size,x_ready:xReady,missing_destination_ids:missing};
+ const visible=(state.destinations??[]).every(destination=>assets.some(asset=>asset.destination_id===destination.id))&&publications.every(publication=>destinationIds.has(publication.id)&&assets.some(asset=>asset.destination_id===publication.id));
+ return {complete:visible,review_ready:visible,delivery_ready:missing.length===0&&incomplete.length===0&&xReady,verified_publications:publications.length,verified_contacts:recipients.length,unresolved_contacts:publications.length-recipients.length,editorial_emails:emailIds.size,x_ready:xReady,needs_revision:incomplete.map(asset=>asset.destination_id),missing_destination_ids:missing};
 }
 
 // Explicit assembly of existing V3 workers. Call only after provider and
@@ -94,8 +95,12 @@ export async function createPreparationReviewService({
   for(const destination of destinations.slice(0,limit)){
    const previous=existingDrafts[destination.id]?.asset;
    const compatible=previous?.kind==='EMAIL'&&previous.editorial_reference?.sha256===EDITORIAL_REFERENCE.sha256&&previous.evidence_ids?.every(id=>evidenceIds.has(id))&&previous.evidence_ids?.some(id=>destination.evidence.ids.includes(id));
-   const asset=compatible?{...structuredClone(previous),to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,recipient_verification:destination.contact}:await write({campaignId,destination,document:state.preparation_input.document,scan:state.scan});
-   verifyEditorialAsset(asset,{evidenceIds});
+   let asset;
+   try{
+    if(!destination.delivery_eligible)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+    asset=compatible?{...structuredClone(previous),to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,recipient_verification:destination.contact}:await write({campaignId,destination,document:state.preparation_input.document,scan:state.scan});
+    verifyEditorialAsset(asset,{evidenceIds});asset.review_status='READY';
+   }catch(error){asset={campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',subject:'Preparation incomplete: '+(destination.name??destination.id),body:'Preparation did not complete for this item. Review the persisted warning and regenerate or exclude it.',from:'sean@emradar.net',evidence_ids:destination.evidence.ids.filter(id=>evidenceIds.has(id)),review_status:'NEEDS_REVISION',preparation_error:/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'EDITORIAL_PREPARATION_FAILED',delivery_eligible:false,contact_status:'UNVERIFIED'};}
    await store.extendReview(campaignId,[destination],[asset]);
    assets.push(asset);
   }
@@ -147,6 +152,8 @@ export async function createPreparationReviewService({
  const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
  return {store,directory,workflow,prepare,discover,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
+  const prior=(await adapter.read(result.campaignId))?.value;
+  if(result.status==='ALREADY_PREPARED'&&!prior?.review_completion)await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});
   let completion=await saveCompletion(result.campaignId);
   if(!completion.complete){
    if(result.status==='ALREADY_PREPARED')await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});

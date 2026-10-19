@@ -49,17 +49,16 @@ test('Run Discovery completes persistence, attachment and notification rather th
  assert.equal(result.complete,true);assert.equal(result.editorial_drafts,12);assert.equal(result.notification,'NOTIFIED');
  await f.service.resumeIntelligentDiscovery(f.id);assert.equal(f.metrics().writes,12);assert.equal(f.metrics().notifications,1);
 });
-test('no verified contact means incomplete preparation, never a false PUBLICATION_REVIEW',async()=>{
- const f=await harness({count:0});await assert.rejects(f.service.prepareAndNotify(f.input),/V3_PUBLICATION_REVIEW_INCOMPLETE/);
- const state=f.records.get(f.id).payload;assert.equal(state.phase,'ASSETS_PREPARED');assert.equal(state.review_completion.complete,false);assert.deepEqual(state.assets.x,f.original.assets.x);assert.equal(f.metrics().notifications,0);
- await assert.rejects(f.service.store.claimDelivery(f.id,'x'),/REVIEW_NOT_OPEN/);
+test('no verified contact still creates review while delivery remains approval-gated',async()=>{
+ const f=await harness({count:0});const result=await f.service.prepareAndNotify(f.input);assert.equal(result.status,'PUBLICATION_REVIEW');
+ const state=f.records.get(f.id).payload;assert.equal(state.phase,'PUBLICATION_REVIEW');assert.equal(state.review_completion.complete,true);assert.deepEqual(state.assets.x,f.original.assets.x);assert.equal(f.metrics().notifications,1);
+ await assert.rejects(f.service.store.claimDelivery(f.id,'x'),/OWNER_APPROVAL_REQUIRED/);
 });
-test('provider interruption preserves completed drafts and owner decisions, and resumes only missing work',async()=>{
- const f=await harness({count:3,failAfter:1});await assert.rejects(f.service.prepareAndNotify(f.input),/PROVIDER_UNAVAILABLE/);
- let state=f.records.get(f.id).payload;assert.equal(state.phase,'ASSETS_PREPARED');assert.equal(Object.keys(state.assets).length,2);assert.equal(f.metrics().notifications,0);
- f.service.workflow.authenticate=async()=>true;const partial=await f.service.workflow.view(f.id);assert.equal(partial.entries.length,2);assert.equal(partial.phase,'ASSETS_PREPARED');
- f.restore();await f.service.prepareAndNotify(f.input);state=f.records.get(f.id).payload;
- assert.equal(state.phase,'PUBLICATION_REVIEW');assert.equal(f.metrics().writes,3);assert.equal(f.metrics().notifications,1);assert.deepEqual(state.assets.x,f.original.assets.x);assert.deepEqual(state.decisions,f.original.decisions);
+test('provider interruption preserves ready work and exposes failed items without suppressing review',async()=>{
+ const f=await harness({count:3,failAfter:1});const result=await f.service.prepareAndNotify(f.input);assert.equal(result.status,'PUBLICATION_REVIEW');
+ const state=f.records.get(f.id).payload;assert.equal(state.phase,'PUBLICATION_REVIEW');assert.equal(Object.keys(state.assets).length,4);assert.equal(f.metrics().notifications,1);
+ f.service.workflow.authenticate=async()=>true;const review=await f.service.workflow.view(f.id);assert.equal(review.entries.length,4);assert.equal(review.entries.filter(entry=>entry.asset.review_status==='NEEDS_REVISION').length,2);
+ assert.deepEqual(state.assets.x,f.original.assets.x);assert.deepEqual(state.decisions,f.original.decisions);
 });
 
 test('one unreviewed X graphic is branded, the old graphic is retained, and restart never generates another post or image',async()=>{

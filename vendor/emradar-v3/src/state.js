@@ -41,20 +41,21 @@ export class CampaignStore {
       return state;
     });
   }
-  async prepare(id, assets) {
+  async prepare(id, assets, warnings=[]) {
     return this.mutate(id, state => {
       if (!state || !['DESTINATIONS_SELECTED','PUBLICATION_REVIEW'].includes(state.phase)) throw Error('INVALID_PHASE');
       const valid = new Set(state.destinations.map(d => d.id));
       const next = {};
       for (const asset of assets) {
         if (!valid.has(asset.destination_id) || asset.campaign_id !== id || next[asset.destination_id]) throw Error('INVALID_ASSET_DESTINATION');
-        if(asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));
+        if(asset.review_status!=='NEEDS_REVISION'&&asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));
         next[asset.destination_id] = {asset:structuredClone(asset), fingerprint:assetFingerprint(asset)};
       }
       if (Object.keys(next).length !== state.destinations.length) throw Error('MISSING_DESTINATION_ASSET');
       if (state.phase === 'PUBLICATION_REVIEW' && sha256(next) !== sha256(state.assets)) throw Error('REVIEW_ASSETS_LOCKED');
       state.assets = next;
       state.phase = 'PUBLICATION_REVIEW';
+      state.preparation_warnings=[...(state.preparation_warnings??[]),...structuredClone(warnings)];
       return state;
     });
   }
@@ -67,7 +68,7 @@ export class CampaignStore {
       if(assets.length!==additions.size) throw Error('MISSING_DESTINATION_ASSET');
       for(const asset of assets){
         if(!additions.has(asset.destination_id)||asset.campaign_id!==id||state.assets[asset.destination_id]) throw Error('INVALID_ASSET_DESTINATION');
-        if(asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(asset,additions.get(asset.destination_id));
+        if(asset.review_status!=='NEEDS_REVISION'&&asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(asset,additions.get(asset.destination_id));
         state.assets[asset.destination_id]={asset:structuredClone(asset),fingerprint:assetFingerprint(asset)};
       }
       state.destinations.push(...[...additions.values()].map(destination=>structuredClone(destination)));
@@ -79,11 +80,15 @@ export class CampaignStore {
     return this.mutate(id, state => {
       if (!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
       const item = state.assets[destinationId];
-      if (!item || item.fingerprint !== fingerprint || !['APPROVE','REJECT'].includes(decision)) throw Error('INVALID_DECISION');
+      if (!item || item.fingerprint !== fingerprint || !['APPROVE','REJECT','EXCLUDE','REGENERATE'].includes(decision)) throw Error('INVALID_DECISION');
       // Editorial decisions are independent of delivery readiness. Recipient
       // verification remains mandatory in claimDelivery and transport checks.
       if (state.deliveries[destinationId]) throw Error('DECISION_AFTER_DISTRIBUTION');
-      state.decisions[destinationId] = {authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId};
+      if(decision==='APPROVE'&&item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');
+      if(decision==='REGENERATE'){
+       state.review_actions??={};state.review_actions[destinationId]={action:'REGENERATE',requested_at:new Date().toISOString(),asset_sha256:fingerprint};
+       delete state.decisions[destinationId];
+      }else state.decisions[destinationId] = {authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId};
       return state;
     });
   }
@@ -115,6 +120,7 @@ export class CampaignStore {
       if (!state || state.phase !== 'PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
       const item = state.assets[destinationId];
       if (!item) throw Error('UNKNOWN_DESTINATION');
+      if(item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_NOT_SENDABLE');
       const prior = state.deliveries[destinationId];
       if(item.asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));
       const key = assertSendable({asset:item.asset,approval:state.decisions[destinationId],receipt:prior});

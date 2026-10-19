@@ -18,8 +18,8 @@ export function assertDestinations(destinations) {
   if (!Array.isArray(destinations) || destinations.length > MAX_DESTINATIONS) throw new Error('DESTINATION_LIMIT');
   const ids = new Set();
   for (const d of destinations) {
-    const verified=d?.id==='x'||recipientPolicy.verifiedDestination(d);
-    if (!d || typeof d.id !== 'string' || !d.id.trim() || ids.has(d.id) || !d.evidence || !verified) throw new Error('INVALID_DESTINATION');
+    const visible=d?.id==='x'||recipientPolicy.verifiedPublication(d)||recipientPolicy.verifiedDestination(d);
+    if (!d || typeof d.id !== 'string' || !d.id.trim() || ids.has(d.id) || !d.evidence || !visible) throw new Error('INVALID_DESTINATION');
     ids.add(d.id);
   }
   return destinations;

@@ -108,7 +108,7 @@ export class ReviewWorkflow {
   for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft'}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
-  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history};
+  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint) {
   await this.authenticate(campaignId,sessionId,secret);

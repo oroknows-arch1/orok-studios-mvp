@@ -42,7 +42,8 @@ async function refresh(){
   const {asset,fingerprint,groupKey,decision,delivery,historical}=item;
   const card=document.createElement('article');
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
-  card.append(text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
+  card.append(text('p','Preparation: '+(asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
+  if(asset.preparation_error)card.append(text('p','Needs revision: '+asset.preparation_error));
   if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.to?'Recipient: '+asset.to+' · Verification: '+(asset.contact_status||'unknown'):'Recipient unavailable'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
   if(delivery?.receipt)card.append(text('p',asset.kind==='X'?'X receipt: '+(delivery.receipt.provider_id||'unconfirmed'):'Mail receipt: '+(delivery.receipt.provider_id||'unconfirmed')+' · Sent folder: '+(delivery.receipt.sent_folder?.status||'no filing receipt')));
   if(asset.subject)card.append(text('h3',asset.subject));
@@ -103,9 +104,10 @@ async function refresh(){
    });
    card.append(send);
   }
-  if(!historical)for(const choice of ['APPROVE','REJECT']){
-   const button=text('button',choice==='APPROVE'?'Approve':'Reject');
+  if(!historical)for(const choice of ['APPROVE','REJECT','REGENERATE','EXCLUDE']){
+   const button=text('button',choice==='APPROVE'?'Approve':choice==='REJECT'?'Reject':choice==='REGENERATE'?'Regenerate':'Exclude');
    button.disabled=!!delivery;
+   if(choice==='APPROVE'&&asset.review_status==='NEEDS_REVISION')button.disabled=true;
    button.addEventListener('click',async()=>{
     button.disabled=true;
     try{await api('decision',{campaignId:campaign,destinationId:asset.destination_id,decision:choice,fingerprint});await refresh();}
