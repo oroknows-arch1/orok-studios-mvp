@@ -13,6 +13,7 @@ import {createDirectoryDiscovery} from './directory-discovery.js';
 import {createReviewedEvidenceLinker} from './reviewed-evidence-links.js';
 import {pinnedHtml} from './autonomous-outlet-discovery.js';
 import {createAutonomousOutletDiscovery} from './autonomous-outlet-discovery.js';
+import {createEditorialContactResearch} from './editorial-contact-research.js';
 import {lookup} from 'node:dns/promises';
 import {createPreparationRun,createVerifiedVisualRenderer} from './preparation-run.js';
 import {ReviewWorkflow} from './review-workflow.js';
