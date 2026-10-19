@@ -25,7 +25,7 @@ async function harness({count=10,failAfter=null,replaceVisual=false}={}){
   throw Error('UNEXPECTED_SQL');
  }};
  let service;
- service=await createPreparationReviewService({pool,reviewOrigin:'https://review.example',reviewedLinks:[],fetcher:async()=>({ok:true,arrayBuffer:async()=>bytes}),researchEvidence:async()=>{throw Error('NO_RESEARCH_REPEAT');},renderVisual:async()=>{if(!replaceVisual)throw Error('NO_X_REGENERATION');images++;return {base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jq1sAAAAASUVORK5CYII=',brand_version:'emradar-formation-card-v1'};},write:async({campaignId,destination})=>{
+ service=await createPreparationReviewService({pool,reviewOrigin:'https://review.example',reviewedLinks:[],fetcher:async()=>({ok:true,arrayBuffer:async()=>bytes}),researchEvidence:async()=>{throw Error('NO_RESEARCH_REPEAT');},renderVisual:async()=>{if(!replaceVisual)throw Error('NO_X_REGENERATION');images++;return {base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jq1sAAAAASUVORK5CYII=',brand_version:'emradar-formation-card-v2'};},write:async({campaignId,destination})=>{
   if(fail!==null&&writes>=fail)throw Error('PROVIDER_UNAVAILABLE');writes++;
   return {campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',subject:'Research contribution',body:'A sourced proposal for '+destination.name+'. Would an article interest you?',from:'sean@emradar.net',to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1']};
  },notify:async({campaignId,recipient})=>{notifications++;return {accepted:true,provider_id:'owner-invitation',campaign_id:campaignId,recipient};},discoverLinks:async()=>{
@@ -63,7 +63,7 @@ test('provider interruption preserves ready work and exposes failed items withou
 
 test('one unreviewed X graphic is branded, the old graphic is retained, and restart never generates another post or image',async()=>{
  const f=await harness({count:2,replaceVisual:true});await f.service.prepareAndNotify(f.input);
- const state=f.records.get(f.id).payload;assert.equal(f.imageCount(),1);assert.equal(state.assets.x.asset.body,f.original.assets.x.asset.body);assert.equal(state.assets.x.asset.visual_brand_version,'emradar-formation-card-v1');assert.deepEqual(state.editorial_versions.x[0],f.original.assets.x);assert.deepEqual(state.decisions,{});
+ const state=f.records.get(f.id).payload;assert.equal(f.imageCount(),1);assert.equal(state.assets.x.asset.body,f.original.assets.x.asset.body);assert.equal(state.assets.x.asset.visual_brand_version,'emradar-formation-card-v2');assert.deepEqual(state.editorial_versions.x[0],f.original.assets.x);assert.deepEqual(state.decisions,{});
  await f.service.prepareAndNotify(f.input);assert.equal(f.imageCount(),1);assert.equal(Object.values(state.assets).filter(entry=>entry.asset.kind==='X').length,1);
 });
 

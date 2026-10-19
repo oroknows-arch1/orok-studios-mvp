@@ -8,7 +8,7 @@ const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
 const SCAN_ORIGIN='https://emerging-markets-radar.onrender.com';
 const SCAN_INDEX_URL=SCAN_ORIGIN+'/data/archive-index.json';
-const FIXED_X_TEMPLATE_VERSION='emradar-formation-card-v1';
+const FIXED_X_TEMPLATE_VERSION='emradar-formation-card-v2';
 const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
@@ -253,6 +253,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
      return current;
     });
    }
+   const refreshed=await service.refreshUnreviewedXVisual?.(failedTemplateCampaign);
+   if(refreshed)await service.workflow.issue(failedTemplateCampaign,{revisionId:'fixed-template-v2'});
    const {rows}=await pool.query(`SELECT s.campaign_id, a.key AS destination_id
     FROM v3_campaign_state s CROSS JOIN LATERAL jsonb_each(COALESCE(s.payload->'review_actions','{}'::jsonb)) a
     WHERE s.payload->>'phase'='PUBLICATION_REVIEW' AND a.value->>'status' IN ('PENDING','RUNNING','OWNER_REVIEW_PENDING')

@@ -75,7 +75,7 @@ test('fixed graphic renders at 1024px without probabilistic visual approval',asy
  let calls=0;const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{calls++;}}}}});
  const rendered=await provider.renderVisual({asset:{...asset,subject:'Bangladesh',story_record_id:'bangladesh-measles-immunization-system-failure'},document,scan:{snapshot_date:'2026-10-18'}});
  assert.equal(Buffer.from(rendered.base64,'base64').subarray(0,8).toString('hex'),'89504e470d0a1a0a');
- assert.equal(calls,0);assert.equal(rendered.diagnostics.template,'emradar-formation-card-v1');
+ assert.equal(calls,0);assert.equal(rendered.diagnostics.template,'emradar-formation-card-v2');
 });
 
 test('graphic callback receives deterministic layout diagnostics',async()=>{

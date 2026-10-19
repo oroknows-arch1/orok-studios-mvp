@@ -39,7 +39,7 @@ test('production provider deterministically renders the fixed formation card wit
  let chatCalls=0;const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{chatCalls++;}}},images:{generate:async()=>{imageCalls++;}}}});
  const visual=await providers.renderVisual(input),bytes=Buffer.from(visual.base64,'base64');
  assert.equal(visual.brand_version,GRAPHIC_STANDARD.version);assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(imageCalls,0);assert.equal(chatCalls,0);assert.deepEqual(input,before);
- assert.equal(GRAPHIC_STANDARD.version,'emradar-formation-card-v1');
+ assert.equal(GRAPHIC_STANDARD.version,'emradar-formation-card-v2');
 });
 test('authoritative composer uses scan states, formations, date and fixed footer',()=>{
  const input=structuredClone(saved);input.asset.subject='Free State EV investment';input.asset.kind='X';

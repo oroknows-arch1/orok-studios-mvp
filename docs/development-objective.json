@@ -246,7 +246,7 @@
       "production_http_health": "NOT_VERIFIED"
     },
     "local_uncommitted_changes": [
-      "docs/v3-source-integration.json updated to pin authoritative V3 main commit 231dfcd18a7b20e625feeeacbc7e5713491b0cef",
+      "docs/v3-source-integration.json updated to pin authoritative V3 main commit 428396809cee45a3c5b98c949e25358ee767d8e7",
       "test/v3-source-integration.test.cjs updated to the verified authoritative V3 pin",
       "test/emradar-v3-publication-first.test.mjs expected result updated for the current review-completion fields"
     ],
@@ -273,8 +273,8 @@
   },
   "october_19_fixed_x_template": {
     "status": "LOCALLY_VERIFIED_PENDING_DEPLOYMENT",
-    "authoritative_commit": "231dfcd18a7b20e625feeeacbc7e5713491b0cef",
-    "template": "emradar-formation-card-v1",
+    "authoritative_commit": "428396809cee45a3c5b98c949e25358ee767d8e7",
+    "template": "emradar-formation-card-v2",
     "reference": "Owner-supplied navy EMRADAR card with turquoise accent, scan date, evidence-state formation rows, bounded-evidence note and EMRADAR footer; surrounding X and macOS interface excluded.",
     "behaviour": "Deterministic SVG-to-PNG only. Scan date, evidence state and evidence-grounded formation wording vary. Up to seven linked verified records are rendered; omitted IDs and any fallback wording source are persisted in visual_diagnostics.",
     "failed_campaign_id": "v3-5d73d453fb02fa0da4287e23834f92db",
@@ -289,7 +289,7 @@
     {
       "id": "authoritative_v3_source_integration",
       "status": "VERIFIED",
-      "evidence": "The harness executes and verifies the pinned authoritative V3 main commit 231dfcd18a7b20e625feeeacbc7e5713491b0cef through npm run harness:v3 while preserving the production runtime overlay and legacy-repository exclusion boundary."
+      "evidence": "The harness executes and verifies the pinned authoritative V3 main commit 428396809cee45a3c5b98c949e25358ee767d8e7 through npm run harness:v3 while preserving the production runtime overlay and legacy-repository exclusion boundary."
     },
     {
       "id": "prior_discovery_repair",
