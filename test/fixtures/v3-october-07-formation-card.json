@@ -1,0 +1,32 @@
+{
+  "asset": {
+    "kind": "X",
+    "evidence_ids": [
+      "zambia-drc-copperbelt-power-interconnector:0",
+      "vietnam-metro-technology-transfer:0",
+      "guatemala-firm-power-auction-peg6:0",
+      "india-sme-growth-equity-fund:0",
+      "trans-caspian-digital-corridor:0",
+      "east-africa-refining-localisation:0"
+    ]
+  },
+  "scan": {"snapshot_date": "2026-10-07"},
+  "document": {
+    "records": [
+      {"id":"zambia-drc-copperbelt-power-interconnector","status":"FORMING","theme":"Cross-border private transmission is becoming a prerequisite for Copperbelt mine growth","causal_chain":{"formation":["Private transmission for Copperbelt mine growth"]}},
+      {"id":"vietnam-metro-technology-transfer","status":"FORMING","theme":"Vietnam is converting metro procurement into domestic rail-manufacturing capability","causal_chain":{"formation":["Metro procurement is building Vietnamese rail-manufacturing capability"]}},
+      {"id":"guatemala-firm-power-auction-peg6","status":"INVESTIGATE","theme":"Guatemala is procuring firm capacity as demand growth and hydro volatility collide","causal_chain":{"formation":["Firm power procurement amid demand growth and hydro volatility"]}},
+      {"id":"india-sme-growth-equity-fund","status":"FORMING","theme":"India is adding patient public equity to the SME financing stack","causal_chain":{"formation":["Patient public equity for SME growth"]}},
+      {"id":"trans-caspian-digital-corridor","status":"FORMING","theme":"The Middle Corridor is gaining a subsea digital route alongside physical transport","causal_chain":{"formation":["A subsea digital route alongside the Middle Corridor"]}},
+      {"id":"east-africa-refining-localisation","status":"WEAKENING","theme":"Kenya's refinery localisation thesis is weakened by unresolved public-finance and legal disclosure","causal_chain":{"formation":["Refinery localisation faces public-finance and legal uncertainty"]}}
+    ],
+    "evidence": [
+      {"id":"zambia-drc-copperbelt-power-interconnector:0","record_id":"zambia-drc-copperbelt-power-interconnector","verified":true},
+      {"id":"vietnam-metro-technology-transfer:0","record_id":"vietnam-metro-technology-transfer","verified":true},
+      {"id":"guatemala-firm-power-auction-peg6:0","record_id":"guatemala-firm-power-auction-peg6","verified":true},
+      {"id":"india-sme-growth-equity-fund:0","record_id":"india-sme-growth-equity-fund","verified":true},
+      {"id":"trans-caspian-digital-corridor:0","record_id":"trans-caspian-digital-corridor","verified":true},
+      {"id":"east-africa-refining-localisation:0","record_id":"east-africa-refining-localisation","verified":true}
+    ]
+  }
+}

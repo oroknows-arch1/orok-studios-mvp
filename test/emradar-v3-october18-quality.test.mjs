@@ -70,23 +70,23 @@ test('October 18 Bangladesh X uses one formation and adds analysis instead of re
  assert.match(prompt,/at most three short reader-facing text blocks/);assert.doesNotMatch(prompt,/kenya-bundibugyo/);for(const item of evidence.filter(e=>bangladeshIds.includes(e.id)))assert(!prompt.includes(item.source_url));
 });
 
-test('faint or unsupported generated graphics fail before PUBLICATION_REVIEW persistence',async()=>{
+test('fixed graphic renders at 1024px without probabilistic visual approval',async()=>{
  const asset={kind:'X',body:'Evidence-backed analysis with uncertainty.',subject:'Bangladesh',evidence_ids:bangladeshIds};
- const unreadable=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({choices:[{message:{content:'{"readable":false,"unsupported_claims":false,"reason":"faint text"}'}}]})}},images:{generate:async()=>({data:[{b64_json:'aW1hZ2U='}]})}}});
- await assert.rejects(unreadable.renderVisual({asset,document}),/V3_X_VISUAL_QUALITY_FAILED/);
- const readable=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({choices:[{message:{content:'{"readable":true,"unsupported_claims":false,"reason":"large high-contrast text"}'}}]})}},images:{generate:async()=>({data:[{b64_json:'aW1hZ2U='}]})}}});
- const rendered=await readable.renderVisual({asset:{...asset,subject:'Bangladesh',story_record_id:'bangladesh-measles-immunization-system-failure'},document});
+ let calls=0;const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{calls++;}}}}});
+ const rendered=await provider.renderVisual({asset:{...asset,subject:'Bangladesh',story_record_id:'bangladesh-measles-immunization-system-failure'},document,scan:{snapshot_date:'2026-10-18'}});
  assert.equal(Buffer.from(rendered.base64,'base64').subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+ assert.equal(calls,0);assert.equal(rendered.diagnostics.template,'emradar-formation-card-v1');
 });
 
-test('graphic inspection can capture rejected bytes and the exact provider reason without weakening the gate',async()=>{
+test('graphic callback receives deterministic layout diagnostics',async()=>{
  let captured;
- const openai={chat:{completions:{create:async()=>({choices:[{message:{content:'{"readable":false,"unsupported_claims":false,"reason":"The limitation line is too small at phone-feed size."}'}}]})}},images:{generate:async()=>({data:[{b64_json:'aW1hZ2U='}]})}};
+ const openai={chat:{completions:{create:async()=>{throw Error('VISUAL_LLM_MUST_NOT_RUN');}}}};
  const provider=createOpenAiPreparationProviders({openai,onVisualInspection:async value=>{captured=value;}});
  const asset={kind:'X',body:'Evidence-backed analysis with uncertainty.',subject:'Bangladesh',evidence_ids:bangladeshIds};
- await assert.rejects(provider.renderVisual({asset,document}),/V3_X_VISUAL_QUALITY_FAILED/);
+ await provider.renderVisual({asset,document,scan:{snapshot_date:'2026-10-18'}});
  assert.equal(Buffer.from(captured.base64,'base64').subarray(0,8).toString('hex'),'89504e470d0a1a0a');
- assert.deepEqual(captured.quality,{readable:false,unsupported_claims:false,reason:'The limitation line is too small at phone-feed size.'});
+ assert.deepEqual(captured.quality,{readable:true,unsupported_claims:false,reason:'Deterministic fixed template passed bounded layout checks.'});
+ assert.equal(captured.diagnostics.snapshot_date,'2026-10-18');
 });
 
 test('the preparation handoff preserves a failed X graphic as owner-visible incomplete work',async()=>{

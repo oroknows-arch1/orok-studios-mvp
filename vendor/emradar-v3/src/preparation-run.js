@@ -18,7 +18,8 @@ export function createVerifiedVisualRenderer(renderVisual){
   input.asset.visual_base64=bytes.toString('base64');
   input.asset.visual_mime=png?'image/png':'image/jpeg';
   if(visual.brand_version)input.asset.visual_brand_version=visual.brand_version;
-  return {sha256,url:'data:'+input.asset.visual_mime+';base64,'+input.asset.visual_base64};
+  if(visual.diagnostics)input.asset.visual_diagnostics=structuredClone(visual.diagnostics);
+  return {sha256,url:'data:'+input.asset.visual_mime+';base64,'+input.asset.visual_base64,diagnostics:visual.diagnostics};
  };
 }
 

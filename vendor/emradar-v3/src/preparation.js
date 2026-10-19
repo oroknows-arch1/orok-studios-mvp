@@ -49,6 +49,7 @@ export class CampaignPreparation {
     if(!visual?.sha256 || !/^[a-f0-9]{64}$/.test(visual.sha256) || !visual.url) throw Error('X_VISUAL_UNAVAILABLE');
     asset.visual_sha256=visual.sha256;
     asset.visual_url=visual.url;
+    if(visual.diagnostics)asset.visual_diagnostics=structuredClone(visual.diagnostics);
    }
    verifyEditorialAsset(asset,{evidenceIds:verifiedEvidence});
    if(asset.campaign_id!==campaignId || asset.destination_id!==destination.id) throw Error('CROSS_CAMPAIGN_ASSET');

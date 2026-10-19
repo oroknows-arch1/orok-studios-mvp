@@ -76,7 +76,7 @@ export async function createPreparationReviewService({
   if(!entry||entry.asset.visual_brand_version===GRAPHIC_STANDARD.version||state.decisions?.x||state.deliveries?.x)return;
   const asset=structuredClone(entry.asset);
   const visual=await renderVerifiedVisual({asset,document:state.preparation_input.document,scan:state.scan});
-  asset.visual_sha256=visual.sha256;asset.visual_url=visual.url;
+  asset.visual_sha256=visual.sha256;asset.visual_url=visual.url;if(visual.diagnostics)asset.visual_diagnostics=structuredClone(visual.diagnostics);
   // Injected providers may omit metadata; the shared branded provider owns the standard.
   asset.visual_brand_version=GRAPHIC_STANDARD.version;
   await store.mutate(campaignId,current=>{
@@ -120,7 +120,7 @@ export async function createPreparationReviewService({
   if(!asset||asset.campaign_id!==campaignId||asset.destination_id!==destinationId||asset.kind!==entry.asset.kind)throw Error('REGENERATION_ASSET_MISMATCH');
   if(asset.kind==='X'){
    const visual=await renderVerifiedVisual({asset,document,scan:state.scan});
-   asset.visual_sha256=visual.sha256;asset.visual_url=visual.url;asset.visual_brand_version=asset.visual_brand_version||GRAPHIC_STANDARD.version;
+   asset.visual_sha256=visual.sha256;asset.visual_url=visual.url;asset.visual_brand_version=asset.visual_brand_version||GRAPHIC_STANDARD.version;if(visual.diagnostics)asset.visual_diagnostics=structuredClone(visual.diagnostics);
   }
   const evidenceIds=new Set(document.evidence.filter(item=>item?.verified===true).map(item=>item.id));
   verifyEditorialAsset(asset,{evidenceIds});
