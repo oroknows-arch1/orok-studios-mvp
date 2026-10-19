@@ -38,3 +38,18 @@ test('incomplete items can be rejected, excluded or queued for regeneration but 
  await store.decide(campaignId,'writer-failure','EXCLUDE','fingerprint');assert.equal(value.decisions['writer-failure'].decision,'EXCLUDE');
  await assert.rejects(store.claimDelivery(campaignId,'writer-failure'),/INCOMPLETE_ASSET_NOT_SENDABLE/);
 });
+
+test('rejection feedback is revision-bound, missing feedback waits, and a later owner approval cancels pending regeneration',async()=>{
+ let version=1,value={phase:'PUBLICATION_REVIEW',destinations:[destinations[0]],assets:{'writer-failure':{asset:{campaign_id:campaignId,destination_id:'writer-failure',kind:'EMAIL',subject:'A researched angle',body:'Ready content',review_status:'READY'},fingerprint:'fingerprint'}},decisions:{},deliveries:{},events:[]};
+ const adapter={read:async()=>({version,value:structuredClone(value)}),compareAndSwap:async(_id,expected,next)=>{if(expected!==version)return false;value=structuredClone(next);version++;return true;}};
+ const store=new CampaignStore(adapter);
+ await store.decide(campaignId,'writer-failure','REJECT','fingerprint','');
+ assert.equal(value.decisions['writer-failure'].decision,'REJECT');assert.equal(value.decisions['writer-failure'].feedback_required,true);
+ assert.equal(value.review_actions['writer-failure'].status,'NEEDS_FEEDBACK');assert.equal(value.review_feedback[0].asset_sha256,'fingerprint');
+ await store.decide(campaignId,'writer-failure','REGENERATE','fingerprint','Keep the same verified finding and make the opening more publication-specific.');
+ const request=value.review_actions['writer-failure'];assert.equal(request.status,'PENDING');assert(request.request_id);assert.equal(value.decisions['writer-failure'].decision,'REJECT');
+ assert.equal(value.review_feedback.length,2);assert.equal(value.review_feedback[1].asset_sha256,'fingerprint');
+ await store.decide(campaignId,'writer-failure','APPROVE','fingerprint');
+ assert.equal(value.decisions['writer-failure'].decision,'APPROVE');assert.equal(value.review_actions['writer-failure'].status,'CANCELLED');
+ assert.deepEqual(value.deliveries,{});
+});

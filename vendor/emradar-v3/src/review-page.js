@@ -43,6 +43,12 @@ async function refresh(){
   const card=document.createElement('article');
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
   card.append(text('p','Preparation: '+(asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
+  if(!historical&&item.review_action){
+   const action=item.review_action;
+   const labels={NEEDS_FEEDBACK:'Rejection saved — owner feedback is needed before regeneration.',PENDING:'Regeneration queued.',RUNNING:'Regeneration in progress.',OWNER_REVIEW_PENDING:'Revised content is ready; owner review notification is pending.',COMPLETE:'Revised content is ready for owner review.',FAILED:'Regeneration failed; the rejected draft remains unchanged.',NOTIFICATION_AMBIGUOUS:'Review notification outcome is uncertain; it will not be resent automatically.',CANCELLED:'Regeneration was cancelled by a later owner decision.'};
+   card.append(text('p',labels[action.status]||'Regeneration status: '+action.status));
+  }
+  if(!historical)for(const note of item.rejection_feedback??[])if(note.feedback)card.append(text('p','Owner feedback: '+note.feedback));
   if(asset.preparation_error)card.append(text('p','Needs revision: '+asset.preparation_error));
   if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.to?'Recipient: '+asset.to+' · Verification: '+(asset.contact_status||'unknown'):'Recipient unavailable'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
   if(delivery?.receipt)card.append(text('p',asset.kind==='X'?'X receipt: '+(delivery.receipt.provider_id||'unconfirmed'):'Mail receipt: '+(delivery.receipt.provider_id||'unconfirmed')+' · Sent folder: '+(delivery.receipt.sent_folder?.status||'no filing receipt')));
@@ -109,11 +115,27 @@ async function refresh(){
    button.disabled=!!delivery;
    if(choice==='APPROVE'&&asset.review_status==='NEEDS_REVISION')button.disabled=true;
    button.addEventListener('click',async()=>{
+    let feedback='';
+    if(choice==='REJECT'||choice==='REGENERATE'){
+     const response=prompt('What should change? Leave blank to save the rejection and request clarification before regeneration.',item.review_action?.feedback||'');
+     if(response===null)return;
+     feedback=response;
+    }
     button.disabled=true;
-    try{await api('decision',{campaignId:campaign,destinationId:asset.destination_id,decision:choice,fingerprint});await refresh();}
+    try{const result=await api('decision',{campaignId:campaign,destinationId:asset.destination_id,decision:choice,fingerprint,feedback});await refresh();if(result.regeneration_status==='NEEDS_FEEDBACK')status.textContent='Rejection saved. Add specific feedback before this item can be regenerated.';else if(result.regeneration_status==='PENDING')status.textContent='Rejection and feedback saved. Regeneration is queued; the revised item will return to owner review.';}
     catch(e){status.textContent='Could not save decision. Please retry.';button.disabled=false;}
    });
    card.append(button);
+  }
+  if(!historical&&!delivery&&item.review_action?.status==='NEEDS_FEEDBACK'){
+   const addFeedback=text('button','Add feedback for regeneration');
+   addFeedback.addEventListener('click',async()=>{
+    const feedback=prompt('What specifically should change?');if(feedback===null)return;
+    addFeedback.disabled=true;
+    try{const result=await api('decision',{campaignId:campaign,destinationId:asset.destination_id,decision:'REGENERATE',fingerprint,feedback});await refresh();status.textContent=result.regeneration_status==='PENDING'?'Feedback saved. Regeneration is queued for owner review.':'Rejection saved. Add specific feedback before regeneration.';}
+    catch{status.textContent='Feedback was not saved. Please retry.';addFeedback.disabled=false;}
+   });
+   card.append(addFeedback);
   }
   if(!historical && groupKey && !renderedGroups.has(groupKey) && view.entries.filter(e=>e.groupKey===groupKey).length>1 && view.entries.some(e=>e.groupKey===groupKey && !e.decision && !e.delivery)){
    renderedGroups.add(groupKey);

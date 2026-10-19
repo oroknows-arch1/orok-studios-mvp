@@ -106,6 +106,48 @@ export async function createPreparationReviewService({
   }
   return {campaignId,status:'PUBLICATION_REVIEW',editorial_drafts:assets.length,notification:'EXISTING_REVIEW_SESSION'};
  };
+ const regenerateRejectedAsset=async(campaignId,destinationId,requestId)=>{
+  const state=(await adapter.read(campaignId))?.value;
+  const action=state?.review_actions?.[destinationId],entry=state?.assets?.[destinationId];
+  if(!state||state.phase!=='PUBLICATION_REVIEW'||!entry||!action||action.request_id!==requestId||!['RUNNING','PENDING'].includes(action.status))throw Error('REGENERATION_REQUEST_STALE');
+  if(!action.feedback?.trim())throw Error('OWNER_FEEDBACK_REQUIRED');
+  if(entry.fingerprint!==action.asset_sha256||state.deliveries?.[destinationId])throw Error('REGENERATION_ASSET_STALE');
+  const destination=state.destinations.find(item=>item.id===destinationId);
+  if(!destination)throw Error('REGENERATION_DESTINATION_MISSING');
+  const document=state.preparation_input?.document;
+  if(!document)throw Error('REGENERATION_EVIDENCE_MISSING');
+  const asset=await write({campaignId,destination,document,scan:state.scan,ownerFeedback:action.feedback});
+  if(!asset||asset.campaign_id!==campaignId||asset.destination_id!==destinationId||asset.kind!==entry.asset.kind)throw Error('REGENERATION_ASSET_MISMATCH');
+  if(asset.kind==='X'){
+   const visual=await renderVerifiedVisual({asset,document,scan:state.scan});
+   asset.visual_sha256=visual.sha256;asset.visual_url=visual.url;asset.visual_brand_version=asset.visual_brand_version||GRAPHIC_STANDARD.version;
+  }
+  const evidenceIds=new Set(document.evidence.filter(item=>item?.verified===true).map(item=>item.id));
+  verifyEditorialAsset(asset,{evidenceIds});
+  asset.review_status='READY';
+  const revisionId=action.revision_id;
+  const nextFingerprint=assetFingerprint(asset);
+  await store.mutate(campaignId,current=>{
+   const currentAction=current?.review_actions?.[destinationId],currentEntry=current?.assets?.[destinationId];
+   if(!current||current.phase!=='PUBLICATION_REVIEW'||currentAction?.request_id!==requestId||!['RUNNING','PENDING'].includes(currentAction.status)||currentEntry?.fingerprint!==action.asset_sha256||current.deliveries?.[destinationId])throw Error('REGENERATION_ASSET_STALE');
+   current.editorial_versions??={};current.editorial_versions[destinationId]??=[];
+   current.editorial_versions[destinationId].push({...structuredClone(currentEntry),label:'Owner-rejected revision',rejection:structuredClone(current.decisions?.[destinationId]??null),feedback:action.feedback,revision_id:requestId});
+   current.assets[destinationId]={asset:structuredClone(asset),fingerprint:nextFingerprint};
+   delete current.decisions[destinationId];
+   current.review_actions[destinationId]={...currentAction,status:'OWNER_REVIEW_PENDING',generated_at:new Date().toISOString(),new_asset_sha256:nextFingerprint,revision_id:revisionId};
+   current.events??=[];current.events.push({type:'OWNER_FEEDBACK_REVISION_CREATED',destination_id:destinationId,request_id:requestId,previous_fingerprint:action.asset_sha256,new_fingerprint:nextFingerprint});
+   return current;
+  });
+  const completion=await reviewCompletion(campaignId);
+  await store.mutate(campaignId,current=>{current.review_completion=completion;current.phase='PUBLICATION_REVIEW';return current;});
+  return {campaignId,destinationId,requestId,revisionId,fingerprint:nextFingerprint,status:'OWNER_REVIEW_PENDING'};
+ };
+ const updateRegenerationStatus=async(campaignId,destinationId,requestId,status,details={})=>store.mutate(campaignId,current=>{
+  const action=current?.review_actions?.[destinationId];
+  if(!action||action.request_id!==requestId)return current;
+  current.review_actions[destinationId]={...action,...details,status,updated_at:new Date().toISOString()};
+  return current;
+ });
  const ensureOwnerReview=async campaignId=>{
   const existing=(await adapter.read('review:'+campaignId))?.value;
   if(existing){
@@ -150,7 +192,7 @@ export async function createPreparationReviewService({
   return {...result,directory_removed:cleanup.directory_removed,campaign_destinations_removed:cleanup.campaign_destinations_removed,verified_recipients:active.length,owner_decisions_preserved:true,x_unchanged:true,external_distribution:0};
  };
  const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
- return {store,directory,workflow,prepare,discover,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
+ return {store,directory,workflow,prepare,discover,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,regenerateRejectedAsset,updateRegenerationStatus,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
   const prior=(await adapter.read(result.campaignId))?.value;
   if(result.status==='ALREADY_PREPARED'&&!prior?.review_completion)await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});

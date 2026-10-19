@@ -76,7 +76,9 @@ export class CampaignStore {
       return state;
     });
   }
-  async decide(id, destinationId, decision, fingerprint) {
+  async decide(id, destinationId, decision, fingerprint, feedback='') {
+    if(typeof feedback!=='string'||feedback.length>4000)throw Error('INVALID_OWNER_FEEDBACK');
+    const note=feedback.trim();
     return this.mutate(id, state => {
       if (!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
       const item = state.assets[destinationId];
@@ -85,10 +87,19 @@ export class CampaignStore {
       // verification remains mandatory in claimDelivery and transport checks.
       if (state.deliveries[destinationId]) throw Error('DECISION_AFTER_DISTRIBUTION');
       if(decision==='APPROVE'&&item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');
-      if(decision==='REGENERATE'){
-       state.review_actions??={};state.review_actions[destinationId]={action:'REGENERATE',requested_at:new Date().toISOString(),asset_sha256:fingerprint};
-       delete state.decisions[destinationId];
-      }else state.decisions[destinationId] = {authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId};
+      state.review_actions??={};
+      state.decisions??={};
+      if(['REJECT','REGENERATE'].includes(decision)){
+       const requestedAt=new Date().toISOString(),requestId=randomUUID();
+       const feedbackRecord={id:requestId,campaign_id:id,destination_id:destinationId,asset_sha256:fingerprint,feedback:note||null,requested_at:requestedAt};
+       state.review_feedback??=[];state.review_feedback.push(feedbackRecord);
+       state.decisions[destinationId]={authority:'OWNER',decision:'REJECT',asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId,feedback_id:requestId,feedback_required:!note};
+       state.review_actions[destinationId]={action:'REGENERATE',status:note?'PENDING':'NEEDS_FEEDBACK',request_id:requestId,revision_id:'review-'+requestId,requested_at:requestedAt,asset_sha256:fingerprint,feedback:note||null};
+      }else{
+       state.decisions[destinationId] = {authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId};
+       if(['PENDING','RUNNING','OWNER_REVIEW_PENDING'].includes(state.review_actions[destinationId]?.status))state.review_actions[destinationId]={...state.review_actions[destinationId],status:'CANCELLED',cancelled_at:new Date().toISOString()};
+      }
+      state.events??=[];state.events.push({type:'OWNER_ASSET_DECISION',destination_id:destinationId,decision:state.decisions[destinationId].decision,asset_sha256:fingerprint,feedback_id:state.decisions[destinationId].feedback_id??null});
       return state;
     });
   }

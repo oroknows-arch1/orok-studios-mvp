@@ -21,17 +21,23 @@ export class ReviewWorkflow {
   }
   throw Error('REVIEW_CONCURRENT_UPDATE');
  }
- async issue(campaignId) {
+ async issue(campaignId,{revisionId=null}={}) {
   const campaign=(await this.store.adapter.read(campaignId))?.value;
   if(!campaign || !isReviewPhase(campaign.phase)) throw Error('CAMPAIGN_NOT_READY');
   const key='review:'+campaignId;
   const now=this.clock();
   const existing=(await this.adapter.read(key))?.value;
-  if(existing && !['EXPIRED','CONSUMED'].includes(existing.status) && existing.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
+  if(revisionId&&existing?.revision_id===revisionId){
+   if(['NOTIFIED','CONSUMED'].includes(existing.status))return {campaignId,status:'NOTIFIED',revisionId,existing:true};
+   if(['ISSUED','NOTIFICATION_AMBIGUOUS'].includes(existing.status))throw Error('REVIEW_NOTIFICATION_AMBIGUOUS');
+  }
+  const replaceForRevision=Boolean(revisionId&&existing?.revision_id!==revisionId);
+  if(existing && !replaceForRevision && !['EXPIRED','CONSUMED'].includes(existing.status) && existing.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
   const {token,record}=issueReviewAccess({campaignId,now});
   await this.update(key,old=>{
-   if(old && !['EXPIRED','CONSUMED'].includes(old.status) && old.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
-   return {...record,status:'ISSUED',owner_session:null,notification_id:randomUUID(),previous_reviews:old?[...(old.previous_reviews??[]),Object.fromEntries(Object.entries(old).filter(([key])=>key!=='previous_reviews'))]:[]};
+   if(old?.revision_id===revisionId&&revisionId&&['NOTIFIED','CONSUMED'].includes(old.status))throw Error('REVIEW_REVISION_ALREADY_NOTIFIED');
+   if(old && !replaceForRevision && !['EXPIRED','CONSUMED'].includes(old.status) && old.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
+   return {...record,status:'ISSUED',revision_id:revisionId,owner_session:null,notification_id:randomUUID(),previous_reviews:old?[...(old.previous_reviews??[]),Object.fromEntries(Object.entries(old).filter(([key])=>key!=='previous_reviews'))]:[]};
   });
   const link=this.baseUrl+'/review/access#token='+encodeURIComponent(token)+'&campaign='+encodeURIComponent(campaignId);
   // Notification failure is recorded as AMBIGUOUS; never silently reissue a second live link.
@@ -101,6 +107,8 @@ export class ReviewWorkflow {
    if(asset.kind==='EMAIL'){try{recipientPolicy.assertVerifiedAsset(asset,destination);}catch{recipientReady=false;}}
    return {asset,fingerprint,historical,label,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
     groupKey:!historical&&asset.kind==='EMAIL'?identicalEmailGroupKey(asset):null,
+    review_action:historical?null:campaign.review_actions?.[asset.destination_id]??null,
+    rejection_feedback:historical?null:(campaign.review_feedback??[]).filter(item=>item.destination_id===asset.destination_id),
     decision:historical?decision:campaign.decisions[asset.destination_id]??null,
     delivery:historical?null:campaign.deliveries[asset.destination_id]??null};
   };
@@ -110,9 +118,9 @@ export class ReviewWorkflow {
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
   return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history};
  }
- async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint) {
+ async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
-  return this.store.decide(campaignId,destinationId,decision,fingerprint);
+  return this.store.decide(campaignId,destinationId,decision,fingerprint,feedback);
  }
  async revise(campaignId,sessionId,secret,destinationId,fingerprint,changes) {
   await this.authenticate(campaignId,sessionId,secret);

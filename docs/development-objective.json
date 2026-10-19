@@ -206,11 +206,72 @@
       "missing_destination_ids": []
     }
   },
+  "october_19_autonomous_loop_preflight": {
+    "verified_at": "2026-10-19T08:20:31Z",
+    "status": "PARTIAL_NOT_DEPLOYED",
+    "production_commit": "8eb83bc6c387eda0ba8d0576b00416d02dadae46",
+    "production_deploy_id": "dep-dbasirnlk1mc73d7155g",
+    "live_deploy_status": "live",
+    "automatic_pickup_observed": {
+      "campaign_id": "v3-cf61e2ed4124701aa8d0a412471c5381",
+      "snapshot_date": "2026-10-19",
+      "result": "PUBLICATION_REVIEW",
+      "review_complete": true,
+      "owner_notification": "NOTIFIED",
+      "owner_recipient": "sean@emradar.net",
+      "editorial_emails": 2,
+      "x_ready": false,
+      "needs_revision": ["x"],
+      "decisions": 0,
+      "deliveries": 0,
+      "external_distribution": 0
+    },
+    "historical_campaign_preservation": {
+      "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
+      "snapshot_date": "2026-10-17",
+      "phase": "PUBLICATION_REVIEW",
+      "review_status": "CONSUMED",
+      "decisions": 0,
+      "deliveries": 0
+    },
+    "remaining_gaps": [
+      "Local code now enumerates the authoritative archive and enforces publication and downstream-release attestations, but legacy archive dates without valid attestations remain intentionally blocked.",
+      "The rejection-feedback and durable revision worker are locally implemented; production deployment and live operation are not yet verified."
+    ],
+    "verification": {
+      "harness_verify": "PASS",
+      "harness_v3": "16/16 PASS",
+      "targeted_runtime_and_review_tests": "Locally rerun for archive enumeration, review feedback, regeneration, graphics, and distribution safety; results recorded in the October 19 completion checkpoint.",
+      "public_health_request": "NOT_VERIFIED_LOCAL_DNS_RESOLUTION_FAILED",
+      "production_http_health": "NOT_VERIFIED"
+    },
+    "local_uncommitted_changes": [
+      "docs/v3-source-integration.json updated to pin authoritative V3 main commit 973d84fb60c1ee49382c04e19ad51ac8a8de8326",
+      "test/v3-source-integration.test.cjs updated to the verified authoritative V3 pin",
+      "test/emradar-v3-publication-first.test.mjs expected result updated for the current review-completion fields"
+    ],
+    "scanner_modified": false,
+    "campaigns_created": 0,
+    "owner_decisions_changed": 0,
+    "external_distribution": 0,
+    "production_deployed": false,
+    "october_19_daily_autonomous_loop": {
+      "status": "LOCALLY_VERIFIED_NOT_DEPLOYED",
+      "archive_recovery": "Chronological enumeration from /data/archive-index.json; exact checkpoint path, publication verification, and authorized downstream release attestation remain mandatory.",
+      "blocked_legacy_dates": ["2026-09-23", "2026-09-30"],
+      "owner_feedback_regeneration": "Feedback is bound to the rejected asset fingerprint; one bounded worker creates a new revision and fresh idempotent owner review while preserving prior history.",
+      "targeted_tests": "37/37 PASS across affected non-network tests; loopback HTTP test could not bind in the sandbox (EPERM).",
+      "scanner_modified": false,
+      "campaign_state_mutated": false,
+      "external_distribution": 0,
+      "production_deployed": false
+    }
+  },
   "acceptance_conditions": [
     {
       "id": "authoritative_v3_source_integration",
       "status": "VERIFIED",
-      "evidence": "The harness executes and verifies the pinned authoritative V3 source at d35b6b2b0f759c57eaac2379e4fbc3c8c04cf238 through npm run harness:v3 while preserving the production runtime overlay and legacy-repository exclusion boundary."
+      "evidence": "The harness executes and verifies the pinned authoritative V3 main commit 973d84fb60c1ee49382c04e19ad51ac8a8de8326 through npm run harness:v3 while preserving the production runtime overlay and legacy-repository exclusion boundary."
     },
     {
       "id": "prior_discovery_repair",

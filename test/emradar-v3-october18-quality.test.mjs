@@ -89,16 +89,19 @@ test('graphic inspection can capture rejected bytes and the exact provider reaso
  assert.deepEqual(captured.quality,{readable:false,unsupported_claims:false,reason:'The limitation line is too small at phone-feed size.'});
 });
 
-test('the preparation handoff cannot persist an X asset after the graphic quality gate fails',async()=>{
- let prepared=false;
+test('the preparation handoff preserves a failed X graphic as owner-visible incomplete work',async()=>{
+ let persisted;
  const state={phase:'DESTINATIONS_SELECTED',destinations:[{id:'x',evidence:{ids:bangladeshIds}}]};
  const preparation=new CampaignPreparation({
-  store:{start:async()=> 'oct18',select:async()=>{},prepare:async()=>{prepared=true;},adapter:{read:async()=>({value:state})}},
+  store:{start:async()=> 'oct18',select:async()=>{},prepare:async(_id,assets,warnings)=>{persisted={assets,warnings};},adapter:{read:async()=>({value:state})}},
   discover:async()=>state.destinations,
   write:async()=>({campaign_id:'oct18',destination_id:'x',kind:'X',body:'Analysis with a material limitation.',subject:'Bangladesh',evidence_ids:bangladeshIds}),
   renderVisual:async()=>{throw Error('V3_X_VISUAL_QUALITY_FAILED');}
  });
- await assert.rejects(preparation.prepare({scan:{},document}),/V3_X_VISUAL_QUALITY_FAILED/);
- assert.equal(prepared,false);
+ const result=await preparation.prepare({scan:{},document});
+ assert.equal(result.status,'PUBLICATION_REVIEW');
+ assert.equal(persisted.assets[0].review_status,'NEEDS_REVISION');
+ assert.equal(persisted.assets[0].preparation_error,'V3_X_VISUAL_QUALITY_FAILED');
+ assert.deepEqual(persisted.warnings,[{stage:'X_PREPARATION',destination_id:'x',code:'V3_X_VISUAL_QUALITY_FAILED'}]);
  assert.equal(state.phase,'DESTINATIONS_SELECTED');
 });

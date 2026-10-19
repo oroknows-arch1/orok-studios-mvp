@@ -34,7 +34,7 @@ async function body(req) {
  }
  return JSON.parse(value||'{}');
 }
-export function createReviewServer({workflow,runDiscovery,releaseEmail,xAuth,publishing={email:{enabled:true},x:{enabled:false,reason:'X publishing is disabled.'}},logOAuthDiagnostic=message=>console.info(message),health=()=>({ok:true})}) {
+export function createReviewServer({workflow,runDiscovery,runRegeneration,releaseEmail,xAuth,publishing={email:{enabled:true},x:{enabled:false,reason:'X publishing is disabled.'}},logOAuthDiagnostic=message=>console.info(message),health=()=>({ok:true})}) {
  if(!(workflow instanceof ReviewWorkflow)) throw Error('WORKFLOW_REQUIRED');
  return createServer(async(req,res)=>{
   let isCallback=false,stage='REQUEST',failure;
@@ -126,8 +126,10 @@ export function createReviewServer({workflow,runDiscovery,releaseEmail,xAuth,pub
     return json(res,200,await runDiscovery(input.campaignId));
    }
    if(url.pathname==='/api/review/decision'){
-    await workflow.decide(input.campaignId,session.id,session.secret,input.destinationId,input.decision,input.fingerprint);
-    return json(res,200,{saved:true});
+    const state=await workflow.decide(input.campaignId,session.id,session.secret,input.destinationId,input.decision,input.fingerprint,input.feedback??'');
+    const action=state?.review_actions?.[input.destinationId];
+    if(action?.status==='PENDING'&&typeof runRegeneration==='function')setImmediate(()=>runRegeneration(input.campaignId,input.destinationId).catch(error=>console.error('V3_REGENERATION_WORKER_FAILED',/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'V3_REGENERATION_FAILED')));
+    return json(res,200,{saved:true,regeneration_status:action?.status??null});
    }
    if(url.pathname==='/api/review/revise'){
     await workflow.revise(input.campaignId,session.id,session.secret,input.destinationId,input.fingerprint,input.changes);

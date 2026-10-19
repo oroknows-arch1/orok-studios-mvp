@@ -32,7 +32,7 @@ test('activation initializes V3 tables and exposes preparation plus guarded rele
  assert.equal(handlers.length,1);
  for(const table of ['v3_campaign_state','v3_outlet_directory','v3_contact_research','v3_send_reservations','v3_owner_notification_reservations','v3_x_authorization','v3_x_oauth_states'])assert(createSql.some(q=>q.includes(table)));
 });
-test('selects newest unprocessed published scan and runs discovery before preparation',async()=>{
+test('selects oldest unprocessed published scan and runs discovery before preparation',async()=>{
  const published=loadPublishedScans();
  assert.deepEqual(published.slice(0,2).map(item=>item.snapshotDate),['2026-10-13','2026-10-12']);
  const events=[];
@@ -87,8 +87,26 @@ test('daily refresh detects October 15 without bundled attestations and verifies
  const verified=await verifyPublishedScan({...scan,fetcher});
  assert.equal(verified.scan.snapshot_date,'2026-10-15');
  assert.equal(campaignIdFor(scan),'v3-'+require('node:crypto').createHash('sha256').update(verified.scan.source_key).digest('hex').slice(0,32));
- const next=await require('../src/emradar-v3-runtime.cjs').selectNextPublishedScan({published:[scan,...loadPublishedScans()],readCampaign:async id=>id===campaignIdFor(scan)?null:{phase:'DESTINATIONS_SELECTED'}});
+ const next=await require('../src/emradar-v3-runtime.cjs').selectNextPublishedScan({published:[scan,...loadPublishedScans()],readCampaign:async id=>id===campaignIdFor(scan)?null:{phase:'PUBLICATION_REVIEW'}});
  assert.equal(next.snapshotDate,'2026-10-15');
  await assert.rejects(verifyPublishedScan({...scan,fetcher:async()=>({ok:true,arrayBuffer:async()=>Buffer.from('{}')})}),/UNVERIFIED_PUBLICATION/);
  await assert.rejects(refreshPublishedScans({fetcher:async()=>({ok:true,arrayBuffer:async()=>Buffer.from('{"snapshot_date":"2026-10-15","publication_state":"DRAFT"}')})}),/SCAN_NOT_PUBLISHED/);
+});
+
+test('published archive index enumerates attestable scans in chronological order and excludes untrusted paths',async()=>{
+ const {enumeratePublishedScans,campaignIdFor,selectNextPublishedScan}=require('../src/emradar-v3-runtime.cjs');
+ const dates=['2026-10-18','2026-10-17'];
+ const index={scans:[{snapshot_date:dates[0],path:`data/checkpoints/discovery-${dates[0]}.json`},{snapshot_date:'2026-09-23',path:'scans/2026-09-23/data/discovery.json'}],snapshots:[{snapshot_date:dates[1],path:`data/checkpoints/discovery-${dates[1]}.json`}]};
+ const docs=new Map();
+ for(const date of dates){
+  const digest=require('node:crypto').createHash('sha256').update(date).digest('hex'),archiveUrl=`https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-${date}.json`;
+  docs.set(`https://emerging-markets-radar.onrender.com/verification/publication-${date}.json`,{snapshot_date:date,public_verification:{artifact_sha256:digest,verification_contract:'live-reader-exact-identity-v2',archive_data_url:archiveUrl},gates:{public_snapshot_verification:'PASS'},downstream_release_allowed:true});
+  docs.set(`https://emerging-markets-radar.onrender.com/verification/downstream-release-attestation-${date}.json`,{snapshot_date:date,source_path:`data/checkpoints/discovery-${date}.json`,source_sha256:digest,publication_state:'PUBLISHED',downstream_release_allowed:true,native_gates:{publication:'PASS'},attested_by:'AUTHORIZED_SOURCE_RELEASE_REVIEW',campaign_authority:{required_stop:'PUBLICATION_REVIEW',external_publication_allowed:false}});
+ }
+ const fetcher=async url=>({ok:true,status:200,arrayBuffer:async()=>Buffer.from(JSON.stringify(url.endsWith('archive-index.json')?index:docs.get(url)))});
+ const scans=await enumeratePublishedScans({fetcher});
+ assert.deepEqual(scans.map(item=>item.snapshotDate),['2026-10-17','2026-10-18']);
+ assert.deepEqual(scans.blocked,[{snapshotDate:'2026-09-23',reason:'ARCHIVE_PATH_NOT_VERIFIABLE'}]);
+ const first=await selectNextPublishedScan({published:scans,readCampaign:async()=>null});assert.equal(first.snapshotDate,'2026-10-17');
+ const second=await selectNextPublishedScan({published:scans,readCampaign:async id=>id===campaignIdFor(scans[0])?{phase:'PUBLICATION_REVIEW'}:null});assert.equal(second.snapshotDate,'2026-10-18');
 });

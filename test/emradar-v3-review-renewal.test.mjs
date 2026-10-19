@@ -12,6 +12,16 @@ test('consumed review can be renewed once while preserving old receipt and campa
  assert.equal(review.status,'NOTIFIED');assert.equal(review.previous_reviews[0].notification_receipt.provider_id,'old');assert.equal(campaign.decisions.x.decision,'REJECT');
  await assert.rejects(flow.issue('v3-test'),/ALREADY_ISSUED/);assert.equal(sends,1);
 });
+test('a new asset revision gets one fresh owner review while retry reuses its notification',async()=>{
+ const f=fixture();
+ await f.workflow.issue('campaign');
+ const renewed=await f.workflow.issue('campaign',{revisionId:'review-revision-2'});
+ assert.equal(renewed.status,'NOTIFIED');assert.equal(f.notifications.length,2);
+ assert.equal(f.records.get('review:campaign').value.revision_id,'review-revision-2');
+ const resumed=await f.workflow.issue('campaign',{revisionId:'review-revision-2'});
+ assert.equal(resumed.existing,true);assert.equal(f.notifications.length,2);
+ assert.equal(f.records.get('review:campaign').value.previous_reviews.length,1);
+});
 test('review renders saved HTML inside a sandbox without script permissions',()=>{
  assert.match(reviewPage,/preview\.setAttribute\('sandbox',''\)/);
  assert.match(reviewPage,/preview\.srcdoc=asset\.html/);

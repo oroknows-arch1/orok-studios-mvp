@@ -45,7 +45,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    // Model-derived additions never acquire verified=true.
    return {evidence:[],source:'published_scan',status:'SOURCE_EVIDENCE_REUSED'};
   },
-  write:async({campaignId,destination,document,editorialAngle})=>{
+  write:async({campaignId,destination,document,editorialAngle,ownerFeedback})=>{
    if(destination?.id!=='x')recipientPolicy.assertVerifiedDestination(destination);
    const allowed=destination?.evidence?.ids;
    if(!Array.isArray(allowed)||!allowed.length)throw Error('V3_DESTINATION_EVIDENCE_LINK_REQUIRED');
@@ -57,13 +57,15 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    const writerEvidence=story?.evidence??evidence;
    const system=type==='EDITORIAL_OUTREACH'?editorialPrompt:type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write one standalone analytical EMRADAR X post about the supplied single formation. Return JSON strings subject, body, analytical_finding, limitations, plus story_evidence_ids. The analytical_finding must appear verbatim in body and explain the evidence-supported mechanism, constraint or change rather than paraphrasing reported figures. The limitations field must appear verbatim in body. Preserve uncertainty and do not invent conclusions. Use only supplied evidence and analysis_context.';
    const payload={channel:type,...(story?{editorial_reference:type==='EDITORIAL_OUTREACH'?EDITORIAL_REFERENCE:undefined,story_record_id:story.record_id,analysis_context:story.analysis_context,editorial_angle:editorialAngle??null}:{}),destination:{id:destination.id,category:destination.category,name:destination.name??destination.id,relationship:destination.relationship},evidence:writerEvidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]};
-   let draft=await complete(system,payload);
+   const feedbackInstruction=typeof ownerFeedback==='string'&&ownerFeedback.trim()?`\nApply this explicit owner feedback to the revision while preserving verified evidence, uncertainty, recipient rules and the established Semiconductor For You editorial template: ${ownerFeedback.trim()}`:'';
+   const requestedSystem=system+feedbackInstruction;
+   let draft=await complete(requestedSystem,{...payload,...(ownerFeedback?{owner_feedback:ownerFeedback.trim()}: {})});
    if(onWriterDraft)await onWriterDraft({attempt:1,type,draft});
    if(story){
     try{validateEditorialStory(draft,story);}
     catch(error){
      if(!/^V3_(?:ANALYTICAL_FINDING_REQUIRED|EDITORIAL_UNCERTAINTY_REQUIRED|UNSUPPORTED_EDITORIAL_CONNECTION)$/.test(error.message))throw error;
-     draft=await complete(system+'\nRepair the previous draft once. Correct the named validation error exactly; retain the same single formation and evidence IDs. State the analytical mechanism explicitly using natural language such as because, means, indicates, reveals, shows, shifts, depends, bottleneck, constraint, rather than, or not ... but. The analytical_finding and limitations values must each appear verbatim in body. Return the complete corrected JSON object only.',{...payload,repair_error:error.message,previous_draft:draft});
+     draft=await complete(requestedSystem+'\nRepair the previous draft once. Correct the named validation error exactly; retain the same single formation and evidence IDs. State the analytical mechanism explicitly using natural language such as because, means, indicates, reveals, shows, shifts, depends, bottleneck, constraint, rather than, or not ... but. The analytical_finding and limitations values must each appear verbatim in body. Return the complete corrected JSON object only.',{...payload,...(ownerFeedback?{owner_feedback:ownerFeedback.trim()}:{}),repair_error:error.message,previous_draft:draft});
      if(onWriterDraft)await onWriterDraft({attempt:2,type,draft});
      validateEditorialStory(draft,story);
     }

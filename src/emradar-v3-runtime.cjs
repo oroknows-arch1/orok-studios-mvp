@@ -6,6 +6,8 @@ const path=require('node:path');
 const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
+const SCAN_ORIGIN='https://emerging-markets-radar.onrender.com';
+const SCAN_INDEX_URL=SCAN_ORIGIN+'/data/archive-index.json';
 const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
@@ -22,7 +24,7 @@ function loadPublishedScans(attestationDir=ATTESTATION_DIR){
 // Refresh the public source at execution time; immutable archive bytes are
 // independently checked by verifyPublishedScan before any campaign is created.
 async function refreshPublishedScans({fetcher=fetch}={}){
- const liveUrl='https://emerging-markets-radar.onrender.com/data/discovery.json';
+ const liveUrl=SCAN_ORIGIN+'/data/discovery.json';
  const response=await fetcher(liveUrl,{redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
  if(!response.ok)throw Error('SCAN_HTTP_'+response.status);
  const bytes=Buffer.from(await response.arrayBuffer());
@@ -30,7 +32,58 @@ async function refreshPublishedScans({fetcher=fetch}={}){
  const document=JSON.parse(bytes.toString('utf8'));
  if(document.publication_state!=='PUBLISHED'||!/^\d{4}-\d{2}-\d{2}$/.test(document.snapshot_date||''))throw Error('SCAN_NOT_PUBLISHED');
  return [{snapshotDate:document.snapshot_date,expectedSha256:createHash('sha256').update(bytes).digest('hex'),liveUrl,
- archiveUrl:'https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+document.snapshot_date+'.json'}];
+ archiveUrl:SCAN_ORIGIN+'/data/checkpoints/discovery-'+document.snapshot_date+'.json'}];
+}
+async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={}){
+ if(indexUrl!==SCAN_INDEX_URL)throw Error('UNTRUSTED_SCAN_INDEX');
+ const getJson=async url=>{
+  const parsed=new URL(url);
+  if(parsed.protocol!=='https:'||parsed.origin!==SCAN_ORIGIN)throw Error('UNTRUSTED_SCAN_HOST');
+  const response=await fetcher(url,{method:'GET',redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
+  if(response.status===404)return null;
+  if(!response.ok)throw Error('SCAN_HTTP_'+response.status);
+  const bytes=Buffer.from(await response.arrayBuffer());
+  if(bytes.length>10*1024*1024)throw Error('SCAN_TOO_LARGE');
+  return JSON.parse(bytes.toString('utf8'));
+ };
+ const index=await getJson(indexUrl);
+ if(!index||!Array.isArray(index.scans)||!Array.isArray(index.snapshots))throw Error('SCAN_ARCHIVE_INDEX_INVALID');
+ const entries=new Map(),blocked=[];
+ for(const entry of [...index.scans,...index.snapshots]){
+  const date=entry?.snapshot_date,pathValue=entry?.path;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date||'')){blocked.push({snapshotDate:null,reason:'INVALID_ARCHIVE_DATE'});continue;}
+  const expectedPath=`data/checkpoints/discovery-${date}.json`;
+  if(pathValue!==expectedPath){blocked.push({snapshotDate:date,reason:'ARCHIVE_PATH_NOT_VERIFIABLE'});continue;}
+  const previous=entries.get(date);
+  if(previous&&previous.path!==pathValue)throw Error('SCAN_ARCHIVE_INDEX_CONFLICT');
+  entries.set(date,{snapshotDate:date,path:pathValue});
+ }
+ if(entries.size>120)throw Error('SCAN_ARCHIVE_INDEX_TOO_LARGE');
+ const candidates=[...entries.values()].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
+ const verified=await Promise.all(candidates.map(async candidate=>{
+  const date=candidate.snapshotDate;
+  const archiveUrl=SCAN_ORIGIN+'/'+candidate.path;
+  const publicationRecord=await getJson(`${SCAN_ORIGIN}/verification/publication-${date}.json`);
+  const releaseAttestation=await getJson(`${SCAN_ORIGIN}/verification/downstream-release-attestation-${date}.json`);
+  const expectedSha256=publicationRecord?.public_verification?.artifact_sha256;
+  const authorized=publicationRecord?.snapshot_date===date&&
+   publicationRecord?.public_verification?.verification_contract==='live-reader-exact-identity-v2'&&
+   publicationRecord?.public_verification?.archive_data_url===archiveUrl&&
+   publicationRecord?.gates?.public_snapshot_verification==='PASS'&&
+   publicationRecord?.downstream_release_allowed===true&&
+   releaseAttestation?.snapshot_date===date&&releaseAttestation?.source_path===candidate.path&&
+   releaseAttestation?.source_sha256===expectedSha256&&releaseAttestation?.publication_state==='PUBLISHED'&&
+   releaseAttestation?.downstream_release_allowed===true&&releaseAttestation?.native_gates?.publication==='PASS'&&
+   releaseAttestation?.attested_by==='AUTHORIZED_SOURCE_RELEASE_REVIEW'&&
+   releaseAttestation?.campaign_authority?.required_stop==='PUBLICATION_REVIEW'&&
+   releaseAttestation?.campaign_authority?.external_publication_allowed===false&&
+   /^[a-f0-9]{64}$/.test(expectedSha256||'');
+  if(!authorized){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_UNAVAILABLE'});return null;}
+  return {snapshotDate:date,expectedSha256,liveUrl:SCAN_ORIGIN+'/data/discovery.json',archiveUrl,publicationRecord,releaseAttestation};
+ }));
+ verified.sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
+ Object.defineProperty(verified,'blocked',{value:blocked,enumerable:false});
+ return verified;
 }
 // Historical archives are verified from the original published source, not local attestations.
 async function fetchHistoricalPublishedScan(snapshotDate){
@@ -44,7 +97,7 @@ async function fetchHistoricalPublishedScan(snapshotDate){
 }
 const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snapshotDate+':'+published.expectedSha256).digest('hex').slice(0,32);
 async function selectNextPublishedScan({published,readCampaign}){
- for(const candidate of published){
+ for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
   if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
  }
@@ -146,9 +199,48 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
    autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
   });
+  const runRegeneration=async(campaignId,destinationId)=>{
+   const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
+   try{
+    const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[lockKey]);
+    if(!lock.rows[0]?.acquired)return {status:'REGENERATION_IN_PROGRESS',campaignId,destinationId};
+    let state=(await service.store.adapter.read(campaignId))?.value,action=state?.review_actions?.[destinationId];
+    if(!action||!['PENDING','RUNNING','OWNER_REVIEW_PENDING'].includes(action.status))return {status:action?.status??'NO_REGENERATION_REQUEST',campaignId,destinationId};
+    const requestId=action.request_id;
+    let revision=action.status==='OWNER_REVIEW_PENDING'?{revisionId:action.revision_id}:null;
+    try{
+     if(!revision){
+      await service.updateRegenerationStatus(campaignId,destinationId,requestId,'RUNNING',{started_at:action.started_at??new Date().toISOString()});
+      revision=await service.regenerateRejectedAsset(campaignId,destinationId,requestId);
+     }
+     const notified=await service.workflow.issue(campaignId,{revisionId:revision.revisionId});
+     await service.updateRegenerationStatus(campaignId,destinationId,requestId,'COMPLETE',{completed_at:new Date().toISOString(),owner_notification: notified.status});
+     return {...revision,status:'COMPLETE',owner_notification:notified.status};
+    }catch(error){
+     const code=/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'REGENERATION_FAILED';
+     await service.updateRegenerationStatus(campaignId,destinationId,requestId,code==='REVIEW_NOTIFICATION_AMBIGUOUS'?'NOTIFICATION_AMBIGUOUS':'FAILED',{error_code:code,failed_at:new Date().toISOString()});
+     throw Error(code);
+    }
+   }finally{
+    await client.query('SELECT pg_advisory_unlock(hashtext($1))',[lockKey]);client.release();
+   }
+  };
+  const runPendingRegenerations=async({limit=50}={})=>{
+   if(!Number.isInteger(limit)||limit<1||limit>50)throw Error('REGENERATION_BATCH_LIMIT_INVALID');
+   const {rows}=await pool.query(`SELECT s.campaign_id, a.key AS destination_id
+    FROM v3_campaign_state s CROSS JOIN LATERAL jsonb_each(COALESCE(s.payload->'review_actions','{}'::jsonb)) a
+    WHERE s.payload->>'phase'='PUBLICATION_REVIEW' AND a.value->>'status' IN ('PENDING','RUNNING','OWNER_REVIEW_PENDING')
+    ORDER BY s.updated_at ASC, s.campaign_id ASC, a.key ASC LIMIT $1`,[limit]);
+   const results=[];
+   for(const row of rows){
+    try{results.push(await runRegeneration(row.campaign_id,row.destination_id));}
+    catch(error){results.push({campaignId:row.campaign_id,destinationId:row.destination_id,status:'FAILED',reason:/^[A-Z0-9_]+$/.test(error.message)?error.message:'REGENERATION_FAILED'});}
+   }
+   return {processed:results.length,results};
+  };
   console.info('V3_DISTRIBUTION_CAPABILITIES '+JSON.stringify({email_release:true,x_release:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true',x_client_id_present:Boolean(env.X_CLIENT_ID),x_client_secret_present:Boolean(env.X_CLIENT_SECRET),x_token_encryption_configured:Boolean(env.EMRADAR_V3_X_TOKEN_KEY)}));
   let releaseApprovedEmail;
-  const reviewServer=createReviewServer({workflow:service.workflow,xAuth:integration.xAuth,publishing:{email:{enabled:true},x:{enabled:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true',reason:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true'?null:'X publishing is disabled.'}},runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId),releaseEmail:input=>releaseApprovedEmail(input)});
+  const reviewServer=createReviewServer({workflow:service.workflow,xAuth:integration.xAuth,publishing:{email:{enabled:true},x:{enabled:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true',reason:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true'?null:'X publishing is disabled.'}},runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId),runRegeneration,releaseEmail:input=>releaseApprovedEmail(input)});
   setReviewHandler((req,res,next)=>{
    if(!REVIEW_PATHS.has(req.url.split('?')[0]))return next();
    reviewServer.emit('request',req,res);
@@ -159,7 +251,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   });
   const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
   const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
-  const published=()=>refreshPublishedScans({fetcher});
+  const published=()=>enumeratePublishedScans({fetcher});
   const verify=async selected=>{
    const sourceFetcher=selected.bundledBytes?async url=>{
     if(url!==selected.archiveUrl)throw Error('UNTRUSTED_SCAN_URL');
@@ -171,7 +263,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const choose=async()=>selectNextPublishedScan({published:await published(),readCampaign:async id=>(await service.store.adapter.read(id))?.value});
   const refreshDirectory=async(selected)=>{
    if(env.EMRADAR_V3_AUTONOMOUS_DISCOVERY!=='true')throw Error('V3_AUTONOMOUS_DISCOVERY_DISABLED');
-   selected=selected??(await published())[0];
+   selected=selected??(await choose());
    if(!selected)return {status:'NO_UNPROCESSED_SCAN',destination_count:0,editorial_count:0};
    const campaignId=campaignIdFor(selected),existing=(await service.store.adapter.read(campaignId))?.value;
    if(['PUBLICATION_REVIEW','ASSETS_PREPARED'].includes(existing?.phase))return service.resumeIntelligentDiscovery(campaignId);
@@ -182,7 +274,10 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const runCampaign=async(snapshotDate)=>{
    // Historical runs require the source's paired release attestations and exact archive digest.
    // Never substitute the current live scan for a requested historical date.
-   const selected=snapshotDate?await fetchHistoricalPublishedScan(snapshotDate,{fetcher}):(await published())[0];
+   const available=await published();
+   if(available.blocked?.length)console.warn('V3_ARCHIVE_ENTRIES_NOT_VERIFIABLE',JSON.stringify(available.blocked));
+   const selected=snapshotDate?available.find(item=>item.snapshotDate===snapshotDate):await selectNextPublishedScan({published:available,readCampaign:async id=>(await service.store.adapter.read(id))?.value});
+   if(!selected) return {status:snapshotDate?'SCAN_NOT_IN_VERIFIED_ARCHIVE':'NO_UNPROCESSED_SCAN',archive_unverified_dates:available.blocked?.map(item=>item.snapshotDate).filter(Boolean)??[]};
    const campaignId=campaignIdFor(selected);
    // Hold a database session lock through preparation. A crashed process releases
    // it automatically; all workers/restarts share the same durable scan identity.
@@ -199,7 +294,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     }
     // Preparation owns evidence research and discovery, preserving their order
     // and resuming persisted destinations instead of repeating completed work.
-    return {...await service.prepareAndNotify(selected),snapshotDate:selected.snapshotDate};
+    return {...await service.prepareAndNotify(selected),snapshotDate:selected.snapshotDate,archive_unverified_dates:available.blocked?.map(item=>item.snapshotDate).filter(Boolean)??[]};
    }finally{
     await client.query('SELECT pg_advisory_unlock(hashtext($1))',[campaignId]);
     client.release();
@@ -294,7 +389,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
    return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
   };
-  return {discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  return {discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
+module.exports={restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

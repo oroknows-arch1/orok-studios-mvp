@@ -15,11 +15,11 @@ class Element {
 const flatten=element=>[element,...element.children.flatMap(flatten)];
 async function render(view){
  const elements=Object.fromEntries(['status','entries','discover','connect-x','check-x'].map(id=>[id,new Element(id)]));
- const calls=[];
- const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,fetch:async(path)=>{calls.push(path);assert.equal(path,'/api/review/view');return {ok:true,json:async()=>view};}};
+ const calls=[],payloads=[];
+ const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
  const script=reviewPage.match(/<script>([\s\S]*)<\/script>/)[1];
  await new vm.Script(script).runInNewContext(context);
- return {...elements,calls};
+ return {...elements,calls,payloads};
 }
 test('actual review script renders full X text and saved image while publishing is disabled',async()=>{
  const body='Complete approved X text\nwith every saved line.';
@@ -32,6 +32,15 @@ test('actual review script renders full X text and saved image while publishing 
  assert.equal(nodes.find(n=>n.textContent==='Publish approved X post').disabled,true);
  for(const label of ['Edit draft','Approve','Reject'])assert(!nodes.find(n=>n.textContent===label).disabled);
  assert.deepEqual(result.calls,['/api/review/view']);
+});
+test('owner review captures rejection feedback and displays the durable regeneration state',async()=>{
+ const view={entries:[{asset:{kind:'EMAIL',destination_id:'journal',subject:'A story',body:'Draft text',review_status:'READY'},fingerprint:'asset-hash',review_action:{action:'REGENERATE',status:'NEEDS_FEEDBACK'},rejection_feedback:[]}],publishing:{email:{enabled:true}}};
+ const result=await render(view),nodes=flatten(result.entries);
+ assert(nodes.some(node=>node.textContent==='Rejection saved — owner feedback is needed before regeneration.'));
+ await nodes.find(node=>node.textContent==='Reject').listeners.click();
+ const decision=result.payloads.find(payload=>payload.decision);
+ assert.equal(decision.decision,'REJECT');assert.equal(decision.feedback,'Make the analytical contribution clearer without changing the verified finding.');
+ assert.equal(result.calls.filter(path=>path==='/api/review/decision').length,1);
 });
 test('all saved email content is visible, including unresolved drafts and historical alternatives',async()=>{
  const asset={kind:'EMAIL',destination_id:'journal',subject:'Specific article idea',body:'Complete body\nwith signature.',html:'<p>Complete HTML email</p>'};
