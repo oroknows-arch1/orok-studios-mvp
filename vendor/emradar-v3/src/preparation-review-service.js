@@ -11,10 +11,9 @@ import {CampaignStore} from './state.js';
 import {OutletDirectory} from './outlet-directory.js';
 import {createDirectoryDiscovery} from './directory-discovery.js';
 import {createReviewedEvidenceLinker} from './reviewed-evidence-links.js';
-import {createEditorialContactResearch} from './editorial-contact-research.js';
-import {lookup} from 'node:dns/promises';
 import {pinnedHtml} from './autonomous-outlet-discovery.js';
 import {createAutonomousOutletDiscovery} from './autonomous-outlet-discovery.js';
+import {lookup} from 'node:dns/promises';
 import {createPreparationRun,createVerifiedVisualRenderer} from './preparation-run.js';
 import {ReviewWorkflow} from './review-workflow.js';
 import {createPublicationReviewHandoff} from './publication-review-handoff.js';
@@ -86,7 +85,22 @@ export async function createPreparationReviewService({
   });
   return true;
  };
- const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin});
+ const contactResearch=createEditorialContactResearch({read:url=>pinnedHtml(url,lookup)});
+ const verifyRecipient=async({campaignId,destinationId,fingerprint,email})=>{
+  if(typeof email!=='string'||!email.trim())throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+  const campaign=(await adapter.read(campaignId))?.value,destination=campaign?.destinations?.find(item=>item.id===destinationId);
+  const entry=campaign?.assets?.[destinationId];
+  if(!campaign||!isReviewPhase(campaign.phase)||entry?.fingerprint!==fingerprint||entry?.asset?.kind!=='EMAIL'||campaign.deliveries?.[destinationId])throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+  const origin=new URL(destination.website).origin;
+  const result=await contactResearch({website:destination.website,publication:destination.name,topics:destination.relationship?.industries??[],sourceUrls:['/about/press','/press','/contact'].map(path=>new URL(path,origin).href)});
+  const contact=result.contacts?.find(item=>item.email.toLowerCase()===email.toLowerCase()&&item.eligible===true);
+  if(!contact||!['editorial','submissions','named_editor','general'].includes(contact.purpose))throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+  const verified={...destination,contact:{...contact,alternatives:result.alternatives??[]},contact_verified:true,delivery_eligible:true,contact_status:'VERIFIED',verification:{...destination.verification,method:'live_editorial_contact_page',status:'VERIFIED',source_url:contact.source_url}};
+  recipientPolicy.assertVerifiedDestination(verified);
+  await directory.upsert(verified);
+  return verified;
+ };
+ const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin,verifyRecipient});
  const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS,verifiedPublicationsOnly=false,existingDrafts={}}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');

@@ -72,7 +72,7 @@ test('manual recipient entry cannot alter an existing approval or recipient',asy
  const {CampaignStore}=await import('../vendor/emradar-v3/src/state.js');
  const original={decisions:{journal:{decision:'REJECT'}},assets:{},destinations:[],deliveries:{}};
  const store=new CampaignStore({read:async()=>({version:1,value:original}),compareAndSwap:async()=>{throw Error('MUST_NOT_WRITE');}});
- await assert.rejects(store.revise('campaign','journal','old',{to:'editor@example.org'}),/INVALID_REVISION_FIELDS/);
+ await assert.rejects(store.revise('campaign','journal','old',{to:'editor@example.org'}),/V3_VERIFIED_RECIPIENT_REQUIRED/);
  assert.equal(original.decisions.journal.decision,'REJECT');
 });
 

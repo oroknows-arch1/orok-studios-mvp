@@ -6,7 +6,7 @@ const emails=/[A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const decode=value=>String(value).replace(/&#(?:x([a-f\d]+)|(\d+));?/gi,(_,hex,n)=>String.fromCodePoint(parseInt(hex??n,hex?16:10))).replace(/&(?:amp|nbsp|quot|apos|lt|gt);/gi,m=>({'&amp;':'&','&nbsp;':' ','&quot;':'"','&apos;':"'",'&lt;':'<','&gt;':'>'}[m.toLowerCase()]));
 const text=value=>decode(value.replace(/<[^>]*>/g,' ')).replace(/[ \t]+/g,' ').trim();
 const relevant=/contact|about|editorial|editors|newsroom|staff|team|contribut|submission|send.us.news/i;
-const forbidden=/website issues|online department|advertis|subscription|circulation|sponsor|\bsales\b|website assistance|technical|\bsupport\b|privacy|legal|accounts|careers|customer service|administrati|events|webinars/i;
+const forbidden=/website issues|online department|advertis|subscription|circulation|sponsor|\bsales\b|website assistance|technical|\bsupport\b|privacy|legal|accounts|careers|customer service|administrati|events|webinars|\bdonat(?:e|ion|ions)\b|fundrais/i;
 export function publicContactUrl(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password&&!u.port&&!/^\[|^\d+\.\d+\.\d+\.\d+$/.test(u.hostname)&&u.hostname.includes('.')&&!/(?:^|\.)(?:localhost|local|internal)$/.test(u.hostname)?u:null;}catch{return null;}}
 function visibleHtml(html){
  return html.replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1>/gi,'').replace(/<!--[\s\S]*?-->/g,'').replace(/<span\b[^>]*data-cfemail=["']([a-f\d]+)["'][^>]*>[\s\S]*?<\/span>/gi,(_,encoded)=>{
@@ -30,22 +30,25 @@ export function navigationLinks(html,url){
 }
 export function extractPublicationContacts(html,{url,publication,topics=[]}){
  const prepared=visibleHtml(html).replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi,(_,level,label)=>'\n@@HEADING '+text(label)+'@@\n').replace(/<br\s*\/?\s*>/gi,'\n').replace(/<\/(?:p|li|tr|div)>/gi,'\n\n');
- let heading='';const contacts=[],seen=new Set();
+ let heading='';const contacts=[],seen=new Set();let sectionLead=[];
  for(const group of prepared.split(/(@@HEADING [\s\S]*?@@)/)){
-  if(group.startsWith('@@HEADING ')){heading=group.slice(10,-2).trim();continue;}
+  if(group.startsWith('@@HEADING ')){heading=group.slice(10,-2).trim();sectionLead=[];continue;}
   for(const raw of group.split(/\n\s*\n/)){
    const block=text(raw);const addresses=block.match(emails)??[];
+   if(!addresses.length){if(block)sectionLead.push(block.slice(0,500));sectionLead=sectionLead.slice(-2);continue;}
    for(const address of addresses){
     const email=address.toLowerCase();if(!recipientPolicy.validRecipient(email))continue;
     // A contact may appear first in a generic footer and later under its real role.
     // Keep both observations; the final ranking retains the stronger evidence.
     const position=block.toLowerCase().indexOf(email),previous=block.slice(0,position).match(emails)?.at(-1);
     const start=previous?block.toLowerCase().lastIndexOf(previous.toLowerCase(),position)+previous.length:0;
-    const roleText=block.slice(start,position).slice(-400).trim(),context=(heading+' '+roleText).trim();
+    const roleText=block.slice(start,position).slice(-400).trim(),context=(heading+' '+sectionLead.join(' ')+' '+roleText).trim();
     let purpose=null,rank=99,reason='NO_EDITORIAL_PURPOSE';
     if(recipientPolicy.isCommercialContactContext(block))reason='COMMERCIAL_CONTACT_ROLE';
     else if(forbidden.test(context))reason='NON_EDITORIAL_ROLE';
-    else if(/editor\b/i.test(context)&&!/editorial (?:enquir|inquir)/i.test(context)){
+    else if(/press|media|journalist/i.test(context)){
+     purpose='editorial';rank=2;
+    }else if(/editor\b/i.test(context)&&!/editorial (?:enquir|inquir)/i.test(context)){
      purpose='named_editor';rank=1;
      if(topics.some(topic=>String(topic).length>3&&context.toLowerCase().includes(String(topic).toLowerCase()))){rank=0;}
     }else if(/editorial|newsroom|news desk/i.test(context)){purpose='editorial';rank=2;}
@@ -53,8 +56,9 @@ export function extractPublicationContacts(html,{url,publication,topics=[]}){
     else if(/general (?:enquir|inquir)|contact us|get in touch/i.test(context)){purpose='general';rank=4;}
     const lines=decode(raw.replace(/<[^>]*>/g,' ')).split(/\n/).map(s=>s.trim()).filter(Boolean);
     const name=purpose==='named_editor'?lines.find(line=>/^[A-Z][A-Za-z’'.-]+(?:\s+[A-Z][A-Za-z’'.-]+){1,3}$/.test(line)&&!/(?:editor|contact|email|news|phone)/i.test(line))??null:null;
-    contacts.push({email,publication,name,role:context.slice(0,1200),purpose,rank,eligible:Boolean(purpose),rejection_reason:purpose?null:reason,source_url:url,published_excerpt:(heading+'\n'+block).slice(0,3000),page_sha256:hash(html),checked_at:new Date().toISOString()});
+    contacts.push({email,publication,name,role:context.slice(0,1200),purpose,rank,eligible:Boolean(purpose),rejection_reason:purpose?null:reason,source_url:url,published_excerpt:(heading+'\n'+sectionLead.join('\n')+'\n'+block).slice(0,3000),page_sha256:hash(html),checked_at:new Date().toISOString()});
    }
+   sectionLead=[];
   }
  }
  return contacts;

@@ -28,15 +28,17 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
   seen.add(candidate.id);
   const linked=(candidate.evidence_ids??[]).filter(id=>evidenceIds.has(id));
   if(!linked.length || candidate.editorial_fit_verified!==true || candidate.active!==true || !recipientPolicy.verifiedPublication(candidate)) continue;
+  const contactVerified=candidate.contact_verified===true&&recipientPolicy.verifiedDestination(candidate);
+  const contact=contactVerified?candidate.contact:null;
 
-  const email=candidate.contact?.email?.toLowerCase();if(email&&emails.has(email))continue;if(email)emails.add(email);
+  const email=contact?.email?.toLowerCase();if(email&&emails.has(email))continue;if(email)emails.add(email);
   const previous=prior.get(candidate.id);
   if(previous?.do_not_contact===true || previous?.opted_out===true || previous?.status==='PENDING_REPLY') continue;
   const repeat=Boolean(previous?.last_scan_digest && candidate.scan_digest && previous.last_scan_digest===candidate.scan_digest);
   if(repeat) continue;
   const recency=previous?.last_contacted_at ? Date.parse(previous.last_contacted_at):0;
   const relevance=Math.min(linked.length,4);
-  eligible.push({...candidate,linked_evidence:linked,relevance,last_contacted_at:Number.isFinite(recency)?recency:0});
+  eligible.push({...candidate,contact_verified:contactVerified,contact,linked_evidence:linked,relevance,last_contacted_at:Number.isFinite(recency)?recency:0});
  }
  eligible.sort((a,b)=>b.relevance-a.relevance || a.last_contacted_at-b.last_contacted_at || a.id.localeCompare(b.id));
  const selected=eligible.slice(0,limit).map(({id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified,verification,active})=>({

@@ -7,11 +7,11 @@ import {identicalEmailGroupKey} from './contracts.js';
 import {validateNotificationReceipt} from './owner-notification.js';
 
 export class ReviewWorkflow {
- constructor({store,adapter,notify,baseUrl,clock=()=>Date.now()}) {
+ constructor({store,adapter,notify,baseUrl,verifyRecipient,clock=()=>Date.now()}) {
   if(!store?.adapter || !adapter?.read || !adapter?.compareAndSwap || typeof notify!=='function') throw Error('REVIEW_DEPENDENCIES_REQUIRED');
   const url=new URL(baseUrl);
   if(url.protocol!=='https:' || url.username || url.password || url.search || url.hash) throw Error('SECURE_REVIEW_URL_REQUIRED');
-  this.store=store;this.adapter=adapter;this.notify=notify;this.baseUrl=url.origin;this.clock=clock;
+  this.store=store;this.adapter=adapter;this.notify=notify;this.baseUrl=url.origin;this.verifyRecipient=verifyRecipient;this.clock=clock;
  }
  async update(key,fn) {
   for(let attempt=0;attempt<8;attempt++){
@@ -124,7 +124,12 @@ export class ReviewWorkflow {
  }
  async revise(campaignId,sessionId,secret,destinationId,fingerprint,changes) {
   await this.authenticate(campaignId,sessionId,secret);
-  return this.store.revise(campaignId,destinationId,fingerprint,changes);
+  let verifiedDestination=null;
+  if(Object.hasOwn(changes??{},'to')){
+   if(typeof this.verifyRecipient!=='function')throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+   verifiedDestination=await this.verifyRecipient({campaignId,destinationId,fingerprint,email:changes.to});
+  }
+  return this.store.revise(campaignId,destinationId,fingerprint,changes,verifiedDestination);
  }
  async decideGroup(campaignId,sessionId,secret,groupKey,decision) {
   await this.authenticate(campaignId,sessionId,secret);

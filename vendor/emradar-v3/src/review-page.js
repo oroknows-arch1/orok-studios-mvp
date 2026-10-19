@@ -77,6 +77,24 @@ async function refresh(){
      catch(e){status.textContent='Subject not saved. Reload and retry.';editSubject.disabled=false;}
     });
     card.append(editSubject);
+    const editRecipient=text('button','Edit recipient');
+    editRecipient.addEventListener('click',()=>{
+     editRecipient.disabled=true;
+     const form=document.createElement('form');
+     const label=text('label','Verified editorial email address ');
+     const input=document.createElement('input');input.type='email';input.required=true;input.autocomplete='email';input.value=asset.to||'';input.setAttribute('aria-label','Recipient email address');
+     const save=text('button','Save');save.type='submit';
+     const cancel=text('button','Cancel');cancel.type='button';
+     cancel.addEventListener('click',()=>{form.remove();editRecipient.disabled=false;});
+     form.addEventListener('submit',async event=>{
+      event.preventDefault();if(!input.reportValidity())return;
+      save.disabled=true;cancel.disabled=true;
+      try{await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{to:input.value.trim()}});await refresh();status.textContent='Recipient saved and verified. The previous approval was cleared; approve the updated email before any release.';}
+      catch{status.textContent='Recipient was not saved. The address must be published for an editorial purpose on the publication’s official site.';save.disabled=false;cancel.disabled=false;}
+     });
+     label.append(input);form.append(label,save,cancel);card.append(form);input.focus();
+    });
+    card.append(editRecipient);
    }
   }
   if(asset.kind==='X'&&!delivery)card.append(text('p','Approval does not publish this post. Release checks the account, graphic and publication history before posting.'));

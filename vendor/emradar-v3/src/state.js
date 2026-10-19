@@ -103,11 +103,15 @@ export class CampaignStore {
       return state;
     });
   }
-  async revise(id,destinationId,fingerprint,changes) {
+  async revise(id,destinationId,fingerprint,changes,verifiedDestination=null) {
     if (!changes || typeof changes!=='object' || Array.isArray(changes)) throw Error('INVALID_REVISION');
-    const allowed=['subject','body'];
+    const allowed=['subject','body','to'];
     if (!Object.keys(changes).length || Object.keys(changes).some(key=>!allowed.includes(key))) throw Error('INVALID_REVISION_FIELDS');
-    for (const value of Object.values(changes)) {
+    for (const [key,value] of Object.entries(changes)) {
+      if(key==='to'){
+        if(!recipientPolicy.validRecipient(value)||!verifiedDestination||verifiedDestination.contact?.email?.toLowerCase()!==value.toLowerCase())throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+        continue;
+      }
       if (typeof value!=='string' || !value.trim() || value.length>50000) throw Error('INVALID_REVISION_TEXT');
     }
     return this.mutate(id,state=>{
@@ -115,11 +119,24 @@ export class CampaignStore {
       const entry=state.assets[destinationId];
       if (!entry || entry.fingerprint!==fingerprint) throw Error('STALE_ASSET_REVISION');
       if (state.deliveries[destinationId]) throw Error('REVISION_AFTER_DISTRIBUTION');
+      const destinationIndex=state.destinations.findIndex(item=>item.id===destinationId);
+      if(Object.hasOwn(changes,'to')){
+        if(entry.asset.kind!=='EMAIL'||destinationIndex<0||verifiedDestination.id!==destinationId)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
+        recipientPolicy.assertVerifiedDestination(verifiedDestination);
+      }
       const revised={...entry.asset,...changes};
+      if(Object.hasOwn(changes,'to')){
+        revised.contact_status='VERIFIED';revised.delivery_eligible=true;
+        revised.recipient_verification=structuredClone(verifiedDestination.contact);
+      }
       if(revised.brand_version)revised.html=emailBrand.render(revised.body);
       if (sha256(revised)===sha256(entry.asset)) return state;
+      if(Object.hasOwn(changes,'to'))recipientPolicy.assertVerifiedAsset(revised,verifiedDestination);
       const nextFingerprint=assetFingerprint(revised);
       const priorDecision=state.decisions[destinationId]?.decision??null;
+      state.editorial_versions??={};state.editorial_versions[destinationId]??=[];
+      state.editorial_versions[destinationId].push(structuredClone(entry));
+      if(Object.hasOwn(changes,'to'))state.destinations[destinationIndex]=structuredClone(verifiedDestination);
       state.assets[destinationId]={asset:revised,fingerprint:nextFingerprint};
       delete state.decisions[destinationId];
       state.events.push({type:'ASSET_REVISED',destination_id:destinationId,id:randomUUID(),previous_fingerprint:fingerprint,new_fingerprint:nextFingerprint,previous_decision:priorDecision,changed_fields:Object.keys(changes)});

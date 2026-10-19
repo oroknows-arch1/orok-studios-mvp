@@ -25,9 +25,11 @@ test('missing recipient cannot call the paid writer',async()=>{
  let calls=0;const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{calls++;}}},images:{generate:async()=>{}}}});
  await assert.rejects(providers.write({campaignId:'campaign',destination:{id:'bad',evidence:{ids:['e1']}},document:{}}),/VERIFIED_RECIPIENT_REQUIRED/);assert.equal(calls,0);
 });
-test('campaign selection excludes unsupported contacts and deduplicates exact addresses',()=>{
+test('campaign selection hides unsupported contacts, retains incomplete candidates and deduplicates exact addresses',()=>{
  const d=verified();const selected=selectDestinations({candidates:[{...d,evidence_ids:['e1']},{...d,id:'second',evidence_ids:['e1']},{...d,id:'bad',contact:null,evidence_ids:['e1']}],scanEvidence:[{id:'e1',verified:true}]});
- assert.equal(selected.selected.length,1);assert.deepEqual(selected.selected[0].contact,d.contact);
+ assert.equal(selected.selected.length,2);assert.deepEqual(selected.selected.find(item=>item.id==='journal').contact,d.contact);
+ const incomplete=selected.selected.find(item=>item.id==='bad');assert.equal(incomplete.contact,null);assert.equal(incomplete.contact_verified,false);assert.equal(incomplete.review_status,'NEEDS_REVISION');
+ assert.equal(selected.selected.some(item=>item.id==='second'),false);
 });
 test('cleanup removes unresolved active drafts, preserves decisions, receipts, evidence, X and historical revisions',()=>{
  const state={destinations:[{id:'x'},{id:'bad'},verified()],assets:{x:{asset:{kind:'X'}},bad:{asset:{kind:'EMAIL',body:'Old'}},journal:{asset:{kind:'EMAIL'}}},decisions:{bad:{decision:'REJECT'},x:{decision:'APPROVE'}},deliveries:{bad:{status:'ACCEPTED',receipt:{provider_id:'historical'}}},preparation_input:{document:{evidence:['keep']}},editorial_versions:{bad:[{body:'revision'}]},editorial_rewrite:{variants:['old']}};

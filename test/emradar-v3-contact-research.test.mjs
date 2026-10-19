@@ -35,6 +35,12 @@ test('mailto extraction, general fallback and evidence hashes are independent of
  const result=await createEditorialContactResearch({read:async()=>'<h2>General enquiries</h2><p><a href="mailto:hello@journal.example?subject=Idea">Email us</a></p>'})({website:'https://journal.example',publication:'Journal'});
  assert.equal(result.status,'GENERAL_FALLBACK_VERIFIED');assert.equal(result.primary.email,'hello@journal.example');assert.match(result.primary.page_sha256,/^[a-f0-9]{64}$/);assert(result.primary.published_excerpt.includes(result.primary.email));
 });
+test('published press/media roles qualify while donation contacts remain non-editorial',()=>{
+ const contacts=extractPublicationContacts('<h1>Press</h1><p>We aim to respond to media queries within a few hours.</p><p>press@epoch.ai</p><h2>Donate</h2><p>Please contact us for donation details.</p><p>donate@epoch.ai</p>',{url:'https://epoch.ai/about/press',publication:'Epoch AI'});
+ const press=contacts.find(contact=>contact.email==='press@epoch.ai'),donate=contacts.find(contact=>contact.email==='donate@epoch.ai');
+ assert.equal(press?.eligible,true);assert.equal(press?.purpose,'editorial');
+ assert.equal(donate?.eligible,false);assert.equal(donate?.rejection_reason,'NON_EDITORIAL_ROLE');
+});
 test('private destinations and unlinked external pages cannot be researched',async()=>{
  let reads=0;const run=createEditorialContactResearch({read:async()=>{reads++;return '<a href="http://127.0.0.1/contact">Contact Us</a><a href="https://attacker.example/contact">Advertisement</a>';}});
  assert.equal((await run({website:'https://journal.example',publication:'Journal'})).primary,null);assert.equal(reads,1);

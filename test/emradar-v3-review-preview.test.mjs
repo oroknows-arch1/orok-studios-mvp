@@ -11,6 +11,9 @@ class Element {
  replaceChildren(...children){this.children=children;}
  setAttribute(key,value){this.attributes[key]=value;}
  addEventListener(name,handler){this.listeners[name]=handler;}
+ focus(){}
+ reportValidity(){return true;}
+ remove(){}
 }
 const flatten=element=>[element,...element.children.flatMap(flatten)];
 async function render(view){
@@ -49,8 +52,22 @@ test('all saved email content is visible, including unresolved drafts and histor
  for(const value of ['Publication',asset.subject,asset.body,'Previous saved body','Recipient unavailable','Editorial decision: REJECT','Delivery: Not released'])assert(nodes.some(n=>n.textContent===value));
  assert.equal(nodes.find(n=>n.tag==='iframe').srcdoc,asset.html);assert.equal(nodes.find(n=>n.tag==='iframe').attributes.sandbox,'');
  assert.equal(nodes.find(n=>n.textContent==='Send approved email').disabled,true);
- for(const label of ['Edit draft','Edit subject','Approve','Reject'])assert(!nodes.find(n=>n.textContent===label).disabled);
+ for(const label of ['Edit draft','Edit subject','Edit recipient','Approve','Reject'])assert(!nodes.find(n=>n.textContent===label).disabled);
  assert(!flatten(result.entries.children[1]).some(n=>n.tag==='button'));
+});
+test('recipient editor exposes Save and Cancel and submits only the edited address',async()=>{
+ const view={entries:[{asset:{kind:'EMAIL',destination_id:'epoch',to:'donate@epoch.ai',subject:'Saved subject',body:'Saved body'},fingerprint:'saved-fingerprint',recipient_ready:false,destination:{name:'Epoch AI'}}],publishing:{email:{enabled:true}}};
+ const result=await render(view),button=flatten(result.entries).find(node=>node.textContent==='Edit recipient');
+ assert(button);await button.listeners.click();
+ const form=flatten(result.entries).find(node=>node.tag==='form'),formNodes=flatten(form),input=formNodes.find(node=>node.tag==='input');
+ assert.equal(input.value,'donate@epoch.ai');assert(formNodes.some(node=>node.textContent==='Save'));assert(formNodes.some(node=>node.textContent==='Cancel'));
+ input.value='press@epoch.ai';await form.listeners.submit({preventDefault(){}});
+ const revision=result.payloads.find(payload=>payload.changes?.to);
+ assert.deepEqual(revision.changes,{to:'press@epoch.ai'});assert.equal(revision.fingerprint,'saved-fingerprint');
+ assert(result.status.textContent.includes('previous approval was cleared'));
+ const cancelled=await render(view);await flatten(cancelled.entries).find(node=>node.textContent==='Edit recipient').listeners.click();
+ const cancelForm=flatten(cancelled.entries).find(node=>node.tag==='form');await flatten(cancelForm).find(node=>node.textContent==='Cancel').listeners.click();
+ assert.deepEqual(cancelled.calls,['/api/review/view']);
 });
 test('accepted email remains fully visible with receipt, with resend and post-delivery edits disabled',async()=>{
  const result=await render({entries:[{asset:{kind:'EMAIL',destination_id:'journal',to:'editor@example.org',subject:'Approved subject',body:'Already sent body'},decision:{decision:'APPROVE'},delivery:{status:'ACCEPTED',receipt:{provider_id:'message-id',sent_folder:{status:'FILED'}}}}]});

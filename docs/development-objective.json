@@ -449,6 +449,21 @@
       }
     }
   },
+  "october_19_epoch_recipient_edit": {
+    "status": "LOCAL_VERIFIED_NOT_DEPLOYED",
+    "campaign_id": "v3-6da40294a77f2ef8ca35a7131b8192dd",
+    "publication": "Epoch AI",
+    "previous_recipient": "donate@epoch.ai",
+    "corrected_recipient": "press@epoch.ai",
+    "purpose_evidence": "Epoch AI official press page lists press@epoch.ai for media queries; official About page identifies donate@epoch.ai for donations.",
+    "implementation": "PUBLICATION_REVIEW supports Edit recipient with Save/Cancel; server re-reads official contact pages, persists source-bound verification, preserves the previous draft, clears old approval and binds any renewed approval to the new asset fingerprint. Donation-purpose contacts are excluded from verified editorial delivery.",
+    "targeted_tests": "35/35 recipient, review UI, verification and distribution-safety tests passed; V3 source integration 16/16 passed; harness verification passed.",
+    "live_contact_fetch": "NOT_VERIFIED_LOCAL_NETWORK_DNS_UNAVAILABLE",
+    "production_deployed": false,
+    "campaign_state_mutated": false,
+    "owner_decisions_changed": 0,
+    "external_distribution": 0
+  },
   "execution_policy": {
     "chat_first": true,
     "exhaust_chat_tools_before_work": true,
