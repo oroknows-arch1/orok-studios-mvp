@@ -153,6 +153,30 @@ test('a previously saved OJK government contact cannot be reused as an editorial
  assert.equal(policy.verifiedDestination(institutional),false);
 });
 
+test('checks official publisher pages for submission policy and keeps an enquiry distinct from acceptance',async()=>{
+ const {createAutonomousOutletDiscovery}=await load();
+ const accepting=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],
+ 'News and analysis. Editorial: editor@journal.example. We welcome research contributions.');
+ const accepted=await createAutonomousOutletDiscovery(accepting)({document});
+ assert.equal(accepted.length,1);
+ assert.equal(accepting.saved[0].submission_policy.status,'ACCEPTS_CONTRIBUTIONS');
+ assert.match(accepting.saved[0].submission_policy.source_url,/journal\.example/);
+
+ const undecided=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
+ const enquiry=await createAutonomousOutletDiscovery(undecided)({document});
+ assert.equal(enquiry.length,1);
+ assert.equal(undecided.saved[0].submission_policy.status,'EDITORIAL_ENQUIRY_ONLY');
+});
+
+test('explicit publisher refusal excludes that proposal without failing the formation search',async()=>{
+ const {createAutonomousOutletDiscovery}=await load();
+ const declining=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],
+ 'News and analysis. Editorial: editor@journal.example. We do not accept unsolicited articles.');
+ const links=await createAutonomousOutletDiscovery(declining)({document});
+ assert.deepEqual(links,[]);
+ assert.equal(declining.saved.length,0);
+});
+
 test('multiple verified outlets can receive distinct proposals for one formation',async()=>{
  const h=harness([
   {name:'Mining Journal One',category:'mining journal',website:'https://journal1.example',publication_proof_url:'https://journal1.example/news',contact_url:'https://journal1.example/editorial',email:'editor@journal1.example',evidence_ids:['e1']},
