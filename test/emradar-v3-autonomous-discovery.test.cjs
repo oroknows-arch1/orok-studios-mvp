@@ -144,6 +144,15 @@ test('a government press-release host cannot masquerade as an independent public
  assert.equal(h.saved.length,0);
 });
 
+test('a previously saved OJK government contact cannot be reused as an editorial publication',()=>{
+ const policy=require('../src/emradar-v3-recipient.cjs');
+ const recipient=require('./fixtures/v3-verified-recipient.cjs')();
+ assert.equal(policy.verifiedPublication(recipient),true);
+ const institutional={...recipient,website:'https://www.ojk.go.id',name:'OJK Financial Services Authority',contact:{...recipient.contact,email:'humas@ojk.go.id',source_url:'https://www.ojk.go.id/contact',published_excerpt:'Contact humas@ojk.go.id'},verification:{...recipient.verification,publication_proof_url:'https://www.ojk.go.id/press-release'}};
+ assert.equal(policy.verifiedPublication(institutional),false);
+ assert.equal(policy.verifiedDestination(institutional),false);
+});
+
 test('multiple verified outlets can receive distinct proposals for one formation',async()=>{
  const h=harness([
   {name:'Mining Journal One',category:'mining journal',website:'https://journal1.example',publication_proof_url:'https://journal1.example/news',contact_url:'https://journal1.example/editorial',email:'editor@journal1.example',evidence_ids:['e1']},
