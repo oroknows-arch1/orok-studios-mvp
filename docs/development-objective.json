@@ -221,7 +221,9 @@
       "owner_recipient": "sean@emradar.net",
       "editorial_emails": 2,
       "x_ready": false,
-      "needs_revision": ["x"],
+      "needs_revision": [
+        "x"
+      ],
       "decisions": 0,
       "deliveries": 0,
       "external_distribution": 0
@@ -260,9 +262,28 @@
       "production_failure": "TypeError at src/emradar-v3-runtime.cjs:84 sorting null results from indexed scans without acceptable publication attestations; logged as V3_PREPARATION_FAILED.",
       "secondary_current_scan_gap": "Production replaced the existing live-current scan candidate with historical attestation enumeration. The current 2026-10-19 live scan is PUBLISHED and live/archive byte verification passes, but its publication record is absent, so historical enumeration alone excluded it.",
       "archive_recovery": "The public index responds 200. Eight dates (2026-10-07 through 2026-10-14) pass the existing publication/release gates and exact archived-byte verification. The 2026-10-19 live scan passes existing live/archive verification and is merged as a current candidate. Oldest-first selection and campaign identity deduplication are preserved.",
-      "blocked_archive_dates": ["2026-09-23", "2026-09-30", "2026-10-03", "2026-10-05", "2026-10-06", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"],
+      "blocked_archive_dates": [
+        "2026-09-23",
+        "2026-09-30",
+        "2026-10-03",
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-15",
+        "2026-10-16",
+        "2026-10-17",
+        "2026-10-18"
+      ],
       "blocked_archive_reasons": "2026-09-23 uses a non-checkpoint path; 2026-09-30 lacks paired records; 2026-10-03 and 2026-10-05 use unaccepted legacy attestor labels; 2026-10-06 and 2026-10-15 through 2026-10-17 have mismatched archive URL origins; 2026-10-18 lacks the required artifact digest in its publication record. Existing campaign dates remain preserved.",
-      "existing_campaign_dates": ["2026-10-10", "2026-10-12", "2026-10-13", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19"],
+      "existing_campaign_dates": [
+        "2026-10-10",
+        "2026-10-12",
+        "2026-10-13",
+        "2026-10-15",
+        "2026-10-16",
+        "2026-10-17",
+        "2026-10-18",
+        "2026-10-19"
+      ],
       "owner_feedback_regeneration": "Feedback is bound to the rejected asset fingerprint; one bounded worker creates a new revision and fresh idempotent owner review while preserving prior history.",
       "targeted_tests": "9/9 runtime tests pass after the null-filter and live-current merge regressions; harness:verify passes.",
       "scanner_modified": false,
@@ -285,7 +306,12 @@
     "render_deploy_id": "dep-dbaubi9srm7s73arvkrg",
     "campaign_version": 17,
     "asset_sha256": "283132be54a292580d472b13a99032b3aa535b592a0dc5ade31be05b5029554f",
-    "asset_diagnostics": {"record_count":6,"omitted_record_ids":[],"shortened":[],"snapshot_date":"2026-10-07"},
+    "asset_diagnostics": {
+      "record_count": 6,
+      "omitted_record_ids": [],
+      "shortened": [],
+      "snapshot_date": "2026-10-07"
+    },
     "owner_review": "https://orok-studios-api.onrender.com/review/access?campaign=v3-5d73d453fb02fa0da4287e23834f92db",
     "health": "HTTP 200",
     "review_endpoint": "HTTP 200",
@@ -484,5 +510,36 @@
     "may_be_imported": false,
     "owner_requested_deletion": true,
     "delete_only_after_live_service_dependency_preflight": true
+  },
+  "october_20_per_formation_discovery": {
+    "status": "FOCUSED_TESTS_PASS_FULL_HARNESS_BLOCKED_CI_SUBMODULE_AUTH",
+    "source_scan_date": "2026-10-20",
+    "campaign_id": "v3-d03cac6eefb5eb481ed20110e3baeff0",
+    "observed_issue": "Seven evidence-supported formations entered Marketing; one cross-formation search returned four Indonesia-centric candidates and produced one invalid governmental editorial destination.",
+    "changes": [
+      "Search each formation independently using its own verified evidence and industry context.",
+      "Round-robin discovered publication candidates across formations within the unchanged destination limit.",
+      "Persist one formation coverage record even when candidates are missing or research fails.",
+      "Continue other formations after malformed search responses or individual contact failures.",
+      "Exclude obvious government and regulator domains from editorial candidates.",
+      "Observe published publisher submission policies; distinguish explicit acceptance, mere editorial enquiry and explicit refusal.",
+      "Invalidate previously saved governmental hosts such as OJK as editorial publications."
+    ],
+    "constraints": [
+      "No synthetic publications or contacts.",
+      "Semiconductor For You remains the sole pinned editorial reference.",
+      "No change to 30-destination, verified-recipient, owner-approval, duplicate-delivery or X requirements.",
+      "No scanner changes, new campaign, live scan, owner decisions or external distribution."
+    ],
+    "verification": {
+      "test_job": "discovery-focused",
+      "result": "PASS",
+      "workflow_run_id": 39354734763,
+      "full_harness": "NOT_RUN - checkout private authoritative V3 submodule fails repository not found",
+      "production": "NOT_DEPLOYED",
+      "campaigns_triggered": 0,
+      "external_distribution": 0
+    },
+    "next_action": "Repair GitHub Actions access to the existing private V3 submodule without bypassing source provenance, run harness:verify and harness:v3, then perform a production-shaped multi-formation dry run; do not deploy or distribute on test-only evidence."
   }
 }

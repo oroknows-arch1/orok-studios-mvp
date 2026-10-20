@@ -12,6 +12,14 @@ async function publiclyResolved(name,resolver){if(isIP(name))return false;try{co
 export const pinnedLookup=address=>(_hostname,options,callback)=>options?.all===true?callback(null,[{address,family:isIP(address)}]):callback(null,address,isIP(address));
 export function pinnedHtml(url,resolver,timeoutMs=12000,maxBytes=1000000){return new Promise(async(resolve,reject)=>{let addresses;try{addresses=await resolver(url.hostname,{all:true,verbatim:true});}catch{return reject(Error('CONTACT_DNS_FAILED'));}if(!addresses?.length||!addresses.every(a=>publicAddress(a.address)))return reject(Error('CONTACT_ADDRESS_UNSAFE'));const address=addresses[0].address;const req=httpsRequest(url,{method:'GET',timeout:timeoutMs,maxRedirects:0,lookup:pinnedLookup(address),headers:{accept:'text/html'},rejectUnauthorized:true},res=>{if(res.statusCode!==200||!String(res.headers['content-type']??'').toLowerCase().includes('text/html')){res.destroy();return reject(Error(res.statusCode===403?'CONTACT_HTTP_403':'CONTACT_RESPONSE_INVALID'));}let size=0;const chunks=[];res.on('data',chunk=>{size+=chunk.length;if(size>maxBytes){res.destroy();reject(Error('CONTACT_TOO_LARGE'));}else chunks.push(chunk);});res.on('end',()=>resolve(Buffer.concat(chunks).toString('utf8')));res.on('error',reject);});req.on('timeout',()=>req.destroy(Error('CONTACT_TIMEOUT')));req.on('error',reject);req.end();});}
 const plainText=response=>(response.output??[]).flatMap(item=>item.content??[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
+// A published editorial contact permits an enquiry; it is not evidence that
+// the publisher accepts unsolicited contributions. Preserve that distinction.
+function contributionPolicy(html){
+ const visible=String(html??'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,75000);
+ if(/(?:do not|does not|don.t|cannot|not currently)\s+accept\s+(?:any\s+)?(?:unsolicited\s+)?(?:articles?|guest posts?|contributions?|submissions?)/i.test(visible)||/unsolicited\s+(?:articles?|guest posts?|contributions?)\s+(?:are|is)\s+not\s+accepted/i.test(visible))return 'DECLINES_EXTERNAL_CONTRIBUTIONS';
+ if(/(?:we\s+(?:accept|welcome)|submit|send\s+us|contribute)\s+(?:your\s+|an?\s+|external\s+|guest\s+|research\s+)?(?:articles?|research contributions?|guest posts?|editorial submissions?)/i.test(visible)||/write\s+for\s+us/i.test(visible))return 'ACCEPTS_CONTRIBUTIONS';
+ return 'POLICY_NOT_PUBLISHED';
+}
 function safeResponseShape(response){const output=Array.isArray(response?.output)?response.output:[];return {response_type:Array.isArray(response)?'array':response===null?'null':typeof response,top_level_keys:response&&typeof response==='object'&&!Array.isArray(response)?Object.keys(response).sort():[],output_count:output.length,output_types:output.map(item=>typeof item?.type==='string'?item.type:null),content_counts:output.map(item=>Array.isArray(item?.content)?item.content.length:0),content_types:output.map(item=>(Array.isArray(item?.content)?item.content:[]).map(content=>typeof content?.type==='string'?content.type:null)),output_text_lengths:output.map(item=>(Array.isArray(item?.content)?item.content:[]).filter(content=>content?.type==='output_text').map(content=>typeof content?.text==='string'?content.text.length:null))};}
 
 export function contactPurpose(html,near,url){
@@ -42,15 +50,48 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
   const evidence=(document?.evidence??[]).filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url);if(!evidence.length)throw Error('DISCOVERY_VERIFIED_EVIDENCE_REQUIRED');
   const context=deriveDiscoveryContext(document);if(!context.formations.length||!context.industries.length)throw Error('DISCOVERY_MARKET_CONTEXT_REQUIRED');
   const scanDigest=digest(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url]))),reusable=outlets.filter(o=>recipientPolicy.verifiedDestination(o)&&o?.verification?.scan_evidence_digest===scanDigest),reusableIds=new Set(reusable.flatMap(o=>o.verification.evidence_ids??[])),remaining=evidence.filter(e=>!reusableIds.has(e.id)),links=[];
-  for(const outlet of reusable)for(const evidence_id of outlet.verification.evidence_ids){const source=evidence.find(e=>e.id===evidence_id);if(source)links.push({approved:true,outlet_id:outlet.id,evidence_id,record_id:source.record_id,source_url:source.source_url});}if(!remaining.length&&reusable.length>=10)return links;const searchEvidence=remaining.length?remaining:evidence;
+  for(const outlet of reusable)for(const evidence_id of outlet.verification.evidence_ids){const source=evidence.find(e=>e.id===evidence_id);if(source)links.push({approved:true,outlet_id:outlet.id,evidence_id,record_id:source.record_id,source_url:source.source_url});}const searchEvidence=evidence;
   const schema={type:'object',additionalProperties:false,properties:{candidates:{type:'array',maxItems:30,items:{type:'object',additionalProperties:false,properties:{name:{type:'string'},category:{type:'string'},publication_type:{type:'string',enum:['trade_publication','news_publication','financial_publication','research_publication','magazine','journal','business_information','newsletter','podcast','social_media','public_forum','industry_association']},website:{type:'string'},publication_proof_url:{type:'string'},contact_url:{type:'string'},email:{type:'string'},directory_source_url:{type:'string'},publisher_source_url:{type:'string'},formation_ids:{type:'array',items:{type:'string'}},industries:{type:'array',items:{type:'string'}},ecosystem_formation_ids:{type:'array',items:{type:'string'}},evidence_ids:{type:'array',items:{type:'string'}},relationship_reason:{type:'string'}},required:['name','category','publication_type','website','publication_proof_url','contact_url','email','directory_source_url','publisher_source_url','formation_ids','industries','ecosystem_formation_ids','evidence_ids','relationship_reason']}}},required:['candidates']};
   const fields=schema.properties.candidates.items.properties;
   for(const field of ['formation_ids','ecosystem_formation_ids'])fields[field]={type:'array',minItems:1,items:{type:'string',enum:context.formations.map(f=>f.id)}};
   fields.industries={type:'array',minItems:1,items:{type:'string',enum:context.industries}};
   fields.evidence_ids={type:'array',minItems:1,items:{type:'string',enum:searchEvidence.map(e=>e.id)}};
-  const answer=await openai.responses.create({model,tools:[{type:'web_search',search_context_size:'low'}],max_tool_calls:4,tool_choice:'required',input:[{role:'system',content:'Discover credible independent publications, financial and business-information platforms, newsletters, business and industry podcasts (including Fear & Greed where relevant), professional social-media accounts, public discussion forums and industry associations across ALL supplied formations. Search across the different industries and geographies in the supplied search_brief. Find a genuine public article, episode, discussion, profile or About page proving the destination publishes relevant material: use its HTTPS domain as website and its full URL as publication_proof_url on the same host. International and indirect economic links are valid when explained through transport, fuel, equipment or finance consequences supported by the scan. Exclude operating companies, government agencies, policy institutions and corporate newsrooms. Do not invent contact details. Identify genuine relevant publications; the website research worker will navigate official contact pages. Also search accessible public editorial/press directories, newspaper and magazine associations, and official publisher portfolios. Supply directory_source_url or publisher_source_url where an actual public page names this publication, links its official website and publishes contacts. These fields may be empty. Exclude paid lead lists, guessed addresses and scraped personal-data brokers. Include exact contact addresses and URLs only when actually published. An empty contact field is allowed for the worker to research. Search official contact, contributor, newsroom and editor pages. Accept legitimate general publication contacts and named editors, not advertising-only, sales, privacy or technical support contacts. Never infer email patterns. Aim to identify 10 or more credible publications across the supported research themes, up to the supplied limit. This is a research target, never a quota: return fewer when genuine sources are unavailable. Choose strongest supported results only. The relationship_reason must state what the publication covers and explain its economic connection; do not claim it reported this scan. Use exact enum values for all identifiers and industries. Do not invent addresses. The independent worker must verify a recipient before anything is saved. Return required JSON.'},{role:'user',content:JSON.stringify({previous_publication_hints:[...candidateHints,...history.filter(r=>r.status!=='VERIFIED').map(r=>({name:r.publication,website:r.website}))].map(({name,website})=>({name,website})),search_brief:context.formations.map(f=>[f.location,f.theme,...f.industries].filter(Boolean).join(' ')).join(' | ')+' official editorial contributor submissions named editor general contact email trade magazine business finance newsletters',formations:context.formations,connected_ecosystems:context.ecosystems,evidence:searchEvidence.map(e=>({id:e.id,record_id:e.record_id,fact:e.fact})),limit})}],text:{format:{type:'json_schema',name:'editorial_publication_candidates',strict:true,schema}},max_output_tokens:10000},{maxRetries:0,timeout:90000});
-  console.info('V3_DISCOVERY_USAGE '+JSON.stringify({model,usage:answer.usage,search_calls:(answer.output??[]).filter(item=>item.type==='web_search_call').length}));
-  let parsed;try{parsed=JSON.parse(plainText(answer));}catch(error){console.error('V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC '+JSON.stringify({...safeResponseShape(answer),parse_error_name:error?.name??null}));throw Error('DISCOVERY_SEARCH_JSON_INVALID');}if(!Array.isArray(parsed?.candidates))throw Error('DISCOVERY_SEARCH_CANDIDATES_REQUIRED');
+  // Search each verified formation separately. A response concentrated on the first
+  // formation cannot consume the discovery opportunity of the remaining stories.
+  const formationSearches=[];
+  for(const formation of context.formations){
+   const searchEvidence=evidence.filter(item=>item.record_id===formation.id);
+   const scopedContext={formations:[formation],industries:formation.industries,ecosystems:context.ecosystems.filter(item=>item.formation_id===formation.id)};
+   const scopedSchema=structuredClone(schema);
+   scopedSchema.properties.candidates.maxItems=10;
+   for(const field of ['formation_ids','ecosystem_formation_ids'])scopedSchema.properties.candidates.items.properties[field].items.enum=[formation.id];
+   scopedSchema.properties.candidates.items.properties.industries.items.enum=formation.industries;
+   scopedSchema.properties.candidates.items.properties.evidence_ids.items.enum=searchEvidence.map(item=>item.id);
+   let answer;
+   try{
+    if(Date.now()-started>=maxRunMs)throw Error('DISCOVERY_SEARCH_BUDGET_EXHAUSTED');
+    if(!searchEvidence.length)throw Error('FORMATION_VERIFIED_EVIDENCE_REQUIRED');
+  answer=await openai.responses.create({model,tools:[{type:'web_search',search_context_size:'low'}],max_tool_calls:4,tool_choice:'required',input:[{role:'system',content:'Discover credible independent publications, financial and business-information platforms, newsletters, business and industry podcasts (including Fear & Greed where relevant), professional social-media accounts, public discussion forums and industry associations across ALL supplied formations. Search across the different industries and geographies in the supplied search_brief. Find a genuine public article, episode, discussion, profile or About page proving the destination publishes relevant material: use its HTTPS domain as website and its full URL as publication_proof_url on the same host. International and indirect economic links are valid when explained through transport, fuel, equipment or finance consequences supported by the scan. Exclude operating companies, government agencies, policy institutions and corporate newsrooms. Do not invent contact details. Identify genuine relevant publications; the website research worker will navigate official contact pages. Also search accessible public editorial/press directories, newspaper and magazine associations, and official publisher portfolios. Supply directory_source_url or publisher_source_url where an actual public page names this publication, links its official website and publishes contacts. These fields may be empty. Exclude paid lead lists, guessed addresses and scraped personal-data brokers. Include exact contact addresses and URLs only when actually published. An empty contact field is allowed for the worker to research. Search official contact, contributor, newsroom and editor pages. Accept legitimate general publication contacts and named editors, not advertising-only, sales, privacy or technical support contacts. Never infer email patterns. Aim to identify 10 or more credible publications across the supported research themes, up to the supplied limit. This is a research target, never a quota: return fewer when genuine sources are unavailable. Choose strongest supported results only. The relationship_reason must state what the publication covers and explain its economic connection; do not claim it reported this scan. Use exact enum values for all identifiers and industries. Do not invent addresses. The independent worker must verify a recipient before anything is saved. Return required JSON.'},{role:'user',content:JSON.stringify({previous_publication_hints:[...candidateHints,...history.filter(r=>r.status!=='VERIFIED'&&r.website).map(r=>({name:r.publication,website:r.website}))].map(({name,website})=>({name,website})),search_brief:scopedContext.formations.map(f=>[f.location,f.theme,...f.industries].filter(Boolean).join(' ')).join(' | ')+' official editorial contributor submissions named editor general contact email trade magazine business finance newsletters',formations:scopedContext.formations,connected_ecosystems:scopedContext.ecosystems,evidence:searchEvidence.map(e=>({id:e.id,record_id:e.record_id,fact:e.fact})),limit})}],text:{format:{type:'json_schema',name:'editorial_publication_candidates',strict:true,schema:scopedSchema}},max_output_tokens:10000},{maxRetries:0,timeout:90000});
+    console.info('V3_DISCOVERY_USAGE '+JSON.stringify({formation_id:formation.id,model,usage:answer.usage,search_calls:(answer.output??[]).filter(item=>item.type==='web_search_call').length}));
+    let result;try{result=JSON.parse(plainText(answer));}catch(error){console.error('V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC '+JSON.stringify({formation_id:formation.id,...safeResponseShape(answer),parse_error_name:error?.name??null}));throw Error('DISCOVERY_SEARCH_JSON_INVALID');}
+    if(!Array.isArray(result?.candidates))throw Error('DISCOVERY_SEARCH_CANDIDATES_REQUIRED');
+    const allowedIds=new Set(searchEvidence.map(item=>item.id));
+    const candidates=result.candidates.filter(item=>Array.isArray(item.formation_ids)&&item.formation_ids.includes(formation.id)&&Array.isArray(item.evidence_ids)&&item.evidence_ids.some(id=>allowedIds.has(id))).slice(0,10);
+    formationSearches.push({formation_id:formation.id,candidates,proposed:result.candidates.length,reason:candidates.length?'CANDIDATES_FOUND':'NO_ELIGIBLE_CANDIDATES_RETURNED'});
+   }catch(error){
+    const reason=/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'DISCOVERY_SEARCH_FAILED';
+    formationSearches.push({formation_id:formation.id,candidates:[],proposed:0,reason});
+    console.info('V3_FORMATION_DISCOVERY_FAILURE '+JSON.stringify({formation_id:formation.id,reason}));
+   }
+  }
+  // Round-robin prevents one strong story monopolising the campaign's 29 email slots.
+  const parsed={candidates:[]};
+  for(let position=0;position<10&&parsed.candidates.length<limit;position++){
+   for(const search of formationSearches){
+    if(parsed.candidates.length>=limit)break;
+    if(search.candidates[position])parsed.candidates.push(search.candidates[position]);
+   }
+  }
   const allowed=new Set(searchEvidence.map(e=>e.id)),formationIds=new Set(context.formations.map(x=>x.id)),industryNames=new Set(context.industries),sourceHosts=new Set(evidence.filter(e=>/government|ministry|department|authority|secretariat/i.test(e.source??'')).map(e=>publicHttps(e.source_url)).filter(Boolean).map(u=>host(u.hostname))),seen=new Set(reusable.map(o=>o.contact.email.toLowerCase())),hosts=new Set(),existing=typeof directory.list==='function'?await directory.list():outlets,known=new Map(existing.filter(o=>o?.id).map(o=>[o.id,o]));
 
   const counts={proposed:parsed.candidates.length,considered:0,missing_fields:0,invalid_url_or_dns:0,source_institution:0,no_verified_evidence_link:0,no_market_relationship:0,publication_proof_failed:0,verified_publications:0,contact_fetch_failed:0,invalid_email_or_duplicate:0,email_not_on_page:0,no_editorial_context:0,verified_contacts:0,reused_contacts:0,unresolved_contacts:0,unresolved:0};
@@ -66,7 +107,7 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
     if(!item?.name?.trim()||!item?.relationship_reason?.trim()){counts.missing_fields++;throw Error('CANDIDATE_FIELDS_MISSING');}
     const proofUrl=publicHttps(item.publication_proof_url);
     if(!website||!proofUrl||host(proofUrl.hostname)!==key||!await publiclyResolved(website.hostname,resolver)){counts.invalid_url_or_dns++;throw Error('PUBLICATION_URL_OR_DNS_INVALID');}
-    if(sourceHosts.has(key)){counts.source_institution++;throw Error('SOURCE_INSTITUTION_NOT_PUBLICATION');}
+    if(sourceHosts.has(key)||/(?:^|\.)(?:gov|gob|go|gouv)\.[a-z]{2}(?:\.[a-z]{2})?$/.test(key)||/\b(?:government|regulator|financial services authority|central bank|ministry|department of|official gazette)\b/i.test(String(item?.name??'')+' '+String(item?.category??''))){counts.source_institution++;throw Error('SOURCE_INSTITUTION_NOT_PUBLICATION');}
     const ids=(item.evidence_ids??[]).filter(id=>allowed.has(id));
     if(!ids.length){counts.no_verified_evidence_link++;throw Error('NO_VERIFIED_EVIDENCE_LINK');}
     const formation_ids=(item.formation_ids??[]).filter(id=>formationIds.has(id)),ecosystem_formation_ids=(item.ecosystem_formation_ids??[]).filter(id=>formationIds.has(id)),industries=(item.industries??[]).filter(name=>industryNames.has(name));
@@ -121,12 +162,25 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
       if(!proven){counts.publication_proof_failed++;throw Error('PUBLICATION_IDENTITY_NOT_PROVEN');}
      }
     }
+    // Inspect the actual retrieved publisher pages; never infer permission to
+    // contribute from an address, search snippet, or a model assertion.
+    let submissionPolicy={status:'EDITORIAL_ENQUIRY_ONLY',source_url:null};
+    for(const page of journal.pages){
+     if(!page?.url||host(new URL(page.url).hostname)!==key)continue;
+     try{
+      const observed=contributionPolicy(await read(new URL(page.url)));
+      if(observed==='DECLINES_EXTERNAL_CONTRIBUTIONS'){submissionPolicy={status:observed,source_url:page.url};break;}
+      if(observed==='ACCEPTS_CONTRIBUTIONS')submissionPolicy={status:observed,source_url:page.url};
+     }catch{}
+    }
+    journal.submission_policy=submissionPolicy;
+    if(submissionPolicy.status==='DECLINES_EXTERNAL_CONTRIBUTIONS')throw Error('PUBLICATION_DECLINES_CONTRIBUTIONS');
     const contact=result.primary,email=contact.email.toLowerCase();
     if(seen.has(email)){counts.invalid_email_or_duplicate++;throw Error('DUPLICATE_RECIPIENT');}
     const publicationMethod=result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_publication_page';
     const publicationHash=proofHtml?digest(proofHtml):prior?.verification?.publication_page_sha256;
     const publicationVerified=Boolean(publicationHash);
-    const discovered={...base,publication_verified:publicationVerified,editorial_fit_verified:true,contact_verified:true,discovery_status:'VERIFIED',contact:{...contact,alternatives:result.alternatives},verification:{method:result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_editorial_contact_page',status:'VERIFIED',source_url:contact.source_url,...(publicationVerified?{publication_method:publicationMethod,publication_status:'VERIFIED',publication_page_sha256:publicationHash}:{}),publication_proof_url:proofSource,evidence_ids:ids,scan_evidence_digest:scanDigest}};
+    const discovered={...base,publication_verified:publicationVerified,editorial_fit_verified:true,contact_verified:true,discovery_status:'VERIFIED',submission_policy:submissionPolicy,contact:{...contact,alternatives:result.alternatives},verification:{method:result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_editorial_contact_page',status:'VERIFIED',source_url:contact.source_url,...(publicationVerified?{publication_method:publicationMethod,publication_status:'VERIFIED',publication_page_sha256:publicationHash}:{}),publication_proof_url:proofSource,evidence_ids:ids,scan_evidence_digest:scanDigest}};
     recipientPolicy.assertVerifiedDestination(discovered);
     await directory.upsert(discovered);counts.verified_contacts++;seen.add(email);
     if(!publicationPersisted)counts.verified_publications++;
@@ -141,6 +195,17 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
     if(typeof directory.recordResearch==='function')await directory.recordResearch(journal);
    }
   }
+  // Persist a separate outcome for every formation, including zero-contact stories.
+  // These records are diagnostics, never candidates or invented publications.
+  const coverage=[];
+  for(const searched of formationSearches){
+   const verifiedContacts=new Set(links.filter(link=>link.record_id===searched.formation_id).map(link=>link.outlet_id));
+   const status=verifiedContacts.size?'VERIFIED':searched.reason==='CANDIDATES_FOUND'?'NO_VERIFIED_EDITORIAL_CONTACT':searched.reason;
+   const result={publication:'FORMATION_COVERAGE:'+searched.formation_id,website:null,scan_digest:scanDigest,formation_id:searched.formation_id,status,reason:verifiedContacts.size?null:status,proposed_candidates:searched.proposed,considered_candidates:searched.candidates.length,verified_contacts:verifiedContacts.size,attempted_at:new Date().toISOString()};
+   coverage.push(result);
+   if(typeof directory.recordResearch==='function')await directory.recordResearch(result);
+  }
+  console.info('V3_FORMATION_DISCOVERY_COVERAGE '+JSON.stringify(coverage.map(({formation_id,status,proposed_candidates,verified_contacts})=>({formation_id,status,proposed_candidates,verified_contacts}))));
   console.info('V3_DISCOVERY_CANDIDATE_COUNTS '+JSON.stringify(counts));return links;
  };
 }

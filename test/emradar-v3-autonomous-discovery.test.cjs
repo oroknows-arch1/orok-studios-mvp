@@ -90,20 +90,106 @@ test('same evidence ID with changed facts cannot reuse prior scan links',async()
  assert.equal(searches,1);assert.deepEqual(links,[]);
 });
 
-test('rejects web-search responses without valid structured candidates and never writes',async()=>{
- const h=harness([]);
+test('malformed search output does not veto owner review and records the formation failure',async()=>{
+ const h=harness([]),coverage=[];
+ h.directory.recordResearch=async row=>coverage.push(row);
  h.openai.responses.create=async()=>({output:[{content:[{type:'output_text',text:'not JSON'}]}]});
  const {createAutonomousOutletDiscovery}=await load();
  const messages=[];const original=console.error;console.error=message=>messages.push(message);
- try{await assert.rejects(createAutonomousOutletDiscovery(h)({document}),/DISCOVERY_SEARCH_JSON_INVALID/);}
+ try{assert.deepEqual(await createAutonomousOutletDiscovery(h)({document}),[]);}
  finally{console.error=original;}
  assert.equal(h.saved.length,0);
  assert.equal(messages.length,1);
  assert.match(messages[0],/^V3_DISCOVERY_SEARCH_PARSE_DIAGNOSTIC /);
  assert.deepEqual(JSON.parse(messages[0].slice(messages[0].indexOf('{'))),{
-  response_type:'object',top_level_keys:['output'],output_count:1,output_types:[null],content_counts:[1],content_types:[['output_text']],output_text_lengths:[[8]],parse_error_name:'SyntaxError'
+  formation_id:'r1',response_type:'object',top_level_keys:['output'],output_count:1,output_types:[null],content_counts:[1],content_types:[['output_text']],output_text_lengths:[[8]],parse_error_name:'SyntaxError'
  });
+ assert.equal(coverage.length,1);
+ assert.equal(coverage[0].formation_id,'r1');
+ assert.equal(coverage[0].status,'DISCOVERY_SEARCH_JSON_INVALID');
 });
+
+test('each formation receives its own publication search and missing contacts are durably explained',async()=>{
+ const second={id:'r2',status:'FORMING',location:'Brazil',causal_chain:{industries:['Aviation'],world_change:'Tax change',formation:'Aviation costs'}};
+ const scan={records:[...document.records,second],evidence:[...document.evidence,{id:'e2',record_id:'r2',verified:true,fact:'Verified aviation tax change',source_url:'https://source.example/aviation'}]};
+ const h=harness([]),searched=[],coverage=[];
+ h.directory.recordResearch=async row=>coverage.push(row);
+ h.openai.responses.create=async request=>{
+  const brief=JSON.parse(request.input[1].content);
+  const formation=brief.formations[0].id;searched.push(formation);
+  assert.equal(brief.formations.length,1);
+  assert.equal(brief.evidence.length,1);
+  const candidates=formation==='r1'?[]:[{name:'Aviation Journal',category:'aviation news',publication_type:'trade_publication',website:'https://journal.example',publication_proof_url:'https://journal.example/news',contact_url:'https://journal.example/editorial',email:'editor@journal.example',formation_ids:['r2'],ecosystem_formation_ids:['r2'],industries:['Aviation'],evidence_ids:['e2'],relationship_reason:'Covers aviation policy and airline operating costs.'}];
+  return {output:[{content:[{type:'output_text',text:JSON.stringify({candidates})}]}]};
+ };
+ const {createAutonomousOutletDiscovery}=await load();
+ const links=await createAutonomousOutletDiscovery(h)({document:scan});
+ assert.deepEqual(searched,['r1','r2']);
+ assert.equal(links.length,1);
+ assert.equal(links[0].record_id,'r2');
+ assert.equal(h.saved.length,1);
+ assert.equal(coverage.length,3); // 1 contact research + 2 independent formation reports
+ const missing=coverage.find(row=>row.formation_id==='r1');
+ const found=coverage.find(row=>row.formation_id==='r2');
+ assert.equal(missing.status,'NO_ELIGIBLE_CANDIDATES_RETURNED');
+ assert.equal(found.status,'VERIFIED');
+ assert.equal(found.verified_contacts,1);
+});
+
+test('a government press-release host cannot masquerade as an independent publication',async()=>{
+ const h=harness([{name:'OJK Financial Services Authority',category:'Press Release',website:'https://ojk.go.id',publication_proof_url:'https://ojk.go.id/news',contact_url:'https://ojk.go.id/contact',email:'humas@ojk.go.id',evidence_ids:['e1']}]);
+ const {createAutonomousOutletDiscovery}=await load();
+ const links=await createAutonomousOutletDiscovery(h)({document});
+ assert.deepEqual(links,[]);
+ assert.equal(h.saved.length,0);
+});
+
+test('a previously saved OJK government contact cannot be reused as an editorial publication',()=>{
+ const policy=require('../src/emradar-v3-recipient.cjs');
+ const recipient=require('./fixtures/v3-verified-recipient.cjs')();
+ assert.equal(policy.verifiedPublication(recipient),true);
+ const institutional={...recipient,website:'https://www.ojk.go.id',name:'OJK Financial Services Authority',contact:{...recipient.contact,email:'humas@ojk.go.id',source_url:'https://www.ojk.go.id/contact',published_excerpt:'Contact humas@ojk.go.id'},verification:{...recipient.verification,publication_proof_url:'https://www.ojk.go.id/press-release'}};
+ assert.equal(policy.verifiedPublication(institutional),false);
+ assert.equal(policy.verifiedDestination(institutional),false);
+});
+
+test('checks official publisher pages for submission policy and keeps an enquiry distinct from acceptance',async()=>{
+ const {createAutonomousOutletDiscovery}=await load();
+ const accepting=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],
+ 'News and analysis. Editorial: editor@journal.example. We welcome research contributions.');
+ const accepted=await createAutonomousOutletDiscovery(accepting)({document});
+ assert.equal(accepted.length,1);
+ assert.equal(accepting.saved[0].submission_policy.status,'ACCEPTS_CONTRIBUTIONS');
+ assert.match(accepting.saved[0].submission_policy.source_url,/journal\.example/);
+
+ const undecided=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
+ const enquiry=await createAutonomousOutletDiscovery(undecided)({document});
+ assert.equal(enquiry.length,1);
+ assert.equal(undecided.saved[0].submission_policy.status,'EDITORIAL_ENQUIRY_ONLY');
+});
+
+test('explicit publisher refusal excludes that proposal without failing the formation search',async()=>{
+ const {createAutonomousOutletDiscovery}=await load();
+ const declining=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}],
+ 'News and analysis. Editorial: editor@journal.example. We do not accept unsolicited articles.');
+ const links=await createAutonomousOutletDiscovery(declining)({document});
+ assert.deepEqual(links,[]);
+ assert.equal(declining.saved.length,0);
+});
+
+test('multiple verified outlets can receive distinct proposals for one formation',async()=>{
+ const h=harness([
+  {name:'Mining Journal One',category:'mining journal',website:'https://journal1.example',publication_proof_url:'https://journal1.example/news',contact_url:'https://journal1.example/editorial',email:'editor@journal1.example',evidence_ids:['e1']},
+  {name:'Mining Journal Two',category:'mining journal',website:'https://journal2.example',publication_proof_url:'https://journal2.example/news',contact_url:'https://journal2.example/editorial',email:'editor@journal2.example',evidence_ids:['e1']}
+ ]);
+ h.contactReader=async url=>'News and analysis. Editorial newsroom editor@'+url.hostname;
+ const {createAutonomousOutletDiscovery}=await load();
+ const links=await createAutonomousOutletDiscovery(h)({document});
+ assert.equal(links.length,2);
+ assert.equal(h.saved.length,2);
+ assert.equal(new Set(links.map(item=>item.outlet_id)).size,2);
+});
+
 test('requires provider-enforced structured discovery output',async()=>{
  const h=harness([]);let request;
  h.openai.responses.create=async value=>{request=value;return {output:[{type:'message',content:[{type:'output_text',text:'{"candidates":[]}'}]}]}};
@@ -112,7 +198,7 @@ test('requires provider-enforced structured discovery output',async()=>{
  assert.equal(request.text.format.type,'json_schema');
  assert.equal(request.text.format.strict,true);
  assert.deepEqual(request.text.format.schema.required,['candidates']);
- assert.equal(request.text.format.schema.properties.candidates.maxItems,30);
+ assert.equal(request.text.format.schema.properties.candidates.maxItems,10);
  assert.equal(request.max_tool_calls,4);
  const brief=JSON.parse(request.input[1].content);
  assert.match(brief.search_brief,/Copper mining.*trade magazine/);
