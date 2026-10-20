@@ -51,6 +51,7 @@ function verifiedPublication(record){
  const explicit=record?.publication_verified===true&&v?.publication_status==='VERIFIED'&&/^[a-f0-9]{64}$/.test(v?.publication_page_sha256??'')&&
   Array.isArray(record?.relationship?.formation_ids)&&record.relationship.formation_ids.length>0&&Array.isArray(record?.relationship?.industries)&&record.relationship.industries.length>0&&typeof record?.relationship?.reason==='string'&&record.relationship.reason.trim().length>0;
  return record?.active===true&&record.editorial_fit_verified===true&&['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(record.destination_class)&&website.protocol==='https:'&&
+  !/(?:^|\.)(?:gov|gob|go|gouv)\.[a-z]{2}(?:\.[a-z]{2})?$/.test(website.hostname.toLowerCase())&&
   (legacy||explicit)&&(sameHost||directoryProof)&&Array.isArray(v?.evidence_ids)&&v.evidence_ids.length>0&&/^[a-f0-9]{64}$/.test(v?.scan_evidence_digest??'');
 }
 function verifiedDestination(record){
