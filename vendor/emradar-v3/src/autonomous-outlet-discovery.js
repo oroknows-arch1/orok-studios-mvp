@@ -12,6 +12,14 @@ async function publiclyResolved(name,resolver){if(isIP(name))return false;try{co
 export const pinnedLookup=address=>(_hostname,options,callback)=>options?.all===true?callback(null,[{address,family:isIP(address)}]):callback(null,address,isIP(address));
 export function pinnedHtml(url,resolver,timeoutMs=12000,maxBytes=1000000){return new Promise(async(resolve,reject)=>{let addresses;try{addresses=await resolver(url.hostname,{all:true,verbatim:true});}catch{return reject(Error('CONTACT_DNS_FAILED'));}if(!addresses?.length||!addresses.every(a=>publicAddress(a.address)))return reject(Error('CONTACT_ADDRESS_UNSAFE'));const address=addresses[0].address;const req=httpsRequest(url,{method:'GET',timeout:timeoutMs,maxRedirects:0,lookup:pinnedLookup(address),headers:{accept:'text/html'},rejectUnauthorized:true},res=>{if(res.statusCode!==200||!String(res.headers['content-type']??'').toLowerCase().includes('text/html')){res.destroy();return reject(Error(res.statusCode===403?'CONTACT_HTTP_403':'CONTACT_RESPONSE_INVALID'));}let size=0;const chunks=[];res.on('data',chunk=>{size+=chunk.length;if(size>maxBytes){res.destroy();reject(Error('CONTACT_TOO_LARGE'));}else chunks.push(chunk);});res.on('end',()=>resolve(Buffer.concat(chunks).toString('utf8')));res.on('error',reject);});req.on('timeout',()=>req.destroy(Error('CONTACT_TIMEOUT')));req.on('error',reject);req.end();});}
 const plainText=response=>(response.output??[]).flatMap(item=>item.content??[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
+// A published editorial contact permits an enquiry; it is not evidence that
+// the publisher accepts unsolicited contributions. Preserve that distinction.
+function contributionPolicy(html){
+ const visible=String(html??'').replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi,' ').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').slice(0,75000);
+ if(/(?:do not|does not|don.t|cannot|not currently)\s+accept\s+(?:any\s+)?(?:unsolicited\s+)?(?:articles?|guest posts?|contributions?|submissions?)/i.test(visible)||/unsolicited\s+(?:articles?|guest posts?|contributions?)\s+(?:are|is)\s+not\s+accepted/i.test(visible))return 'DECLINES_EXTERNAL_CONTRIBUTIONS';
+ if(/(?:we\s+(?:accept|welcome)|submit|send\s+us|contribute)\s+(?:your\s+|an?\s+|external\s+|guest\s+|research\s+)?(?:articles?|research contributions?|guest posts?|editorial submissions?)/i.test(visible)||/write\s+for\s+us/i.test(visible))return 'ACCEPTS_CONTRIBUTIONS';
+ return 'POLICY_NOT_PUBLISHED';
+}
 function safeResponseShape(response){const output=Array.isArray(response?.output)?response.output:[];return {response_type:Array.isArray(response)?'array':response===null?'null':typeof response,top_level_keys:response&&typeof response==='object'&&!Array.isArray(response)?Object.keys(response).sort():[],output_count:output.length,output_types:output.map(item=>typeof item?.type==='string'?item.type:null),content_counts:output.map(item=>Array.isArray(item?.content)?item.content.length:0),content_types:output.map(item=>(Array.isArray(item?.content)?item.content:[]).map(content=>typeof content?.type==='string'?content.type:null)),output_text_lengths:output.map(item=>(Array.isArray(item?.content)?item.content:[]).filter(content=>content?.type==='output_text').map(content=>typeof content?.text==='string'?content.text.length:null))};}
 
 export function contactPurpose(html,near,url){
@@ -154,12 +162,25 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
       if(!proven){counts.publication_proof_failed++;throw Error('PUBLICATION_IDENTITY_NOT_PROVEN');}
      }
     }
+    // Inspect the actual retrieved publisher pages; never infer permission to
+    // contribute from an address, search snippet, or a model assertion.
+    let submissionPolicy={status:'EDITORIAL_ENQUIRY_ONLY',source_url:null};
+    for(const page of journal.pages){
+     if(!page?.url||host(new URL(page.url).hostname)!==key)continue;
+     try{
+      const observed=contributionPolicy(await read(new URL(page.url)));
+      if(observed==='DECLINES_EXTERNAL_CONTRIBUTIONS'){submissionPolicy={status:observed,source_url:page.url};break;}
+      if(observed==='ACCEPTS_CONTRIBUTIONS')submissionPolicy={status:observed,source_url:page.url};
+     }catch{}
+    }
+    journal.submission_policy=submissionPolicy;
+    if(submissionPolicy.status==='DECLINES_EXTERNAL_CONTRIBUTIONS')throw Error('PUBLICATION_DECLINES_CONTRIBUTIONS');
     const contact=result.primary,email=contact.email.toLowerCase();
     if(seen.has(email)){counts.invalid_email_or_duplicate++;throw Error('DUPLICATE_RECIPIENT');}
     const publicationMethod=result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_publication_page';
     const publicationHash=proofHtml?digest(proofHtml):prior?.verification?.publication_page_sha256;
     const publicationVerified=Boolean(publicationHash);
-    const discovered={...base,publication_verified:publicationVerified,editorial_fit_verified:true,contact_verified:true,discovery_status:'VERIFIED',contact:{...contact,alternatives:result.alternatives},verification:{method:result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_editorial_contact_page',status:'VERIFIED',source_url:contact.source_url,...(publicationVerified?{publication_method:publicationMethod,publication_status:'VERIFIED',publication_page_sha256:publicationHash}:{}),publication_proof_url:proofSource,evidence_ids:ids,scan_evidence_digest:scanDigest}};
+    const discovered={...base,publication_verified:publicationVerified,editorial_fit_verified:true,contact_verified:true,discovery_status:'VERIFIED',submission_policy:submissionPolicy,contact:{...contact,alternatives:result.alternatives},verification:{method:result.source_kind==='published_editorial_directory'?'published_editorial_directory':'live_editorial_contact_page',status:'VERIFIED',source_url:contact.source_url,...(publicationVerified?{publication_method:publicationMethod,publication_status:'VERIFIED',publication_page_sha256:publicationHash}:{}),publication_proof_url:proofSource,evidence_ids:ids,scan_evidence_digest:scanDigest}};
     recipientPolicy.assertVerifiedDestination(discovered);
     await directory.upsert(discovered);counts.verified_contacts++;seen.add(email);
     if(!publicationPersisted)counts.verified_publications++;
