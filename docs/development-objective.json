@@ -512,7 +512,7 @@
     "delete_only_after_live_service_dependency_preflight": true
   },
   "october_20_per_formation_discovery": {
-    "status": "IMPLEMENTED_ON_BRANCH_TESTS_PENDING",
+    "status": "FOCUSED_TESTS_PASS_FULL_HARNESS_BLOCKED_CI_SUBMODULE_AUTH",
     "source_scan_date": "2026-10-20",
     "campaign_id": "v3-d03cac6eefb5eb481ed20110e3baeff0",
     "observed_issue": "Seven evidence-supported formations entered Marketing; one cross-formation search returned four Indonesia-centric candidates and produced one invalid governmental editorial destination.",
@@ -521,7 +521,9 @@
       "Round-robin discovered publication candidates across formations within the unchanged destination limit.",
       "Persist one formation coverage record even when candidates are missing or research fails.",
       "Continue other formations after malformed search responses or individual contact failures.",
-      "Exclude obvious government and regulator domains from editorial candidates."
+      "Exclude obvious government and regulator domains from editorial candidates.",
+      "Observe published publisher submission policies; distinguish explicit acceptance, mere editorial enquiry and explicit refusal.",
+      "Invalidate previously saved governmental hosts such as OJK as editorial publications."
     ],
     "constraints": [
       "No synthetic publications or contacts.",
@@ -529,7 +531,15 @@
       "No change to 30-destination, verified-recipient, owner-approval, duplicate-delivery or X requirements.",
       "No scanner changes, new campaign, live scan, owner decisions or external distribution."
     ],
-    "verification": "Await GitHub Actions harness and targeted tests on PR; production not deployed.",
-    "next_action": "Run CI and review test failures; only promote after harness, production-shaped regression and live read-only confirmation."
+    "verification": {
+      "test_job": "discovery-focused",
+      "result": "PASS",
+      "workflow_run_id": 39354734763,
+      "full_harness": "NOT_RUN - checkout private authoritative V3 submodule fails repository not found",
+      "production": "NOT_DEPLOYED",
+      "campaigns_triggered": 0,
+      "external_distribution": 0
+    },
+    "next_action": "Repair GitHub Actions access to the existing private V3 submodule without bypassing source provenance, run harness:verify and harness:v3, then perform a production-shaped multi-formation dry run; do not deploy or distribute on test-only evidence."
   }
 }
