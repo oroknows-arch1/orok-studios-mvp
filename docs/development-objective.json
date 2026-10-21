@@ -513,7 +513,7 @@
   },
   "october_21_discovery_editorial_enforcement": {
     "status": "CHECKS_PASSED_AWAITING_PRODUCTION_VERIFICATION",
-    "authoritative_commit": "bc555b7518881b1879e331f9b9736e5da4033e4f",
+    "authoritative_commit": "a92267f41c00d60a5a8080a6c83911a0d9269e6b",
     "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
     "baseline": {
       "live_commit": "cfbb4bcafbec3d555502a73b24194db223e264a3",
@@ -534,7 +534,8 @@
       "A first production round examined all seven formations but returned below campaign limits with research time remaining. Research now continues fair rounds within the existing 12-minute budget.",
       "The analytical-finding keyword gate rejects a verbatim supported discovery clause from the approved original. Removed the keyword gate while retaining evidence, exact finding, uncertainty and correspondence-progression validation.",
       "Production drafts used a generic interest question. The writer now requires the question itself to name the article or research contribution, as in the approved original, and prior undecided v1 drafts must regenerate under enforcement v2.",
-      "A production-shaped regression proved that a World Bank news page and published press contact could persist as an independent publication. Source institutional and listed-company identities now exclude these candidates before publication persistence or contact reuse."
+      "A production-shaped regression proved that a World Bank news page and published press contact could persist as an independent publication. Source institutional and listed-company identities now exclude these candidates before publication persistence or contact reuse.",
+      "Live research selected SAIMM as an industry association. Institutional identities and association/forum/social destination types are now excluded; a separately named journal can qualify. Undecided institutional drafts are archived in discovery_exclusions rather than lost or counted as genuine editorial groups."
     ],
     "checks": {
       "focused_release_regressions": "74/74 passed",

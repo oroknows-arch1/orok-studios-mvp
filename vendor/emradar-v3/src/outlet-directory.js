@@ -51,6 +51,15 @@ export class OutletDirectory {
   await this.pool.query('INSERT INTO v3_outlet_directory(outlet_id,record) VALUES($1,$2::jsonb) ON CONFLICT(outlet_id) DO UPDATE SET record=EXCLUDED.record,updated_at=now()',[record.id,JSON.stringify(record)]);
   return record.id;
  }
+ async excludePublication(id,reason){
+  const {rows}=await this.pool.query('SELECT record FROM v3_outlet_directory WHERE outlet_id=$1',[id]);
+  const previous=rows[0]?.record;if(!previous)return false;
+  const exclusion={active:false,publication_verified:false,discovery_status:'EXCLUDED_SOURCE_INSTITUTION',exclusion:{reason,previous_record:previous,excluded_at:new Date().toISOString()}};
+  const result=await this.pool.query('UPDATE v3_outlet_directory SET record=record || $2::jsonb,updated_at=now() WHERE outlet_id=$1 AND record=$3::jsonb',[id,JSON.stringify(exclusion),JSON.stringify(previous)]);
+  if(result.rowCount!==1)return false;
+  await this.recordResearch({publication:previous.name,website:previous.website,scan_digest:previous.verification.scan_evidence_digest,status:'EXCLUDED',reason});
+  return true;
+ }
  async list() {
   const {rows}=await this.pool.query('SELECT record FROM v3_outlet_directory ORDER BY outlet_id');
   return rows.map(row=>row.record).filter(recipientPolicy.verifiedPublication);

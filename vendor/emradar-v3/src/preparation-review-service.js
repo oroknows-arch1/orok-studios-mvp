@@ -22,6 +22,24 @@ import {createPublicationReviewHandoff} from './publication-review-handoff.js';
 import {sha256,MAX_DESTINATIONS,isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 
+export async function excludeSourceInstitutionDestinations({store,directory,campaignId}){
+ const state=(await store.adapter.read(campaignId))?.value,document=state?.preparation_input?.document;
+ if(!document)return [];
+ const digest=sha256(JSON.stringify(document.evidence.filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url).map(e=>[e.id,e.fact,e.source_url])));
+ for(const publication of await directory.list())if(publication.verification?.scan_evidence_digest===digest&&isEditorialSourceInstitution(publication,document))await directory.excludePublication(publication.id,'SOURCE_INSTITUTION_NOT_PUBLICATION');
+ const excluded=[];
+ await store.mutate(campaignId,current=>{
+  current.destinations=current.destinations.filter(destination=>{
+   if(destination.id==='x'||!isEditorialSourceInstitution(destination,document)||current.decisions?.[destination.id]||current.deliveries?.[destination.id])return true;
+   current.discovery_exclusions??={};
+   current.discovery_exclusions[destination.id]={destination:structuredClone(destination),asset:structuredClone(current.assets[destination.id]??null),reason:'SOURCE_INSTITUTION_NOT_PUBLICATION'};
+   delete current.assets[destination.id];excluded.push(destination.id);return false;
+  });
+  return current;
+ });
+ return excluded;
+}
+
 export function selectPersistedDraftDestinations({candidates,document,existingIds=[]}) {
  const evidence=(document?.evidence??[]).filter(item=>item?.verified===true&&item?.id);
  const evidenceIds=new Set(evidence.map(item=>item.id));
@@ -39,7 +57,7 @@ export function assessPublicationReview({state,candidates}) {
  if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)return {complete:false,verified_publications:0,editorial_emails:0,x_ready:false,missing_destination_ids:[]};
  const evidence=state.preparation_input.document.evidence.filter(item=>item?.verified===true&&item?.id);
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
- const publications=[...new Map([...(state.destinations??[]),...(candidates??[])].filter(candidate=>recipientPolicy.verifiedPublication(candidate)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>[candidate.id,candidate])).values()].slice(0,MAX_DESTINATIONS);
+ const publications=[...new Map([...(state.destinations??[]),...(candidates??[])].filter(candidate=>!isEditorialSourceInstitution(candidate,state.preparation_input.document)&&recipientPolicy.verifiedPublication(candidate)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>[candidate.id,candidate])).values()].slice(0,MAX_DESTINATIONS);
  const recipients=publications.filter(recipientPolicy.verifiedDestination);
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
@@ -196,6 +214,7 @@ export async function createPreparationReviewService({
  const resumeIntelligentDiscovery=async (campaignId,{notifyOwner=true}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
+  if(autonomousDiscovery)await excludeSourceInstitutionDestinations({store,directory,campaignId});
   await saveCompletion(campaignId);
   let resumed,completion;
   try{
