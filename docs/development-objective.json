@@ -513,7 +513,7 @@
   },
   "october_21_discovery_editorial_enforcement": {
     "status": "CHECKS_PASSED_AWAITING_PRODUCTION_VERIFICATION",
-    "authoritative_commit": "14fb9e8817ca56b01005675da38efd864579d11c",
+    "authoritative_commit": "6f21dd6bc203fe3b8119bbca5c2f3ad0fde64faa",
     "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
     "baseline": {
       "live_commit": "cfbb4bcafbec3d555502a73b24194db223e264a3",
@@ -532,7 +532,8 @@
       "Review completion did not establish discovery exhaustion and prevented automatic continuation.",
       "The writer validated source IDs, findings and uncertainty but not the approved correspondence progression; one repair did not handle writing-standard failures.",
       "A first production round examined all seven formations but returned below campaign limits with research time remaining. Research now continues fair rounds within the existing 12-minute budget.",
-      "The analytical-finding keyword gate rejects a verbatim supported discovery clause from the approved original. Removed the keyword gate while retaining evidence, exact finding, uncertainty and correspondence-progression validation."
+      "The analytical-finding keyword gate rejects a verbatim supported discovery clause from the approved original. Removed the keyword gate while retaining evidence, exact finding, uncertainty and correspondence-progression validation.",
+      "Production drafts used a generic interest question. The writer now requires the question itself to name the article or research contribution, as in the approved original, and prior undecided v1 drafts must regenerate under enforcement v2."
     ],
     "checks": {
       "focused_release_regressions": "74/74 passed",
@@ -556,7 +557,12 @@
       "previous_graphic_preserved": true,
       "x_text_preserved": true,
       "owner_decisions_changed": 0,
-      "external_distribution": 0
+      "external_distribution": 0,
+      "health_http_status": 200,
+      "review_http_status": 200,
+      "verified_publications": 11,
+      "verified_contacts": 6,
+      "eligible_proposals": 4
     }
   }
 }
