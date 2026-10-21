@@ -1,4 +1,4 @@
-import {createCoverageDiscovery,assessDiscoveryCoverage,coverageKey} from '../../emradar-v3-authoritative/src/discovery-coverage.js';
+import {createCoverageDiscovery,assessDiscoveryCoverage,coverageKey,isEditorialSourceInstitution} from '../../emradar-v3-authoritative/src/discovery-coverage.js';
 import {GRAPHIC_STANDARD} from './graphic-standard.js';
 import {assetFingerprint} from './contracts.js';
 import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION} from './editorial-reference.js';
@@ -27,7 +27,7 @@ export function selectPersistedDraftDestinations({candidates,document,existingId
  const evidenceIds=new Set(evidence.map(item=>item.id));
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
  const existing=new Set(existingIds),emails=new Set();
- return (candidates??[]).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&recipientPolicy.verifiedPublication(candidate)&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
+ return (candidates??[]).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&!isEditorialSourceInstitution(candidate,document)&&recipientPolicy.verifiedPublication(candidate)&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
   const ids=(candidate.verification.evidence_ids??[]).filter(id=>evidenceIds.has(id));
   const email=candidate.contact?.email?.toLowerCase();if(!ids.length||(email&&emails.has(email)))return null;if(email)emails.add(email);
   const deliveryEligible=candidate.contact_verified===true&&candidate.editorial_fit_verified===true&&Boolean(candidate.contact?.email)&&Boolean(candidate.contact?.source_url);

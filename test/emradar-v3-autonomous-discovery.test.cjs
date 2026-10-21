@@ -143,3 +143,10 @@ test('derives formation, industry and ecosystem context from verified records',a
  const {deriveDiscoveryContext}=await load();const context=deriveDiscoveryContext(document);
  assert.deepEqual(context.industries,['Copper mining']);assert.equal(context.formations[0].id,'r1');assert.equal(context.ecosystems[0].formation_id,'r1');
 });
+test('institution-source news pages cannot persist as independent editorial publications',async()=>{
+ const h=harness([{name:'World Bank',category:'research publication',website:'https://worldbank.example',publication_proof_url:'https://worldbank.example/news',contact_url:'https://worldbank.example/contact',email:'press@worldbank.example',evidence_ids:['e1']}],'The World Bank is an international financial institution. News and analysis. Editorial enquiries: press@worldbank.example');
+ const publications=[];h.directory.upsertPublication=async record=>publications.push(record);
+ const sourceDocument={...document,evidence:document.evidence.map(e=>({...e,source:'World Bank',source_url:'https://worldbank.example/project'}))};
+ const {createAutonomousOutletDiscovery}=await load();await createAutonomousOutletDiscovery(h)({document:sourceDocument});
+ assert.equal(publications.length,0);assert.equal(h.saved.length,0);
+});
