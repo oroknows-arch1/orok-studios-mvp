@@ -513,7 +513,7 @@
   },
   "october_21_discovery_editorial_enforcement": {
     "status": "CHECKS_PASSED_AWAITING_PRODUCTION_VERIFICATION",
-    "authoritative_commit": "c19f25451b2c121541e065fb1fddbee2d2c35abb",
+    "authoritative_commit": "e9989bf1a0b44986011490b049901d666dc814eb",
     "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
     "baseline": {
       "live_commit": "cfbb4bcafbec3d555502a73b24194db223e264a3",
@@ -536,7 +536,8 @@
       "focused_release_regressions": "74/74 passed",
       "harness_verify": "PASS",
       "harness_v3": "PASS",
-      "authoritative_suite_previous_run": "92 passed, 5 skipped"
+      "authoritative_suite_previous_run": "92 passed, 5 skipped",
+      "production_ci": "Private-submodule checkout blocked; existing authoritative workflow reused to execute the exact production harness. 178/182 passed; four stale integration fixtures lacked the existing recipient proof or queried the old notification reservation key. Fixtures corrected without changing production distribution code."
     },
     "production_scan_resumed": false,
     "external_distribution": 0,

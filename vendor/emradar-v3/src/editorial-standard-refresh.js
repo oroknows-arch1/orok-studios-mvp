@@ -27,7 +27,8 @@ export async function refreshUnreviewedEditorialDrafts({store,write,campaignId})
   if(asset.campaign_id!==campaignId||asset.destination_id!==destination.id||asset.editorial_reference?.sha256!==EDITORIAL_REFERENCE.sha256)throw Error('EDITORIAL_REFERENCE_REQUIRED');
   verifyEditorialAsset(asset,{evidenceIds});
   // Preserve the reviewed recipient; rewriting words cannot change the addressee.
-  asset.to=previous.asset.to;
+  asset.to=previous.asset.to??asset.to;
+  verifyEditorialAsset(asset,{evidenceIds});
   const fingerprint=assetFingerprint(asset);
   const saved=await store.mutate(campaignId,state=>{
    if(state.decisions[destination.id]||state.deliveries[destination.id])return state;

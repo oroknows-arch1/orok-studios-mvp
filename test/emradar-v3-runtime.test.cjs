@@ -116,3 +116,14 @@ test('published archive index enumerates attestable scans in chronological order
  assert.deepEqual(merged.blocked,scans.blocked);
  assert.throws(()=>mergeCurrentPublishedScan(scans,[{...current,snapshotDate:'2026-10-18'}]),/SCAN_ARCHIVE_IDENTITY_CONFLICT/);
 });
+
+test('the existing intake worker resumes persisted incomplete discovery without creating a scan or distributing',async()=>{
+ const {resumePendingDiscovery}=require('../src/emradar-v3-runtime.cjs');
+ const calls=[];
+ const client={query:async sql=>{calls.push(sql);return {rows:[{acquired:true}]};},release:()=>calls.push('released')};
+ const pool={query:async sql=>{assert.match(sql,/discovery_coverage/);return {rows:[{campaign_id:'existing'}]};},connect:async()=>client};
+ const state={phase:'PUBLICATION_REVIEW',discovery_coverage:{complete:false},preparation_input:{document:{evidence:[]}},decisions:{keep:'decision'},deliveries:{keep:'receipt'}};
+ const service={store:{adapter:{read:async()=>({value:state})}},resumeIntelligentDiscovery:async id=>{calls.push(id);return {campaignId:id,status:'PUBLICATION_REVIEW'};}};
+ assert.equal((await resumePendingDiscovery({pool,service})).campaignId,'existing');
+ assert(calls.includes('existing'));assert.equal(calls.at(-1),'released');assert.deepEqual(state.decisions,{keep:'decision'});assert.deepEqual(state.deliveries,{keep:'receipt'});
+});

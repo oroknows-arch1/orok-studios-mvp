@@ -22,6 +22,6 @@ test('V3 PostgreSQL prepared API: durable owner notification reserves once and r
  const results=await Promise.all([run(),run()]);
  assert.deepEqual(results.map(r=>r.statusCode).sort(),[200,409]);
  assert.deepEqual(events,['smtp']);
- const record=await pool.query('SELECT status,provider_id FROM v3_owner_notification_reservations WHERE campaign_id=$1',[id]);
+ const record=await pool.query('SELECT status,provider_id FROM v3_owner_notification_reservations WHERE campaign_id=$1',[id+':review:'+crypto.createHash('sha256').update(payload.private_review_url).digest('hex')]);
  assert.equal(record.rows[0].status,'ACCEPTED');assert.equal(record.rows[0].provider_id,'simulated-review-receipt');
 });

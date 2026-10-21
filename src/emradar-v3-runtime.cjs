@@ -115,6 +115,24 @@ async function selectNextPublishedScan({published,readCampaign}){
  }
  return null;
 }
+// Continue already verified, persisted scans independently of new-scan intake.
+// Reopening publication review is not evidence of discovery exhaustion.
+async function resumePendingDiscovery({pool,service}){
+ const {rows}=await pool.query(`SELECT campaign_id FROM v3_campaign_state
+  WHERE payload->>'phase'='PUBLICATION_REVIEW'
+  AND payload->'preparation_input'->'document' IS NOT NULL
+  AND payload->'discovery_coverage'->>'complete'='false'
+  ORDER BY updated_at ASC,campaign_id ASC LIMIT 1`);
+ const campaignId=rows[0]?.campaign_id;if(!campaignId)return null;
+ const client=await pool.connect();
+ try{
+  const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[campaignId]);
+  if(!lock.rows[0]?.acquired)return {campaignId,status:'SCAN_PREPARATION_IN_PROGRESS'};
+  const state=(await service.store.adapter.read(campaignId))?.value;
+  if(state?.phase!=='PUBLICATION_REVIEW'||state.discovery_coverage?.complete!==false||!state.preparation_input?.document)return null;
+  return await service.resumeIntelligentDiscovery(campaignId);
+ }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[campaignId]);client.release();}
+}
 async function runNextPublishedCampaign({published,readCampaign,startCampaign,verify,discover,persistDestinations,prepareAndNotify}){
  const selected=await selectNextPublishedScan({published,readCampaign});
  if(!selected)return {status:'NO_UNPROCESSED_SCAN'};
@@ -300,6 +318,9 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async(snapshotDate)=>{
+   if(!snapshotDate&&env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'){
+    const resumed=await resumePendingDiscovery({pool,service});if(resumed)return resumed;
+   }
    // Historical runs require the source's paired release attestations and exact archive digest.
    // Never substitute the current live scan for a requested historical date.
    const available=await published();
@@ -420,4 +441,4 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   return {discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
+module.exports={resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

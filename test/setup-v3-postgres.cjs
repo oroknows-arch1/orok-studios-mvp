@@ -8,6 +8,8 @@ async function main(){
  try{
   await pool.query('CREATE TABLE IF NOT EXISTS v3_campaign_state (campaign_id TEXT PRIMARY KEY,version BIGINT NOT NULL,payload JSONB NOT NULL)');
   await new V3Reservations(pool).initialize();
+  const {OutletDirectory}=await import('../vendor/emradar-v3/src/outlet-directory.js');
+  await new OutletDirectory(pool).initialize();
  }finally{await pool.end();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
