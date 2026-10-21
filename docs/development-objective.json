@@ -513,7 +513,7 @@
   },
   "october_21_discovery_editorial_enforcement": {
     "status": "CHECKS_PASSED_AWAITING_PRODUCTION_VERIFICATION",
-    "authoritative_commit": "e9989bf1a0b44986011490b049901d666dc814eb",
+    "authoritative_commit": "14fb9e8817ca56b01005675da38efd864579d11c",
     "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
     "baseline": {
       "live_commit": "cfbb4bcafbec3d555502a73b24194db223e264a3",
@@ -530,7 +530,9 @@
       "Candidate truncation preceded independent verification.",
       "Publication-first persistence omitted editorial_fit_verified and therefore rejected otherwise verified publication records.",
       "Review completion did not establish discovery exhaustion and prevented automatic continuation.",
-      "The writer validated source IDs, findings and uncertainty but not the approved correspondence progression; one repair did not handle writing-standard failures."
+      "The writer validated source IDs, findings and uncertainty but not the approved correspondence progression; one repair did not handle writing-standard failures.",
+      "A first production round examined all seven formations but returned below campaign limits with research time remaining. Research now continues fair rounds within the existing 12-minute budget.",
+      "The analytical-finding keyword gate rejects a verbatim supported discovery clause from the approved original. Removed the keyword gate while retaining evidence, exact finding, uncertainty and correspondence-progression validation."
     ],
     "checks": {
       "focused_release_regressions": "74/74 passed",
@@ -546,6 +548,15 @@
       "Remote authoritative CI and production integration CI",
       "Deploy and resume one existing campaign using the existing bounded recovery",
       "Inspect persisted coverage, generated correspondence, X, owner access and unchanged decisions/deliveries"
-    ]
+    ],
+    "first_live_recovery": {
+      "commit": "dde3cd9b592f46c1672b2e1807b9b98fd8deadc0",
+      "deploy_id": "dep-dbck6hks728c73am5kt0",
+      "formations_examined": 7,
+      "previous_graphic_preserved": true,
+      "x_text_preserved": true,
+      "owner_decisions_changed": 0,
+      "external_distribution": 0
+    }
   }
 }
