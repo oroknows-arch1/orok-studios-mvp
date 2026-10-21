@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import recipientFixture from './fixtures/v3-verified-recipient.cjs';
 import {createAutonomousOutletDiscovery} from '../vendor/emradar-v3/src/autonomous-outlet-discovery.js';
 
 test('rediscovery preserves a verified contact when contact retrieval fails',async()=>{
@@ -9,8 +10,8 @@ test('rediscovery preserves a verified contact when contact retrieval fails',asy
  const verified={
   id,name:'Journal',category:'mining',website:'https://journal.example',
   destination_class:'EDITORIAL_PUBLICATION',active:true,contact_verified:true,editorial_fit_verified:true,
-  contact:{email:'editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13T00:00:00Z'},
-  verification:{method:'live_editorial_contact_page',evidence_ids:['old']}
+  contact:{...recipientFixture(id).contact,email:'editor@journal.example',published_excerpt:'Editorial: editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13T00:00:00Z'},
+  verification:{...recipientFixture(id).verification,method:'live_editorial_contact_page',evidence_ids:['old']}
  };
  const records=new Map([[id,structuredClone(verified)]]);
  const directory={
@@ -30,5 +31,5 @@ test('rediscovery preserves a verified contact when contact retrieval fails',asy
  assert.equal(links.length,1);
  assert.equal(records.size,1);
  assert.equal(records.get(id).contact_verified,true);
- assert.deepEqual(records.get(id).contact,verified.contact);
+ assert.deepEqual(records.get(id).contact,{...verified.contact,alternatives:[]});
 });

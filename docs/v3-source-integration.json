@@ -2,9 +2,17 @@
   "schema_version": 1,
   "repository": "oroknows-arch1/emradar-marketing-engine-v3",
   "url": "https://github.com/oroknows-arch1/emradar-marketing-engine-v3.git",
-  "commit": "428396809cee45a3c5b98c949e25358ee767d8e7",
+  "commit": "c19f25451b2c121541e065fb1fddbee2d2c35abb",
   "path": "vendor/emradar-v3-authoritative",
   "runtime_overlay": "vendor/emradar-v3",
-  "exact_shared_files": ["src/discovery.js", "src/review-access.js"],
-  "authoritative_standard_files": ["src/editorial-reference.js", "src/graphic-standard.js", "src/graphic-renderer.js"]
+  "exact_shared_files": [
+    "src/discovery.js",
+    "src/review-access.js"
+  ],
+  "authoritative_standard_files": [
+    "src/editorial-reference.js",
+    "src/graphic-standard.js",
+    "src/graphic-renderer.js",
+    "src/discovery-coverage.js"
+  ]
 }

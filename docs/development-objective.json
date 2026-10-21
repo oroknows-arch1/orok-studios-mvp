@@ -221,7 +221,9 @@
       "owner_recipient": "sean@emradar.net",
       "editorial_emails": 2,
       "x_ready": false,
-      "needs_revision": ["x"],
+      "needs_revision": [
+        "x"
+      ],
       "decisions": 0,
       "deliveries": 0,
       "external_distribution": 0
@@ -260,9 +262,28 @@
       "production_failure": "TypeError at src/emradar-v3-runtime.cjs:84 sorting null results from indexed scans without acceptable publication attestations; logged as V3_PREPARATION_FAILED.",
       "secondary_current_scan_gap": "Production replaced the existing live-current scan candidate with historical attestation enumeration. The current 2026-10-19 live scan is PUBLISHED and live/archive byte verification passes, but its publication record is absent, so historical enumeration alone excluded it.",
       "archive_recovery": "The public index responds 200. Eight dates (2026-10-07 through 2026-10-14) pass the existing publication/release gates and exact archived-byte verification. The 2026-10-19 live scan passes existing live/archive verification and is merged as a current candidate. Oldest-first selection and campaign identity deduplication are preserved.",
-      "blocked_archive_dates": ["2026-09-23", "2026-09-30", "2026-10-03", "2026-10-05", "2026-10-06", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"],
+      "blocked_archive_dates": [
+        "2026-09-23",
+        "2026-09-30",
+        "2026-10-03",
+        "2026-10-05",
+        "2026-10-06",
+        "2026-10-15",
+        "2026-10-16",
+        "2026-10-17",
+        "2026-10-18"
+      ],
       "blocked_archive_reasons": "2026-09-23 uses a non-checkpoint path; 2026-09-30 lacks paired records; 2026-10-03 and 2026-10-05 use unaccepted legacy attestor labels; 2026-10-06 and 2026-10-15 through 2026-10-17 have mismatched archive URL origins; 2026-10-18 lacks the required artifact digest in its publication record. Existing campaign dates remain preserved.",
-      "existing_campaign_dates": ["2026-10-10", "2026-10-12", "2026-10-13", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18", "2026-10-19"],
+      "existing_campaign_dates": [
+        "2026-10-10",
+        "2026-10-12",
+        "2026-10-13",
+        "2026-10-15",
+        "2026-10-16",
+        "2026-10-17",
+        "2026-10-18",
+        "2026-10-19"
+      ],
       "owner_feedback_regeneration": "Feedback is bound to the rejected asset fingerprint; one bounded worker creates a new revision and fresh idempotent owner review while preserving prior history.",
       "targeted_tests": "9/9 runtime tests pass after the null-filter and live-current merge regressions; harness:verify passes.",
       "scanner_modified": false,
@@ -285,7 +306,12 @@
     "render_deploy_id": "dep-dbaubi9srm7s73arvkrg",
     "campaign_version": 17,
     "asset_sha256": "283132be54a292580d472b13a99032b3aa535b592a0dc5ade31be05b5029554f",
-    "asset_diagnostics": {"record_count":6,"omitted_record_ids":[],"shortened":[],"snapshot_date":"2026-10-07"},
+    "asset_diagnostics": {
+      "record_count": 6,
+      "omitted_record_ids": [],
+      "shortened": [],
+      "snapshot_date": "2026-10-07"
+    },
     "owner_review": "https://orok-studios-api.onrender.com/review/access?campaign=v3-5d73d453fb02fa0da4287e23834f92db",
     "health": "HTTP 200",
     "review_endpoint": "HTTP 200",
@@ -484,5 +510,41 @@
     "may_be_imported": false,
     "owner_requested_deletion": true,
     "delete_only_after_live_service_dependency_preflight": true
+  },
+  "october_21_discovery_editorial_enforcement": {
+    "status": "CHECKS_PASSED_AWAITING_PRODUCTION_VERIFICATION",
+    "authoritative_commit": "c19f25451b2c121541e065fb1fddbee2d2c35abb",
+    "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
+    "baseline": {
+      "live_commit": "cfbb4bcafbec3d555502a73b24194db223e264a3",
+      "campaign_version": 49,
+      "formations": 7,
+      "verified_contacts": 2,
+      "email_proposals": 2,
+      "decisions": 0,
+      "deliveries": 0,
+      "x_state_md5": "6477203294b87e367d2a133286050143"
+    },
+    "verified_root_causes": [
+      "One scan-wide candidate search and a ten-contact early return could terminate evidence-supported discovery.",
+      "Candidate truncation preceded independent verification.",
+      "Publication-first persistence omitted editorial_fit_verified and therefore rejected otherwise verified publication records.",
+      "Review completion did not establish discovery exhaustion and prevented automatic continuation.",
+      "The writer validated source IDs, findings and uncertainty but not the approved correspondence progression; one repair did not handle writing-standard failures."
+    ],
+    "checks": {
+      "focused_release_regressions": "74/74 passed",
+      "harness_verify": "PASS",
+      "harness_v3": "PASS",
+      "authoritative_suite_previous_run": "92 passed, 5 skipped"
+    },
+    "production_scan_resumed": false,
+    "external_distribution": 0,
+    "owner_decisions_changed": 0,
+    "remaining": [
+      "Remote authoritative CI and production integration CI",
+      "Deploy and resume one existing campaign using the existing bounded recovery",
+      "Inspect persisted coverage, generated correspondence, X, owner access and unchanged decisions/deliveries"
+    ]
   }
 }

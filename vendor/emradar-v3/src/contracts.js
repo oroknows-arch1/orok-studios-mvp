@@ -15,7 +15,7 @@ export function assertScan(scan) {
   return Object.freeze({ snapshot_date:scan.snapshot_date, artifact_sha256:scan.artifact_sha256, source_key:scan.snapshot_date+':'+scan.artifact_sha256 });
 }
 export function assertDestinations(destinations) {
-  if (!Array.isArray(destinations) || destinations.length > MAX_DESTINATIONS) throw new Error('DESTINATION_LIMIT');
+  if (!Array.isArray(destinations) || destinations.filter(d=>d?.id!=='x').length > MAX_DESTINATIONS || (Array.isArray(destinations)&&new Set(destinations.filter(d=>d?.id!=='x').map(d=>d.editorial_group_id??d.id)).size>15)) throw new Error('DESTINATION_LIMIT');
   const ids = new Set();
   for (const d of destinations) {
     const visible=d?.id==='x'||recipientPolicy.verifiedPublication(d)||recipientPolicy.verifiedDestination(d);

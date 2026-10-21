@@ -1,5 +1,5 @@
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
-import {EDITORIAL_REFERENCE,isEditorialDestination,selectEditorialEvidence,validateEditorialStory,editorialPrompt} from './editorial-reference.js';
+import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION,validateEditorialCorrespondence,isEditorialDestination,selectEditorialEvidence,validateEditorialStory,editorialPrompt} from './editorial-reference.js';
 import {GRAPHIC_STANDARD,emradarGraphicPrompt} from './graphic-standard.js';
 import {composeGraphicSvg} from '../../emradar-v3-authoritative/src/graphic-renderer.js';
 // Reuse the OpenAI client already configured by the existing paid API.
@@ -62,18 +62,19 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    let draft=await complete(requestedSystem,{...payload,...(ownerFeedback?{owner_feedback:ownerFeedback.trim()}: {})});
    if(onWriterDraft)await onWriterDraft({attempt:1,type,draft});
    if(story){
-    try{validateEditorialStory(draft,story);}
+    try{validateEditorialStory(draft,story);if(type==='EDITORIAL_OUTREACH')validateEditorialCorrespondence(draft);}
     catch(error){
-     if(!/^V3_(?:ANALYTICAL_FINDING_REQUIRED|EDITORIAL_UNCERTAINTY_REQUIRED|UNSUPPORTED_EDITORIAL_CONNECTION)$/.test(error.message))throw error;
-     draft=await complete(requestedSystem+'\nRepair the previous draft once. Correct the named validation error exactly; retain the same single formation and evidence IDs. State the analytical mechanism explicitly using natural language such as because, means, indicates, reveals, shows, shifts, depends, bottleneck, constraint, rather than, or not ... but. The analytical_finding and limitations values must each appear verbatim in body. Return the complete corrected JSON object only.',{...payload,...(ownerFeedback?{owner_feedback:ownerFeedback.trim()}:{}),repair_error:error.message,previous_draft:draft});
+     if(!/^V3_(?:ANALYTICAL_FINDING_REQUIRED|EDITORIAL_UNCERTAINTY_REQUIRED|UNSUPPORTED_EDITORIAL_CONNECTION|EDITORIAL_PROGRESSION_REQUIRED|EDITORIAL_HUMAN_VOICE_REQUIRED|EDITORIAL_SPECIFIC_OFFER_REQUIRED)$/.test(error.message))throw error;
+     draft=await complete(requestedSystem+'\nRepair the previous draft once. Correct the named validation error exactly; retain the same single formation and evidence IDs. Follow the verbatim original outreach again: a natural introduction, the scan discovery and what stood out, a specific evidence-backed contribution, material uncertainty, a direct interest question, and an offer to send a sourced draft. Do not substitute an analytical memo or another writing style. The analytical_finding and limitations values must each appear verbatim in body. Return the complete corrected JSON object only.',{...payload,...(ownerFeedback?{owner_feedback:ownerFeedback.trim()}:{}),repair_error:error.message,previous_draft:draft});
      if(onWriterDraft)await onWriterDraft({attempt:2,type,draft});
      validateEditorialStory(draft,story);
+     if(type==='EDITORIAL_OUTREACH')validateEditorialCorrespondence(draft);
     }
    }
    const deliveryEligible=destination.contact_verified===true && destination.delivery_eligible!==false && Boolean(destination.contact?.email);
    if(type==='EDITORIAL_OUTREACH'){
     const asset=approvedEditorialEmail({campaignId,destination,evidence:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)),draft,deliveryEligible});
-    asset.editorial_reference=EDITORIAL_REFERENCE;asset.story_record_id=story.record_id;
+    asset.editorial_reference=EDITORIAL_REFERENCE;asset.editorial_enforcement=EDITORIAL_ENFORCEMENT_VERSION;asset.story_record_id=story.record_id;
     asset.recipient_verification=destination.contact;
     return asset;
    }

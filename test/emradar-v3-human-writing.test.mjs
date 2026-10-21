@@ -1,16 +1,17 @@
 import test from 'node:test';
+import verified from './fixtures/v3-verified-recipient.cjs';
 import assert from 'node:assert/strict';
 import {CampaignStore} from '../vendor/emradar-v3/src/state.js';
 import {prepareEditorialAlternatives} from '../vendor/emradar-v3/src/editorial-alternatives.js';
 import {createOpenAiPreparationProviders} from '../vendor/emradar-v3/src/openai-preparation-providers.js';
 
 function fixture(){
- let state={id:'campaign',phase:'PUBLICATION_REVIEW',scan:{source_key:'kept'},destinations:[{id:'journal',name:'African Energy',destination_class:'EDITORIAL_PUBLICATION',evidence:{ids:['e1']}}],preparation_input:{document:{evidence:[{id:'e1',verified:true,fact:'Proposed energy and manufacturing projects.'}]}},assets:{journal:{fingerprint:'old-email',asset:{campaign_id:'campaign',destination_id:'journal',kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',body:'Old email',evidence_limitations:'Plans do not establish completed projects.'}},x:{fingerprint:'keep-x',asset:{kind:'X',body:'Saved X',visual_base64:'saved-image'}}},decisions:{journal:{decision:'APPROVE'},x:{decision:'APPROVE'}},deliveries:{},events:[]};
+ let state={id:'campaign',phase:'PUBLICATION_REVIEW',scan:{source_key:'kept'},destinations:[{...verified('journal'),id:'journal',name:'African Energy',destination_class:'EDITORIAL_PUBLICATION',evidence:{ids:['e1']}}],preparation_input:{document:{evidence:[{id:'e1',verified:true,fact:'Proposed energy and manufacturing projects.'}]}},assets:{journal:{fingerprint:'old-email',asset:{campaign_id:'campaign',destination_id:'journal',kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',body:'Old email',evidence_limitations:'Plans do not establish completed projects.'}},x:{fingerprint:'keep-x',asset:{kind:'X',body:'Saved X',visual_base64:'saved-image'}}},decisions:{journal:{decision:'APPROVE'},x:{decision:'APPROVE'}},deliveries:{},events:[]};
  let version=1;
  const adapter={read:async()=>({version,value:structuredClone(state)}),compareAndSwap:async(_id,expected,value)=>{if(expected!==version)return false;version++;state=structuredClone(value);return true;}};
  return {store:new CampaignStore(adapter),read:()=>structuredClone(state)};
 }
-const email=({campaignId,destination})=>({campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',subject:'Article idea',body:'Would an article about these plans interest you?',from:'sean@emradar.net',to:null,delivery_eligible:false,contact_status:'UNVERIFIED',evidence_ids:['e1']});
+const email=({campaignId,destination})=>({campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',subject:'Article idea',body:'Would an article about these plans interest you?',from:'sean@emradar.net',to:destination.contact.email,delivery_eligible:true,contact_status:'VERIFIED',evidence_ids:['e1']});
 
 test('rejects old editorial approval before writing; saves two pending alternatives and reuses on restart',async()=>{
  const f=fixture(),before=f.read();let calls=0;
@@ -23,7 +24,7 @@ test('rejects old editorial approval before writing; saves two pending alternati
  const after=f.read();assert.deepEqual(after.assets,before.assets);assert.deepEqual(after.scan,before.scan);assert.deepEqual(after.preparation_input,before.preparation_input);assert.deepEqual(after.decisions.x,before.decisions.x);assert.deepEqual(after.deliveries,{});
  assert.equal(after.editorial_rewrite.rejected[0].previous_decision.decision,'APPROVE');
  assert.equal(after.editorial_rewrite.rejected[0].rejection.decision,'REJECT');
- assert(after.editorial_rewrite.variants.every(v=>v.status==='OWNER_REVIEW'&&v.asset.to===null));
+ assert(after.editorial_rewrite.variants.every(v=>v.status==='OWNER_REVIEW'&&v.asset.to==='journal@journal.example'));
 });
 
 test('provider failure preserves rejection and first completed sample without retrying either',async()=>{
@@ -41,9 +42,9 @@ test('already distributed editorial assets cannot be rewritten',async()=>{
 
 test('active writer receives plain-language direction, actual publication relevance and only linked evidence',async()=>{
  let request;
- const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async input=>{request=input;return {choices:[{message:{content:JSON.stringify({story_evidence_ids:['e1'],subject:'Article idea',body:'I’m Sean Walker at EMRADAR. Could we contribute an article about these proposed projects? Projects are proposed.',limitations:'Projects are proposed.'})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGES');}}}});
- const asset=await providers.write({campaignId:'campaign',destination:{id:'journal',name:'African Energy',destination_class:'EDITORIAL_PUBLICATION',relationship:{reason:'Reports on African energy industries.'},evidence:{ids:['e1']},contact_verified:false},document:{evidence:[{id:'e1',verified:true,fact:'Proposed energy project.'},{id:'e2',verified:true,fact:'Unrelated story.'},{id:'e3',verified:false,fact:'Unverified story.'}]},editorialAngle:'Follow the announced energy plans'});
+ const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async input=>{request=input;return {choices:[{message:{content:JSON.stringify({story_evidence_ids:['e1'],subject:'Article idea',body:'I’m Sean Walker, working on EMRADAR. Our scan identified the proposed energy project. The proposal shows a move toward investment, although it does not establish completed capacity. We are developing an article on what would turn the plan into a project. Projects are proposed. Would an article or research contribution interest you? If useful, I can send a concise draft with sources for review.',analytical_finding:'The proposal shows a move toward investment, although it does not establish completed capacity.',limitations:'Projects are proposed.'})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGES');}}}});
+ const asset=await providers.write({campaignId:'campaign',destination:{...verified('journal'),id:'journal',name:'African Energy',destination_class:'EDITORIAL_PUBLICATION',relationship:{reason:'Reports on African energy industries.'},evidence:{ids:['e1']},contact_verified:true},document:{evidence:[{id:'e1',verified:true,fact:'Proposed energy project.'},{id:'e2',verified:true,fact:'Unrelated story.'},{id:'e3',verified:false,fact:'Unverified story.'}]},editorialAngle:'Follow the announced energy plans'});
  const payload=JSON.parse(request.messages[1].content);
  assert.match(request.messages[0].content,/everyday language/);assert.match(request.messages[0].content,/Financial figures are optional/);
- assert.equal(payload.destination.relationship.reason,'Reports on African energy industries.');assert.deepEqual(payload.evidence.map(e=>e.id),['e1']);assert.equal(payload.editorial_angle,'Follow the announced energy plans');assert.equal(asset.delivery_eligible,false);assert.equal(asset.to,null);
+ assert.equal(payload.destination.relationship.reason,'Reports on African energy industries.');assert.deepEqual(payload.evidence.map(e=>e.id),['e1']);assert.equal(payload.editorial_angle,'Follow the announced energy plans');assert.equal(asset.delivery_eligible,true);assert.equal(asset.to,'journal@journal.example');
 });

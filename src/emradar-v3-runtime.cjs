@@ -111,7 +111,7 @@ const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snaps
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
-  if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
+  if(existing?.phase!=='PUBLICATION_REVIEW'||existing.discovery_coverage?.complete===false)return {...candidate,resume:Boolean(existing)};
  }
  return null;
 }
@@ -318,7 +318,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     const review=(await adapter.read('review:'+campaignId))?.value;
     if(prior?.phase==='PUBLICATION_REVIEW'&&review){
      const completion=await service.reviewCompletion(campaignId);
-     if(completion.complete)return {campaignId,snapshotDate:selected.snapshotDate,status:'PUBLICATION_REVIEW',...completion,notification:review.status};
+     if(completion.complete&&prior.discovery_coverage?.complete!==false)return {campaignId,snapshotDate:selected.snapshotDate,status:'PUBLICATION_REVIEW',...completion,notification:review.status};
+     if(prior.discovery_coverage?.complete===false)return {...await service.resumeIntelligentDiscovery(campaignId),snapshotDate:selected.snapshotDate};
     }
     // Preparation owns evidence research and discovery, preserving their order
     // and resuming persisted destinations instead of repeating completed work.
@@ -330,7 +331,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   // One bounded verification of this discovery revision, using the existing
   // latest campaign. No notification, release, scan or content regeneration.
-  const discoveryTestKey='v3-publication-first-discovery:2026-10-18-v2-targeted';
+  const discoveryTestKey='v3-publication-first-discovery:2026-10-21-formation-coverage-v1';
   const latestResearchScan=(await published().catch(()=>[]))[0];
   const activeCampaignId='v3-df5b240c718018880410c03a4c392d64';
   const activeCampaignState=(await service.store.adapter.read(activeCampaignId))?.value;
@@ -342,10 +343,9 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    try{
     const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[researchCampaignId]);
     if(!lock.rows[0]?.acquired)return {status:'SCAN_PREPARATION_IN_PROGRESS',campaignId:researchCampaignId,complete:false};
-    await service.cleanUnverifiedRecipients(researchCampaignId);
     return await service.resumeIntelligentDiscovery(researchCampaignId,{notifyOwner:false});
    }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[researchCampaignId]);client.release();}
-  },isComplete:result=>result.complete===true});
+  },isComplete:result=>result.discovery_coverage?.complete===true});
   // Explicit owner release; no automatic publication or ambiguous retries.
   releaseApprovedEmail=require('./emradar-v3-release.cjs').createV3Release({service,integration,pool});
   app.post('/emradar/v3/release-email',async(req,res)=>{

@@ -1,6 +1,7 @@
+import {createCoverageDiscovery,assessDiscoveryCoverage,coverageKey} from '../../emradar-v3-authoritative/src/discovery-coverage.js';
 import {GRAPHIC_STANDARD} from './graphic-standard.js';
 import {assetFingerprint} from './contracts.js';
-import {EDITORIAL_REFERENCE} from './editorial-reference.js';
+import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION} from './editorial-reference.js';
 import {cleanUnverifiedRecipients} from './verified-recipient-recovery.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {refreshUnreviewedEditorialDrafts} from './editorial-standard-refresh.js';
@@ -31,18 +32,18 @@ export function selectPersistedDraftDestinations({candidates,document,existingId
   const email=candidate.contact?.email?.toLowerCase();if(!ids.length||(email&&emails.has(email)))return null;if(email)emails.add(email);
   const deliveryEligible=candidate.contact_verified===true&&candidate.editorial_fit_verified===true&&Boolean(candidate.contact?.email)&&Boolean(candidate.contact?.source_url);
   return {...candidate,id:candidate.id,name:candidate.name,category:candidate.category,publication_type:candidate.publication_type,website:candidate.website,destination_class:candidate.destination_class,relationship:candidate.relationship,contact:deliveryEligible?candidate.contact:null,evidence:{ids},contact_verified:deliveryEligible,editorial_fit_verified:candidate.editorial_fit_verified===true,delivery_eligible:deliveryEligible,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',draft_only:!deliveryEligible};
- }).filter(Boolean).slice(0,Math.max(0,MAX_DESTINATIONS-existing.size));
+ }).filter(Boolean).slice(0,Math.max(0,Math.min(MAX_DESTINATIONS-[...existing].filter(id=>id!=='x').length,15-[...existing].filter(id=>id!=='x').length)));
 }
 
 export function assessPublicationReview({state,candidates}) {
  if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)return {complete:false,verified_publications:0,editorial_emails:0,x_ready:false,missing_destination_ids:[]};
  const evidence=state.preparation_input.document.evidence.filter(item=>item?.verified===true&&item?.id);
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
- const publications=[...new Map([...(state.destinations??[]),...(candidates??[])].filter(candidate=>recipientPolicy.verifiedPublication(candidate)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>[candidate.id,candidate])).values()].slice(0,MAX_DESTINATIONS-1);
+ const publications=[...new Map([...(state.destinations??[]),...(candidates??[])].filter(candidate=>recipientPolicy.verifiedPublication(candidate)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>[candidate.id,candidate])).values()].slice(0,MAX_DESTINATIONS);
  const recipients=publications.filter(recipientPolicy.verifiedDestination);
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
- const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL'&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
+ const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&asset.delivery_eligible===true&&recipientPolicy.recipientReadyForReview(asset,state.destinations.find(d=>d.id===asset.destination_id))&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
  const missing=recipients.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
  const incomplete=assets.filter(asset=>asset.review_status==='NEEDS_REVISION');
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
@@ -67,7 +68,7 @@ export async function createPreparationReviewService({
  await directory.initialize();
  const store=new CampaignStore(adapter);
  const discover=createDirectoryDiscovery({
-  directory,linkEvidence:autonomousDiscovery?async({document,outlets})=>createAutonomousOutletDiscovery({openai,directory,fetcher})({document,outlets}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
+  directory,linkEvidence:autonomousDiscovery?createCoverageDiscovery({directory,scanDigest:document=>sha256(JSON.stringify(document.evidence.filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url).map(e=>[e.id,e.fact,e.source_url]))),searchFormation:createAutonomousOutletDiscovery({openai,directory,fetcher})}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
  });
  const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const renderVerifiedVisual=createVerifiedVisualRenderer(renderVisual);
@@ -114,7 +115,7 @@ export async function createPreparationReviewService({
   const assets=[];
   for(const destination of destinations.slice(0,limit)){
    const previous=existingDrafts[destination.id]?.asset;
-   const compatible=previous?.kind==='EMAIL'&&previous.editorial_reference?.sha256===EDITORIAL_REFERENCE.sha256&&previous.evidence_ids?.every(id=>evidenceIds.has(id))&&previous.evidence_ids?.some(id=>destination.evidence.ids.includes(id));
+   const compatible=previous?.kind==='EMAIL'&&previous.editorial_reference?.sha256===EDITORIAL_REFERENCE.sha256&&previous.editorial_enforcement===EDITORIAL_ENFORCEMENT_VERSION&&previous.evidence_ids?.every(id=>evidenceIds.has(id))&&previous.evidence_ids?.some(id=>destination.evidence.ids.includes(id));
    let asset;
    try{
     if(!destination.delivery_eligible)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
@@ -178,7 +179,14 @@ export async function createPreparationReviewService({
  };
  const saveCompletion=async campaignId=>{
   const completion=await reviewCompletion(campaignId);
+  const currentState=(await adapter.read(campaignId))?.value;
+  const doc=currentState.preparation_input.document;
+  const scanDigest=sha256(JSON.stringify(doc.evidence.filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url).map(e=>[e.id,e.fact,e.source_url])));
+  const researchHistory=autonomousDiscovery?await directory.researchHistory(scanDigest):[];
+  const progress=researchHistory.find(r=>r.publication===coverageKey)??{};
+  completion.discovery_coverage=assessDiscoveryCoverage({document:doc,progress,destinations:(await directory.list()).filter(d=>d.verification?.scan_evidence_digest===scanDigest)});
   await store.mutate(campaignId,current=>{
+   current.discovery_coverage=completion.discovery_coverage;
    const phase=completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED';
    if(current.phase!==phase)current.events.push({type:completion.complete?'PUBLICATION_REVIEW_READY':'PREPARATION_INCOMPLETE'});
    current.phase=phase;current.review_completion=completion;return current;
@@ -194,6 +202,12 @@ export async function createPreparationReviewService({
    await ensureBrandedX(campaignId);
    await discover({scan:state.scan,document:state.preparation_input.document,history:[]});
    resumed=await resumeEditorialDrafts(campaignId);
+   const fresh=new Map((await directory.list()).filter(recipientPolicy.verifiedDestination).map(d=>[d.id,d]));
+   await store.mutate(campaignId,current=>{
+    current.destinations=current.destinations.map(d=>!current.decisions?.[d.id]&&!current.deliveries?.[d.id]&&fresh.has(d.id)?{...d,...fresh.get(d.id),evidence:d.evidence}:d);
+    return current;
+   });
+   if(autonomousDiscovery)resumed.editorial_refresh=await refreshUnreviewedEditorialDrafts({store,write,campaignId});
   }finally{completion=await saveCompletion(campaignId);}
   const notification=completion.complete&&notifyOwner?await ensureOwnerReview(campaignId):null;
   return {...resumed,status:completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED',...completion,notification:notification?.status??(completion.complete?'NOT_REQUESTED':'NOT_READY')};

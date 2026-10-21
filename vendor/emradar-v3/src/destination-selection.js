@@ -40,8 +40,8 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
   const relevance=Math.min(linked.length,4);
   eligible.push({...candidate,contact_verified:contactVerified,contact,linked_evidence:linked,relevance,last_contacted_at:Number.isFinite(recency)?recency:0});
  }
- eligible.sort((a,b)=>b.relevance-a.relevance || a.last_contacted_at-b.last_contacted_at || a.id.localeCompare(b.id));
- const selected=eligible.slice(0,limit).map(({id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified,verification,active})=>({
+ eligible.sort((a,b)=>a.last_contacted_at-b.last_contacted_at || a.id.localeCompare(b.id));
+ const selected=eligible.filter((candidate,index,all)=>new Set(all.slice(0,index+1).map(d=>d.editorial_group_id??d.id)).size<=15).slice(0,limit).map(({id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified,verification,active})=>({
   id,name,category,website,publication_type,destination_class,relationship,verification,active,contact:contact_verified===true?contact:null,evidence:{ids:linked_evidence},contact_verified:contact_verified===true,editorial_fit_verified,delivery_eligible:contact_verified===true&&Boolean(contact?.email),draft_only:contact_verified!==true,review_status:contact_verified===true?'READY':'NEEDS_REVISION',preparation_warning:contact_verified===true?null:'VERIFIED_EDITORIAL_CONTACT_REQUIRED'
  }));
  return {selected,excluded_count:candidates.length-selected.length,selection_digest:sha256(selected)};

@@ -2,7 +2,7 @@ import {createDiscovery} from './discovery.js';
 
 // Read the fresh persistent outlet directory; attach only evidence links
 // explicitly supplied for the current scan by the caller.
-export function createDirectoryDiscovery({directory,linkEvidence,limit=29}) {
+export function createDirectoryDiscovery({directory,linkEvidence,limit=30}) {
  if(typeof directory?.list!=='function' || typeof linkEvidence!=='function') throw Error('DIRECTORY_DISCOVERY_DEPENDENCIES_REQUIRED');
  return createDiscovery({
   limit,

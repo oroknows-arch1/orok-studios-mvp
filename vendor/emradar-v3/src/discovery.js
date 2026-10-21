@@ -2,7 +2,7 @@ import {selectDestinations} from './destination-selection.js';
 
 // Candidate records are supplied by an external, evidence-backed directory.
 // This adapter does not invent outlets or contact details.
-export function createDiscovery({loadCandidates,limit=29}) {
+export function createDiscovery({loadCandidates,limit=30}) {
  if(typeof loadCandidates!=='function') throw Error('DISCOVERY_SOURCE_REQUIRED');
  return async ({scan,document,history=[]})=>{
   const candidates=await loadCandidates({scan,document});
