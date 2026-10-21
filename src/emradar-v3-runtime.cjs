@@ -364,7 +364,15 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    try{
     const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[researchCampaignId]);
     if(!lock.rows[0]?.acquired)return {status:'SCAN_PREPARATION_IN_PROGRESS',campaignId:researchCampaignId,complete:false};
-    return await service.resumeIntelligentDiscovery(researchCampaignId,{notifyOwner:false});
+    const result=await service.resumeIntelligentDiscovery(researchCampaignId,{notifyOwner:false});
+    // Read-only production evidence for this bounded recovery. No owner token,
+    // decision or distribution endpoint is used by these HTTP checks.
+    const verification={deployed_commit:env.RENDER_GIT_COMMIT??null};
+    for(const [key,pathname] of [['health_http_status','/health'],['review_http_status','/review/access?campaign='+encodeURIComponent(researchCampaignId)]]){
+     try{const response=await fetcher(new URL(pathname,env.EMRADAR_V3_REVIEW_ORIGIN).href,{signal:AbortSignal.timeout(5000)});verification[key]=response.status;await response.body?.cancel();}
+     catch{verification[key]='UNVERIFIED';}
+    }
+    return {...result,production_verification:verification};
    }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[researchCampaignId]);client.release();}
   },isComplete:result=>result.discovery_coverage?.complete===true});
   // Explicit owner release; no automatic publication or ambiguous retries.
