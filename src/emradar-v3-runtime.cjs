@@ -358,6 +358,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const activeCampaignState=(await service.store.adapter.read(activeCampaignId))?.value;
   const researchCampaignId=activeCampaignState?activeCampaignId:(latestResearchScan?campaignIdFor(latestResearchScan):null);
   const researchState=researchCampaignId?(await service.store.adapter.read(researchCampaignId))?.value:null;
+  if(['ASSETS_PREPARED','PUBLICATION_REVIEW'].includes(researchState?.phase)&&typeof service.excludeSourceInstitutions==='function')await service.excludeSourceInstitutions(researchCampaignId);
   const discoveryResearchPending=Boolean(['ASSETS_PREPARED','PUBLICATION_REVIEW'].includes(researchState?.phase)&&!(await service.store.adapter.read(discoveryTestKey)));
   const runDiscoveryResearchTest=()=>runReleaseOnce({adapter:service.store.adapter,key:discoveryTestKey,run:async()=>{
    const client=await pool.connect();

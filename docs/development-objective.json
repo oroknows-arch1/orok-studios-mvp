@@ -513,7 +513,7 @@
   },
   "october_21_discovery_editorial_enforcement": {
     "status": "FINAL_LIMIT_CORRECTION_AWAITING_CI_AND_DEPLOY",
-    "authoritative_commit": "4929a6f70d66cee5adede3234a041a5f014d0510",
+    "authoritative_commit": "e0c4b65e3f9affa56a87b3635f91b1d662404d21",
     "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
     "baseline": {
       "live_commit": "cfbb4bcafbec3d555502a73b24194db223e264a3",
@@ -536,7 +536,8 @@
       "Production drafts used a generic interest question. The writer now requires the question itself to name the article or research contribution, as in the approved original, and prior undecided v1 drafts must regenerate under enforcement v2.",
       "A production-shaped regression proved that a World Bank news page and published press contact could persist as an independent publication. Source institutional and listed-company identities now exclude these candidates before publication persistence or contact reuse.",
       "Live research selected SAIMM as an industry association. Institutional identities and association/forum/social destination types are now excluded; a separately named journal can qualify. Undecided institutional drafts are archived in discovery_exclusions rather than lost or counted as genuine editorial groups.",
-      "Unresolved editorial contacts consumed the 15-group allowance and stopped live discovery with only seven eligible proposals. Verified recipients now receive group capacity first; the 30-destination cap and separate mandatory X remain."
+      "Unresolved editorial contacts consumed the 15-group allowance and stopped live discovery with only seven eligible proposals. Verified recipients now receive group capacity first; the 30-destination cap and separate mandatory X remain.",
+      "Live research misclassified GCR Group as news despite its saved relationship describing an operator of mining assets and its proof URL being /operations. Corporate operating roles now fail the shared publication policy; startup archives newly detected undecided source-institution entries without rerunning discovery."
     ],
     "checks": {
       "focused_release_regressions": "74/74 passed",
