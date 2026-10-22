@@ -40,17 +40,20 @@ export async function excludeSourceInstitutionDestinations({store,directory,camp
  return excluded;
 }
 
-export function selectPersistedDraftDestinations({candidates,document,existingIds=[]}) {
+export function selectPersistedDraftDestinations({candidates,document,existingIds=[],existingDestinations=[]}) {
  const evidence=(document?.evidence??[]).filter(item=>item?.verified===true&&item?.id);
  const evidenceIds=new Set(evidence.map(item=>item.id));
  const scanDigest=sha256(JSON.stringify(evidence.map(item=>[item.id,item.fact,item.source_url])));
- const existing=new Set(existingIds),emails=new Set();
- return (candidates??[]).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&!isEditorialSourceInstitution(candidate,document)&&recipientPolicy.verifiedPublication(candidate)&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
+ const existing=new Set(existingIds),emails=new Set(),groups=new Set(existingDestinations.filter(d=>d.id!=='x'&&d.contact_verified===true).map(d=>d.editorial_group_id??d.id));
+ return [...(candidates??[])].sort((a,b)=>Number(b.contact_verified===true)-Number(a.contact_verified===true)).filter(candidate=>['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(candidate?.destination_class)&&!isEditorialSourceInstitution(candidate,document)&&recipientPolicy.verifiedPublication(candidate)&&!existing.has(candidate.id)&&candidate?.verification?.scan_evidence_digest===scanDigest).map(candidate=>{
   const ids=(candidate.verification.evidence_ids??[]).filter(id=>evidenceIds.has(id));
   const email=candidate.contact?.email?.toLowerCase();if(!ids.length||(email&&emails.has(email)))return null;if(email)emails.add(email);
   const deliveryEligible=candidate.contact_verified===true&&candidate.editorial_fit_verified===true&&Boolean(candidate.contact?.email)&&Boolean(candidate.contact?.source_url);
+  const group=candidate.editorial_group_id??candidate.id;
+  if(deliveryEligible&&!groups.has(group)&&groups.size>=15)return null;
+  if(deliveryEligible)groups.add(group);
   return {...candidate,id:candidate.id,name:candidate.name,category:candidate.category,publication_type:candidate.publication_type,website:candidate.website,destination_class:candidate.destination_class,relationship:candidate.relationship,contact:deliveryEligible?candidate.contact:null,evidence:{ids},contact_verified:deliveryEligible,editorial_fit_verified:candidate.editorial_fit_verified===true,delivery_eligible:deliveryEligible,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',draft_only:!deliveryEligible};
- }).filter(Boolean).slice(0,Math.max(0,Math.min(MAX_DESTINATIONS-[...existing].filter(id=>id!=='x').length,15-[...existing].filter(id=>id!=='x').length)));
+ }).filter(Boolean).slice(0,Math.max(0,MAX_DESTINATIONS-[...existing].filter(id=>id!=='x').length));
 }
 
 export function assessPublicationReview({state,candidates}) {
@@ -128,7 +131,7 @@ export async function createPreparationReviewService({
  const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS,verifiedPublicationsOnly=false,existingDrafts={}}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
-  const destinations=selectPersistedDraftDestinations({candidates:(await directory.list()).filter(candidate=>!verifiedPublicationsOnly||candidate.verification?.status==='VERIFIED'),document:state.preparation_input.document,existingIds:[...state.destinations.map(item=>item.id),...Object.keys(state.decisions??{}),...Object.keys(state.deliveries??{})]});
+  const destinations=selectPersistedDraftDestinations({candidates:(await directory.list()).filter(candidate=>!verifiedPublicationsOnly||candidate.verification?.status==='VERIFIED'),document:state.preparation_input.document,existingDestinations:state.destinations,existingIds:[...state.destinations.map(item=>item.id),...Object.keys(state.decisions??{}),...Object.keys(state.deliveries??{})]});
   const evidenceIds=new Set(state.preparation_input.document.evidence.filter(item=>item.verified===true).map(item=>item.id));
   const assets=[];
   for(const destination of destinations.slice(0,limit)){

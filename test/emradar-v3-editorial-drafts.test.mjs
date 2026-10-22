@@ -26,3 +26,10 @@ test('PUBLICATION_REVIEW completion requires valid addressed emails and saved X 
  state.assets.journal.asset.to='invented@journal.example';assert.equal(assessPublicationReview({state,candidates:[d]}).complete,true);assert.equal(assessPublicationReview({state,candidates:[d]}).delivery_ready,false);
  state.assets.journal.asset=asset;delete state.assets.x;assert.equal(assessPublicationReview({state,candidates:[d]}).complete,false);
 });
+test('unresolved contact research cannot block a new verified proposal at fifteen publication records',()=>{
+ const existingDestinations=Array.from({length:15},(_,i)=>({id:'existing-'+i,contact_verified:i<7}));
+ const selected=selectPersistedDraftDestinations({document:{evidence},candidates:[verified('new-journal')],existingDestinations,existingIds:existingDestinations.map(d=>d.id)});
+ assert.equal(selected.length,1);assert.equal(selected[0].delivery_eligible,true);
+ const full=Array.from({length:15},(_,i)=>({id:'ready-'+i,contact_verified:true}));
+ assert.equal(selectPersistedDraftDestinations({document:{evidence},candidates:[verified('new-journal')],existingDestinations:full,existingIds:full.map(d=>d.id)}).length,0);
+});

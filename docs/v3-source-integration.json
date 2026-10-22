@@ -2,7 +2,7 @@
   "schema_version": 1,
   "repository": "oroknows-arch1/emradar-marketing-engine-v3",
   "url": "https://github.com/oroknows-arch1/emradar-marketing-engine-v3.git",
-  "commit": "a92267f41c00d60a5a8080a6c83911a0d9269e6b",
+  "commit": "4929a6f70d66cee5adede3234a041a5f014d0510",
   "path": "vendor/emradar-v3-authoritative",
   "runtime_overlay": "vendor/emradar-v3",
   "exact_shared_files": [

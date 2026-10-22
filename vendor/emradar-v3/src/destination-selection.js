@@ -37,12 +37,18 @@ export function selectDestinations({candidates,scanEvidence,history=[],limit=MAX
   const repeat=Boolean(previous?.last_scan_digest && candidate.scan_digest && previous.last_scan_digest===candidate.scan_digest);
   if(repeat) continue;
   const recency=previous?.last_contacted_at ? Date.parse(previous.last_contacted_at):0;
-  const relevance=Math.min(linked.length,4);
-  eligible.push({...candidate,contact_verified:contactVerified,contact,linked_evidence:linked,relevance,last_contacted_at:Number.isFinite(recency)?recency:0});
+  eligible.push({...candidate,contact_verified:contactVerified,contact,linked_evidence:linked,last_contacted_at:Number.isFinite(recency)?recency:0});
  }
- eligible.sort((a,b)=>a.last_contacted_at-b.last_contacted_at || a.id.localeCompare(b.id));
- const selected=eligible.filter((candidate,index,all)=>new Set(all.slice(0,index+1).map(d=>d.editorial_group_id??d.id)).size<=15).slice(0,limit).map(({id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified,verification,active})=>({
-  id,name,category,website,publication_type,destination_class,relationship,verification,active,contact:contact_verified===true?contact:null,evidence:{ids:linked_evidence},contact_verified:contact_verified===true,editorial_fit_verified,delivery_eligible:contact_verified===true&&Boolean(contact?.email),draft_only:contact_verified!==true,review_status:contact_verified===true?'READY':'NEEDS_REVISION',preparation_warning:contact_verified===true?null:'VERIFIED_EDITORIAL_CONTACT_REQUIRED'
+ eligible.sort((a,b)=>Number(b.contact_verified===true)-Number(a.contact_verified===true) || a.last_contacted_at-b.last_contacted_at || a.id.localeCompare(b.id));
+ const chosen=[],groups=new Set();
+ for(const candidate of eligible){
+  const group=candidate.contact_verified===true?(candidate.editorial_group_id??candidate.id):null;
+  if(group&&!groups.has(group)&&groups.size>=15)continue;
+  if(group)groups.add(group);
+  chosen.push(candidate);if(chosen.length>=limit)break;
+ }
+ const selected=chosen.map(({id,editorial_group_id,name,category,contact,website,publication_type,destination_class,relationship,linked_evidence,contact_verified,editorial_fit_verified,verification,active})=>({
+  id,...(editorial_group_id?{editorial_group_id}:{}),name,category,website,publication_type,destination_class,relationship,verification,active,contact:contact_verified===true?contact:null,evidence:{ids:linked_evidence},contact_verified:contact_verified===true,editorial_fit_verified,delivery_eligible:contact_verified===true&&Boolean(contact?.email),draft_only:contact_verified!==true,review_status:contact_verified===true?'READY':'NEEDS_REVISION',preparation_warning:contact_verified===true?null:'VERIFIED_EDITORIAL_CONTACT_REQUIRED'
  }));
  return {selected,excluded_count:candidates.length-selected.length,selection_digest:sha256(selected)};
 }

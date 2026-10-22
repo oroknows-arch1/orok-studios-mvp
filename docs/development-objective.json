@@ -512,8 +512,8 @@
     "delete_only_after_live_service_dependency_preflight": true
   },
   "october_21_discovery_editorial_enforcement": {
-    "status": "CHECKS_PASSED_AWAITING_PRODUCTION_VERIFICATION",
-    "authoritative_commit": "a92267f41c00d60a5a8080a6c83911a0d9269e6b",
+    "status": "FINAL_LIMIT_CORRECTION_AWAITING_CI_AND_DEPLOY",
+    "authoritative_commit": "4929a6f70d66cee5adede3234a041a5f014d0510",
     "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
     "baseline": {
       "live_commit": "cfbb4bcafbec3d555502a73b24194db223e264a3",
@@ -535,14 +535,16 @@
       "The analytical-finding keyword gate rejects a verbatim supported discovery clause from the approved original. Removed the keyword gate while retaining evidence, exact finding, uncertainty and correspondence-progression validation.",
       "Production drafts used a generic interest question. The writer now requires the question itself to name the article or research contribution, as in the approved original, and prior undecided v1 drafts must regenerate under enforcement v2.",
       "A production-shaped regression proved that a World Bank news page and published press contact could persist as an independent publication. Source institutional and listed-company identities now exclude these candidates before publication persistence or contact reuse.",
-      "Live research selected SAIMM as an industry association. Institutional identities and association/forum/social destination types are now excluded; a separately named journal can qualify. Undecided institutional drafts are archived in discovery_exclusions rather than lost or counted as genuine editorial groups."
+      "Live research selected SAIMM as an industry association. Institutional identities and association/forum/social destination types are now excluded; a separately named journal can qualify. Undecided institutional drafts are archived in discovery_exclusions rather than lost or counted as genuine editorial groups.",
+      "Unresolved editorial contacts consumed the 15-group allowance and stopped live discovery with only seven eligible proposals. Verified recipients now receive group capacity first; the 30-destination cap and separate mandatory X remain."
     ],
     "checks": {
       "focused_release_regressions": "74/74 passed",
       "harness_verify": "PASS",
       "harness_v3": "PASS",
       "authoritative_suite_previous_run": "92 passed, 5 skipped",
-      "production_ci": "Private-submodule checkout blocked; existing authoritative workflow reused to execute the exact production harness. 178/182 passed; four stale integration fixtures lacked the existing recipient proof or queried the old notification reservation key. Fixtures corrected without changing production distribution code."
+      "production_ci": "Private-submodule checkout blocked; existing authoritative workflow reused to execute the exact production harness. 178/182 passed; four stale integration fixtures lacked the existing recipient proof or queried the old notification reservation key. Fixtures corrected without changing production distribution code.",
+      "verified_live_release": "Source 102/102, production 184/184 and harness 16/16 passed in existing authoritative CI."
     },
     "production_scan_resumed": false,
     "external_distribution": 0,
@@ -565,6 +567,18 @@
       "verified_publications": 11,
       "verified_contacts": 6,
       "eligible_proposals": 4
+    },
+    "second_live_recovery": {
+      "commit": "b0e1d77c88d19359414772ac15b827e159ae72c0",
+      "deploy_id": "dep-dbckdmtg1s2s7385drlg",
+      "formations_examined": 7,
+      "verified_contacts": 7,
+      "eligible_email_proposals": 7,
+      "health_http_status": 200,
+      "review_http_status": 200,
+      "writing_enforcement": "semiconductor-progression-v2",
+      "owner_decisions_changed": 0,
+      "external_distribution": 0
     }
   }
 }

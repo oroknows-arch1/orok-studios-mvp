@@ -75,7 +75,7 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
     const id='web-'+digest(key).slice(0,20),prior=known.get(id);
     const current=typeof directory.list==='function'?await directory.list():[...known.values()];
     const campaign=current.filter(o=>o.verification?.scan_evidence_digest===scanDigest&&!isEditorialSourceInstitution(o,document));
-    if(!campaign.some(o=>o.id===id)&&(campaign.length>=30||new Set(campaign.map(o=>o.editorial_group_id??o.id)).size>=15))throw Error('EDITORIAL_CAMPAIGN_LIMIT_REACHED');
+    if(!campaign.some(o=>o.id===id)&&(campaign.length>=30||new Set(campaign.filter(recipientPolicy.verifiedDestination).map(o=>o.editorial_group_id??o.id)).size>=15))throw Error('EDITORIAL_CAMPAIGN_LIMIT_REACHED');
     if(prior?.opted_out||prior?.do_not_contact||prior?.contact?.opted_out||prior?.contact?.do_not_contact)throw Error('PUBLICATION_OPTED_OUT');
     if(reusable.some(outlet=>outlet.id===id)){journal.status='VERIFIED';journal.contact=prior.contact;journal.verification=prior.verification;journal.retry_eligible_at=null;counts.reused_contacts++;continue;}
     const past=history.find(record=>record.website&&host(new URL(record.website).hostname)===key);
