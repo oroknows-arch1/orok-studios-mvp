@@ -111,7 +111,7 @@ const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snaps
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
-  if(existing?.phase!=='PUBLICATION_REVIEW'||existing.discovery_coverage?.complete===false)return {...candidate,resume:Boolean(existing)};
+  if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
  }
  return null;
 }
@@ -318,9 +318,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async(snapshotDate)=>{
-   if(!snapshotDate&&env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'){
-    const resumed=await resumePendingDiscovery({pool,service});if(resumed)return resumed;
-   }
+   // Incomplete discovery must not monopolise campaign intake or owner review.
+   // Existing discovery recovery remains available independently.
    // Historical runs require the source's paired release attestations and exact archive digest.
    // Never substitute the current live scan for a requested historical date.
    const available=await published();
