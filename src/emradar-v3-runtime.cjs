@@ -339,8 +339,10 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     const review=(await adapter.read('review:'+campaignId))?.value;
     if(prior?.phase==='PUBLICATION_REVIEW'&&review){
      const completion=await service.reviewCompletion(campaignId);
-     if(completion.complete&&prior.discovery_coverage?.complete!==false)return {campaignId,snapshotDate:selected.snapshotDate,status:'PUBLICATION_REVIEW',...completion,notification:review.status};
-     if(prior.discovery_coverage?.complete===false)return {...await service.resumeIntelligentDiscovery(campaignId),snapshotDate:selected.snapshotDate};
+     if(completion.complete)return {campaignId,snapshotDate:selected.snapshotDate,status:'PUBLICATION_REVIEW',...completion,notification:review.status};
+     // Discovery coverage is advisory after PUBLICATION_REVIEW; never make the
+     // owner wait for contact research to finish before reviewing persisted assets.
+     if(prior.discovery_coverage?.complete===false)console.warn('V3_DISCOVERY_COVERAGE_PENDING',campaignId);
     }
     // Preparation owns evidence research and discovery, preserving their order
     // and resuming persisted destinations instead of repeating completed work.
