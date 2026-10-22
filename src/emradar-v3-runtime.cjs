@@ -318,6 +318,32 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async(snapshotDate)=>{
+   // Recover a completed persisted review before attempting fresh archive intake.
+   // The durable review record and database lock prevent duplicate invitations.
+   const pending=await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
+    LEFT JOIN v3_campaign_state r ON r.campaign_id='review:'||c.campaign_id
+    WHERE c.payload->>'phase'='PUBLICATION_REVIEW'
+      AND c.payload->'review_completion'->>'complete'='true'
+      AND r.campaign_id IS NULL
+    ORDER BY c.updated_at DESC LIMIT 1`);
+   if(pending.rows[0]){
+    const pendingId=pending.rows[0].campaign_id;
+    const recoveryClient=await pool.connect();
+    try{
+     const lock=await recoveryClient.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',['owner-review:'+pendingId]);
+     if(lock.rows[0]?.acquired){
+      const current=(await service.store.adapter.read(pendingId))?.value;
+      const priorReview=(await service.store.adapter.read('review:'+pendingId))?.value;
+      if(current?.phase==='PUBLICATION_REVIEW'&&current.review_completion?.complete===true&&!priorReview){
+       const outcome=await service.workflow.issue(pendingId);
+       console.log('V3_OWNER_REVIEW_RECOVERY',JSON.stringify({campaignId:pendingId,status:outcome.status}));
+      }
+     }
+    }finally{
+     await recoveryClient.query('SELECT pg_advisory_unlock(hashtext($1))',['owner-review:'+pendingId]);
+     recoveryClient.release();
+    }
+   }
    // Incomplete discovery must not monopolise campaign intake or owner review.
    // Existing discovery recovery remains available independently.
    // Historical runs require the source's paired release attestations and exact archive digest.
