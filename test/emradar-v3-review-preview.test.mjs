@@ -16,10 +16,10 @@ class Element {
  remove(){}
 }
 const flatten=element=>[element,...element.children.flatMap(flatten)];
-async function render(view){
+async function render(view,onRevise){
  const elements=Object.fromEntries(['status','entries','discover','connect-x','check-x'].map(id=>[id,new Element(id)]));
  const calls=[],payloads=[];
- const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
+ const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
  const script=reviewPage.match(/<script>([\s\S]*)<\/script>/)[1];
  await new vm.Script(script).runInNewContext(context);
  return {...elements,calls,payloads};
@@ -103,4 +103,33 @@ test('review preserves decisions/history and permits editorial override while de
  await workflow.decide('campaign',null,null,'journal','APPROVE','saved');assert.equal(state.decisions.journal.decision,'APPROVE');
  await assert.rejects(store.claimDelivery('campaign','journal'),/VERIFIED_RECIPIENT_REQUIRED/);assert.deepEqual(state.deliveries,{});
  await workflow.decide('campaign',null,null,'journal','REJECT','saved');assert.equal(state.decisions.journal.decision,'REJECT');assert.deepEqual(state.assets,original.assets);assert.deepEqual(state.editorial_versions,original.editorial_versions);
+});
+
+test('saved revision confirmation survives a fresh page render and history stays distinct',async()=>{
+ const asset={kind:'EMAIL',destination_id:'journal',body:'Persisted edited body'};
+ const view={entries:[{asset,fingerprint:'saved-hash',revision:{id:'revision-id',fingerprint:'saved-hash'}}],history:[{asset:{...asset,body:'Original body'},historical:true,label:'Previous draft'}]};
+ for(let reload=0;reload<2;reload++){
+  const result=await render(structuredClone(view));
+  assert(flatten(result.entries.children[0]).some(n=>n.textContent==='Edited · Saved · Revision revision-id · saved-hash'));
+  assert(!flatten(result.entries.children[1]).some(n=>n.textContent.includes('Edited · Saved')));
+  await flatten(result.entries.children[0]).find(n=>n.textContent==='Approve').listeners.click();
+  assert.equal(result.payloads.find(p=>p.decision).fingerprint,'saved-hash');
+ }
+});
+
+
+test('Edit draft saves and replaces the active rendered draft before reload',async()=>{
+ const view={entries:[{asset:{kind:'EMAIL',destination_id:'journal',body:'Original body'},fingerprint:'original-hash'}],history:[]};
+ const result=await render(view,payload=>{
+  assert.equal(payload.fingerprint,'original-hash');
+  view.history.push({...structuredClone(view.entries[0]),historical:true,label:'Previous draft'});
+  view.entries[0]={asset:{...view.entries[0].asset,...payload.changes},fingerprint:'edited-hash',revision:{id:'edit-event',fingerprint:'edited-hash'}};
+ });
+ await flatten(result.entries).find(n=>n.textContent==='Edit draft').listeners.click();
+ assert.equal(result.payloads.find(p=>p.changes).changes.body,view.entries[0].asset.body);
+ for(const page of [result,await render(structuredClone(view))]){
+  assert(flatten(page.entries.children[0]).some(n=>n.textContent===view.entries[0].asset.body));
+  assert(flatten(page.entries.children[0]).some(n=>n.textContent==='Edited · Saved · Revision edit-event · edited-hash'));
+  assert(flatten(page.entries.children[1]).some(n=>n.textContent==='Original body'));
+ }
 });

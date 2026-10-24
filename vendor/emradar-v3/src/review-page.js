@@ -42,6 +42,7 @@ async function refresh(){
   const {asset,fingerprint,groupKey,decision,delivery,historical}=item;
   const card=document.createElement('article');
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
+  if(!historical&&item.revision)card.append(text('p','Edited · Saved · Revision '+item.revision.id+' · '+fingerprint));
   card.append(text('p','Preparation: '+(asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
   if(!historical&&item.review_action){
    const action=item.review_action;

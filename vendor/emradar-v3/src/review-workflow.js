@@ -104,7 +104,9 @@ export class ReviewWorkflow {
    const {asset,fingerprint}=entry;
    const destination=campaign.destinations.find(d=>d.id===asset.destination_id);
    const recipientReady=asset.kind!=='EMAIL'||recipientPolicy.recipientReadyForReview(asset,destination);
+   const revision=!historical?(campaign.events??[]).findLast(event=>event.type==='ASSET_REVISED'&&event.destination_id===asset.destination_id&&event.new_fingerprint===fingerprint):null;
    return {asset,fingerprint,historical,label,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
+    revision:revision?{id:revision.id,fingerprint}:null,
     recipient_warning:asset.recipient_verification?.status==='OWNER_OVERRIDE'?asset.recipient_verification.warning_code:null,
     groupKey:!historical&&asset.kind==='EMAIL'?identicalEmailGroupKey(asset):null,
     review_action:historical?null:campaign.review_actions?.[asset.destination_id]??null,

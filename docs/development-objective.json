@@ -581,5 +581,28 @@
       "owner_decisions_changed": 0,
       "external_distribution": 0
     }
+  },
+  "october_24_saved_review_revision": {
+    "campaign_id": "v3-633c153ab053f05eb1c6894598168038",
+    "status": "LOCALLY_VERIFIED_LIVE_ACCESS_BLOCKED_NOT_DEPLOYED",
+    "root_cause": "Saved edits already atomically replace active assets, archive previous drafts and invalidate approvals. The save acknowledgement is transient and view/render omit persisted ASSET_REVISED identity, so reload loses visible saved-edit confirmation.",
+    "minimal_change": "Derive current revision from the matching existing ASSET_REVISED event and render Edited \u00b7 Saved with event ID and asset fingerprint. No persistence schema or distribution changes.",
+    "verification": {
+      "focused_regressions": "22/22 passed: edit button, save refresh, reload, history, stale approval and payload rejection, revised stub delivery, recipient safety",
+      "harness_verify": "PASS before runtime edits; rerun before commit",
+      "harness_v3": "16/16 PASS"
+    },
+    "production_evidence": "Not inspected: production review HTTPS CONNECT denied with HTTP 403 by network policy. No configured production credentials or connected deployment tools are available.",
+    "deployment": "NOT_ATTEMPTED: persisted campaign and live safety verification unavailable",
+    "live_ui_verification": "BLOCKED",
+    "campaign_state_mutations": 0,
+    "campaigns_created": 0,
+    "owner_decisions_changed": 0,
+    "external_distribution": 0,
+    "remaining": [
+      "Read-only inspection of target persisted revision and campaign invariants",
+      "Verified safe deployment using existing infrastructure",
+      "Authenticated live reload verification without edit, approval or send"
+    ]
   }
 }
