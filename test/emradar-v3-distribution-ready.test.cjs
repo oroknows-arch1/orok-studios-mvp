@@ -122,3 +122,30 @@ test('review release reuses private cookie session with CSRF and ignores caller-
  const good=await run({cookie,'x-emradar-csrf':'csrf',origin:'https://review.example.org'});
  assert.equal(good.status,200);assert.equal(releases,1);
 });
+
+test('edit save reload binds approval and distribution payload to the persisted revision',async()=>{
+ const {CampaignStore}=await import('../vendor/emradar-v3/src/state.js');
+ const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
+ const f=await fixture(),stale=f.add('editor'),state=f.states.get('campaign');
+ delete state.deliveries.editor;state.events=[];
+ state.assets.x={asset:{kind:'X',destination_id:'x',body:'Preserved X'},fingerprint:'keep-x'};
+ const untouched=structuredClone(state.assets.x),destinations=structuredClone(state.destinations);
+ let version=1;
+ const adapter={read:async id=>({version,value:structuredClone(f.states.get(id))}),compareAndSwap:async(id,prior,next)=>{if(prior!==version)return false;version++;f.states.set(id,structuredClone(next));return true;}};
+ const workflow=()=>{const store=new CampaignStore(adapter),w=new ReviewWorkflow({store,adapter,baseUrl:'https://review.example',notify:async()=>{throw Error('NO_REAL_SEND');}});w.authenticate=async()=>true;return w;};
+ await workflow().revise('campaign',null,null,'editor',stale.approval.asset_sha256,{body:'Edited persisted body',subject:'Edited subject'});
+ const reloaded=workflow(),view=await reloaded.view('campaign'),entry=view.entries.find(e=>e.asset.destination_id==='editor');
+ assert.equal(entry.asset.body,'Edited persisted body');assert.equal(entry.asset.subject,'Edited subject');
+ assert.equal(entry.revision.fingerprint,entry.fingerprint);assert(entry.revision.id);
+ assert.equal(view.history[0].asset.body,stale.asset.body);assert.equal(entry.decision,null);
+ assert.deepEqual(f.states.get('campaign').assets.x,untouched);assert.deepEqual(f.states.get('campaign').destinations,destinations);
+ await assert.rejects(reloaded.decide('campaign',null,null,'editor','APPROVE',stale.approval.asset_sha256),/INVALID_DECISION/);
+ await assert.rejects(reloaded.store.claimDelivery('campaign','editor'),/OWNER_APPROVAL_REQUIRED/);
+ await reloaded.decide('campaign',null,null,'editor','APPROVE',entry.fingerprint);
+ await reloaded.store.claimDelivery('campaign','editor');
+ const saved=f.states.get('campaign'),payload={...stale,asset:saved.assets.editor.asset,approval:saved.decisions.editor,idempotency_key:saved.deliveries.editor.idempotency_key};
+ await assert.rejects(f.integration().handle({operation:'approved-delivery',payload:stale}),/V3_DURABLE_APPROVAL_MISMATCH/);
+ assert.equal((await f.integration().handle({operation:'approved-delivery',payload})).accepted,true);
+ assert.equal(f.sentPayloads[0].asset.body,'Edited persisted body');assert.equal(f.sentPayloads[0].approval.asset_sha256,entry.fingerprint);
+ assert.equal(f.sends(),1);
+});
