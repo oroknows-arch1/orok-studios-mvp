@@ -621,5 +621,27 @@
     "owner_decisions_changed": 0,
     "external_distribution": 0,
     "deployment": "NOT_ATTEMPTED"
+    },
+    "october_25_group_first_review_integration": {
+        "status": "VERIFIED_INTEGRATION_AWAITING_OWNER_AUTHORIZATION",
+        "source_branch": "fix/group-first-review",
+        "source_commit": "a82e578b97edc4695004d7a248510a9086088339",
+        "parent_branch": "integrate/group-first-review",
+        "root_cause": "The production runtime prepared each destination independently, so personalization made every final subject/body unique; its review overlay also used transient legacy grouping instead of the authoritative persisted group approval state.",
+        "bounded_change": "Prepare compatible verified publications once by exact evidence/destination-class/correspondence identity, clone only recipient envelopes, persist exact-content groups, and connect the existing review controls to versioned group edits, exclusion/split and atomic owner decisions.",
+        "verification": {
+            "source_suite": "104 passed, 5 skipped",
+            "parent_targeted": "8/8 test files passed",
+            "parent_group_runtime": "2/2 passed",
+            "harness_verify": "PASS",
+            "harness_v3": "7/7 test files passed",
+            "database_tests": "NOT_RUN_NO_V3_TEST_DATABASE_URL"
+        },
+        "replacement_campaign": "NOT_CREATED_NO_SUPPORTED_REPLACEMENT_MECHANISM_AND_NOT_DEPLOYED",
+        "owner_invitation": "NOT_SENT",
+        "campaign_state_mutations": 0,
+        "owner_decisions_changed": 0,
+        "external_distribution": 0,
+        "deployment": "NOT_ATTEMPTED_OWNER_AUTHORIZATION_REQUIRED"
   }
 }

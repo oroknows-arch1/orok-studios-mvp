@@ -45,8 +45,12 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    // Model-derived additions never acquire verified=true.
    return {evidence:[],source:'published_scan',status:'SOURCE_EVIDENCE_REUSED'};
   },
-  write:async({campaignId,destination,document,editorialAngle,ownerFeedback})=>{
+  write:async({campaignId,destination,document,editorialAngle,ownerFeedback,sharedDestinations})=>{
    if(destination?.id!=='x')recipientPolicy.assertVerifiedDestination(destination);
+   if(sharedDestinations){
+    if(!Array.isArray(sharedDestinations)||sharedDestinations.length<2)throw Error('V3_SHARED_DESTINATIONS_INVALID');
+    for(const member of sharedDestinations)recipientPolicy.assertVerifiedDestination(member);
+   }
    const allowed=destination?.evidence?.ids;
    if(!Array.isArray(allowed)||!allowed.length)throw Error('V3_DESTINATION_EVIDENCE_LINK_REQUIRED');
    const evidence=(document?.evidence??[]).filter(e=>e.verified===true && allowed.includes(e.id));
@@ -55,8 +59,10 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    const type=isX?'X':correspondenceType(destination);
    const story=['EDITORIAL_OUTREACH','X'].includes(type)?selectEditorialEvidence(document,allowed):null;
    const writerEvidence=story?.evidence??evidence;
-   const system=type==='EDITORIAL_OUTREACH'?editorialPrompt:type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write one standalone analytical EMRADAR X post about the supplied single formation. Return JSON strings subject, body, analytical_finding, limitations, plus story_evidence_ids. The analytical_finding must appear verbatim in body and explain the evidence-supported mechanism, constraint or change rather than paraphrasing reported figures. The limitations field must appear verbatim in body. Preserve uncertainty and do not invent conclusions. Use only supplied evidence and analysis_context.';
-   const payload={channel:type,...(story?{editorial_reference:type==='EDITORIAL_OUTREACH'?EDITORIAL_REFERENCE:undefined,story_record_id:story.record_id,analysis_context:story.analysis_context,editorial_angle:editorialAngle??null}:{}),destination:{id:destination.id,category:destination.category,name:destination.name??destination.id,relationship:destination.relationship},evidence:writerEvidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]};
+   const sharedInstruction=sharedDestinations?'\nWrite one natural shared proposal suitable for every included verified publication. Do not name, greet, flatter, describe the readership of, or otherwise personalise for any publication. Do not use cosmetic outlet-name substitutions. The final subject and body must be reusable byte-for-byte with separate recipient envelopes.':'';
+   const system=(type==='EDITORIAL_OUTREACH'?editorialPrompt:type==='SOURCE_ENQUIRY'?'This destination is a source institution, not an editorial publication. Return JSON strings subject and body. Ask a concise evidence-specific factual question, preserve uncertainty, and do not offer an article, research contribution, editorial pitch, readership claim or relationship.': 'Write one standalone analytical EMRADAR X post about the supplied single formation. Return JSON strings subject, body, analytical_finding, limitations, plus story_evidence_ids. The analytical_finding must appear verbatim in body and explain the evidence-supported mechanism, constraint or change rather than paraphrasing reported figures. The limitations field must appear verbatim in body. Preserve uncertainty and do not invent conclusions. Use only supplied evidence and analysis_context.')+sharedInstruction;
+   const destinationPayload=sharedDestinations?{category:destination.category,shared_publication_count:sharedDestinations.length}:{id:destination.id,category:destination.category,name:destination.name??destination.id,relationship:destination.relationship};
+   const payload={channel:type,...(story?{editorial_reference:type==='EDITORIAL_OUTREACH'?EDITORIAL_REFERENCE:undefined,story_record_id:story.record_id,analysis_context:story.analysis_context,editorial_angle:editorialAngle??null}:{}),destination:destinationPayload,evidence:writerEvidence.map(e=>({id:e.id,fact:e.fact,source:e.source,url:e.source_url,date:e.date})),uncertainty:document.uncertainty??[]};
    const feedbackInstruction=typeof ownerFeedback==='string'&&ownerFeedback.trim()?`\nApply this explicit owner feedback to the revision while preserving verified evidence, uncertainty, recipient rules and the established Semiconductor For You editorial template: ${ownerFeedback.trim()}`:'';
    const requestedSystem=system+feedbackInstruction;
    let draft=await complete(requestedSystem,{...payload,...(ownerFeedback?{owner_feedback:ownerFeedback.trim()}: {})});
@@ -75,6 +81,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    if(type==='EDITORIAL_OUTREACH'){
     const asset=approvedEditorialEmail({campaignId,destination,evidence:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)),draft,deliveryEligible});
     asset.editorial_reference=EDITORIAL_REFERENCE;asset.editorial_enforcement=EDITORIAL_ENFORCEMENT_VERSION;asset.story_record_id=story.record_id;
+    if(sharedDestinations)asset.shared_destination_ids=sharedDestinations.map(item=>item.id).sort();
     asset.recipient_verification=destination.contact;
     return asset;
    }
