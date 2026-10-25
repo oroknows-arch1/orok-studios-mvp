@@ -453,6 +453,25 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const ownerInvitationKey='v3-owner-purelymail-invitation:2026-10-16-v1';
   const ownerInvitationPending=!(await service.store.adapter.read(ownerInvitationKey));
   const runOwnerInvitation=()=>runOwnerInvitationOnce({adapter:service.store.adapter,workflow:service.workflow,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerInvitationKey});
+  const replacementSourceCampaign='v3-cd8f16c860b64b5f39e2db0009f384ed';
+  const replacementRequestId='group-first-review-2026-10-25-v1';
+  const replacementKey='v3-replacement:'+replacementRequestId;
+  const replacementRecord=await service.store.adapter.read(replacementKey);
+  const replacementPending=replacementRecord?.value?.status!=='COMPLETE';
+  const runReplacementReview=async()=>{
+   const prior=await service.store.adapter.read(replacementKey);
+   await service.store.adapter.compareAndSwap(replacementKey,prior?.version??null,{status:'STARTED',request_id:replacementRequestId,started_at:prior?.value?.started_at??new Date().toISOString()});
+   const prepared=await service.prepareReplacementReview({sourceCampaignId:replacementSourceCampaign,requestId:replacementRequestId});
+   let review=(await service.store.adapter.read('review:'+prepared.campaignId))?.value;
+   if(!review)await service.workflow.issue(prepared.campaignId);
+   review=(await service.store.adapter.read('review:'+prepared.campaignId))?.value;
+   if(review?.status!=='NOTIFIED'||review.notification_receipt?.recipient!=='sean@emradar.net')throw Error('REPLACEMENT_INVITATION_UNCONFIRMED');
+   const inbox=await integration.inspectOwnerInvitation({provider_id:review.notification_receipt.provider_id,campaignId:prepared.campaignId,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,token_hash:review.token_hash});
+   if(inbox.status!=='PASS')throw Error('REPLACEMENT_INVITATION_UNCONFIRMED');
+   const state=(await service.store.adapter.read(prepared.campaignId)).value;
+   const result={...prepared,status:'REVIEW_READY',invitation:{accepted:true,provider_id:review.notification_receipt.provider_id,recipient:'sean@emradar.net',inbox:inbox.status},shared_groups:Object.values(state.email_groups??{}).filter(group=>group.destination_ids.length>1).length,individual_proposals:Object.values(state.email_groups??{}).filter(group=>group.destination_ids.length===1).length};
+   const latest=await service.store.adapter.read(replacementKey);await service.store.adapter.compareAndSwap(replacementKey,latest.version,{status:'COMPLETE',request_id:replacementRequestId,completed_at:new Date().toISOString(),result});return result;
+  };
   const editorialStandardKey='v3-sfy-editorial-standard:2026-10-16-v1';
   const editorialStandardPending=!(await service.store.adapter.read(editorialStandardKey));
   const runEditorialStandard=()=>runReleaseOnce({adapter:service.store.adapter,key:editorialStandardKey,run:()=>service.refreshUnreviewedEditorialDrafts(editorialCampaign)});
@@ -474,7 +493,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
    return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
   };
-  return {discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
