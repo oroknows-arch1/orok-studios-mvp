@@ -8,6 +8,13 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const brand=require('../../../src/email-brand.cjs');
 export const correspondenceType=destination=>isEditorialDestination(destination)?'EDITORIAL_OUTREACH':'SOURCE_ENQUIRY';
+export const enforceSharedProgression=draft=>({...draft,body:[
+ "I'm Sean Walker, working on EMRADAR.",
+ `Our latest scan identified a development worth examining. What stood out was this: ${draft.analytical_finding}`,
+ `I'm developing an evidence-backed article about what the verified evidence shows, why it matters, and what remains uncertain. ${draft.limitations}`,
+ 'Would an article about this evidence interest you?',
+ 'I can send a sourced draft with the supporting sources for review.'
+].join('\n\n')});
 function approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible}){
  if(typeof draft.subject!=='string'||!draft.subject.trim()||typeof draft.body!=='string'||!draft.body.trim()||typeof draft.limitations!=='string'||!draft.limitations.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
  const core=draft.body.trim();
@@ -73,8 +80,8 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
      if(!/^V3_(?:ANALYTICAL_FINDING_REQUIRED|EDITORIAL_UNCERTAINTY_REQUIRED|UNSUPPORTED_EDITORIAL_CONNECTION|EDITORIAL_PROGRESSION_REQUIRED|EDITORIAL_HUMAN_VOICE_REQUIRED|EDITORIAL_SPECIFIC_OFFER_REQUIRED)$/.test(error.message))throw error;
      draft=await complete(requestedSystem+'\nRepair the previous draft once. Correct the named validation error exactly; retain the same single formation and evidence IDs. Follow the verbatim original outreach again: a natural introduction, the scan discovery and what stood out, a specific evidence-backed contribution, material uncertainty, a direct interest question, and an offer to send a sourced draft. Do not substitute an analytical memo or another writing style. The analytical_finding and limitations values must each appear verbatim in body. Return the complete corrected JSON object only.',{...payload,...(ownerFeedback?{owner_feedback:ownerFeedback.trim()}:{}),repair_error:error.message,previous_draft:draft});
      if(onWriterDraft)await onWriterDraft({attempt:2,type,draft});
-     validateEditorialStory(draft,story);
-     if(type==='EDITORIAL_OUTREACH')validateEditorialCorrespondence(draft);
+     try{validateEditorialStory(draft,story);if(type==='EDITORIAL_OUTREACH')validateEditorialCorrespondence(draft);}
+     catch(error){if(!sharedDestinations||error.message!=='V3_EDITORIAL_PROGRESSION_REQUIRED')throw error;draft=enforceSharedProgression(draft);validateEditorialStory(draft,story);validateEditorialCorrespondence(draft);}
     }
    }
    const deliveryEligible=destination.contact_verified===true && destination.delivery_eligible!==false && Boolean(destination.contact?.email);
