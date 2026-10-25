@@ -1,6 +1,7 @@
 import {isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 import {assertDestinations} from './contracts.js';
+import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
 
 const failureCode=error=>/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'PREPARATION_WORKER_FAILED';
 const incompleteAsset=({campaignId,destination,evidenceIds,error})=>({
@@ -36,10 +37,10 @@ export class CampaignPreparation {
   }
   const verifiedEvidence=new Set((document?.evidence??[]).filter(e=>e.verified===true).map(e=>e.id));
   const assets=[];
-  for(const destination of destinations) {
+  const prepareAsset=async(destination,sharedDestinations=null)=>{
    let asset;
    try{
-    asset=await this.write({campaignId,destination,document,scan});
+    asset=await this.write({campaignId,destination,document,scan,...(sharedDestinations?{sharedDestinations}: {})});
    // The mandatory X destination must produce an X asset with a graphic.
    if(destination.id==='x' && asset?.kind!=='X') throw Error('X_ASSET_KIND_MISMATCH');
    if(destination.id!=='x' && asset?.kind==='X') throw Error('X_ASSET_DESTINATION_MISMATCH');
@@ -53,11 +54,21 @@ export class CampaignPreparation {
    }
    verifyEditorialAsset(asset,{evidenceIds:verifiedEvidence});
    if(asset.campaign_id!==campaignId || asset.destination_id!==destination.id) throw Error('CROSS_CAMPAIGN_ASSET');
-    asset.review_status='READY';assets.push(asset);
+    asset.review_status='READY';return asset;
    }catch(error){
     const code=failureCode(error);warnings.push({stage:destination.id==='x'?'X_PREPARATION':'EDITORIAL_PREPARATION',destination_id:destination.id,code});
-    assets.push(incompleteAsset({campaignId,destination,evidenceIds:verifiedEvidence,error}));
+    return incompleteAsset({campaignId,destination,evidenceIds:verifiedEvidence,error});
    }
+  };
+  for(const batch of planPreparationBatches(destinations)) {
+   if(batch.length>1){
+    const shared=await prepareAsset(batch[0],batch);
+    if(shared.review_status==='READY'&&shared.kind==='EMAIL'){
+     const candidates=batch.map(destination=>envelopeSharedEmail(shared,destination));
+     try{for(const asset of candidates)verifyEditorialAsset(asset,{evidenceIds:verifiedEvidence});assets.push(...candidates);continue;}catch{}
+    }
+   }
+   for(const destination of batch)assets.push(await prepareAsset(destination));
   }
   await this.store.prepare(campaignId,assets,warnings);
   return {campaignId,status:'PUBLICATION_REVIEW',assets:assets.length,warnings:warnings.length};

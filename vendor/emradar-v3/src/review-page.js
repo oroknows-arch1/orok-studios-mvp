@@ -37,9 +37,31 @@ async function refresh(){
   else if(entry.decision?.decision==='REJECT')counts.rejected++;
   else counts.undecided++;
  }
- const renderedGroups=new Set();
+ const sharedGroups=new Map((view.groups??[]).filter(group=>group.destination_ids.length>1).map(group=>[group.id,group]));
+ for(const group of sharedGroups.values()){
+  const members=group.destination_ids.map(id=>view.entries.find(entry=>entry.asset.destination_id===id));
+  const card=document.createElement('article');card.append(text('h2','Shared publication email · '+members.length+' recipients'),text('small','Version '+group.version+' · '+(group.approval?.decision||'Awaiting group decision')));
+  if(group.subject)card.append(text('h3',group.subject));card.append(text('pre',group.body),text('p','Included verified publications:'));
+  const list=document.createElement('ul');
+  for(const member of members){
+   const row=document.createElement('li');row.append(text('span',(member.destination?.name||member.asset.destination_id)+' · '+member.asset.to));
+   if(member.delivery)row.append(text('small',' · Delivery: '+member.delivery.status+(member.delivery.receipt?.provider_id?' · Receipt: '+member.delivery.receipt.provider_id:'')));
+   if(!members.some(item=>item.delivery))for(const action of ['EXCLUDE','SPLIT']){const button=text('button',action==='EXCLUDE'?'Exclude recipient':'Split to individual');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group-member',{campaignId:campaign,groupId:group.id,destinationId:member.asset.destination_id,contentHash:group.content_hash,version:group.version,action});await refresh();}catch{status.textContent='Group membership was not changed. Reload and retry.';button.disabled=false;}});row.append(button);}
+   if(group.approval?.decision==='APPROVE'&&!member.delivery){const send=text('button','Send approved email');send.disabled=view.publishing?.email?.enabled===false;send.addEventListener('click',async()=>{if(!confirm('Send this exact approved email to '+member.asset.to+'?'))return;send.disabled=true;try{await api('release',{campaignId:campaign,destinationId:member.asset.destination_id});await refresh();}catch{await refresh();status.textContent='Release was blocked or uncertain. Check the saved delivery record.';}});row.append(send);}
+   list.append(row);
+  }
+  card.append(list);
+  if(!members.some(member=>member.delivery)){
+   const editSubject=text('button','Edit shared subject');editSubject.addEventListener('click',async()=>{const revised=prompt('Edit shared email subject',group.subject);if(revised===null||revised===group.subject)return;editSubject.disabled=true;try{await api('group-revise',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,changes:{subject:revised}});await refresh();status.textContent='Shared subject saved. The new version requires approval.';}catch{status.textContent='Shared subject was not saved. Reload and retry.';editSubject.disabled=false;}});
+   const editBody=text('button','Edit shared body');editBody.addEventListener('click',async()=>{const revised=prompt('Edit shared email body',group.body);if(revised===null||revised===group.body)return;editBody.disabled=true;try{await api('group-revise',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,changes:{body:revised}});await refresh();status.textContent='Shared body saved. The new version requires approval.';}catch{status.textContent='Shared body was not saved. Reload and retry.';editBody.disabled=false;}});
+   card.append(editSubject,editBody);
+   if(!group.approval)for(const decision of ['APPROVE','REJECT']){const button=text('button',decision==='APPROVE'?'Approve Group':'Reject Group');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,decision});await refresh();}catch{status.textContent='The group decision was not saved. Reload and retry.';button.disabled=false;}});card.append(button);}
+  }
+  main.append(card);
+ }
  for(const item of [...view.entries,...(view.history??[])]){
-  const {asset,fingerprint,groupKey,decision,delivery,historical}=item;
+  const {asset,fingerprint,groupId,decision,delivery,historical}=item;
+  if(!historical&&sharedGroups.has(groupId))continue;
   const card=document.createElement('article');
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
   if(!historical&&item.revision)card.append(text('p','Edited · Saved · Revision '+item.revision.id+' · '+fingerprint));
@@ -156,14 +178,6 @@ async function refresh(){
     catch{status.textContent='Feedback was not saved. Please retry.';addFeedback.disabled=false;}
    });
    card.append(addFeedback);
-  }
-  if(!historical && groupKey && !renderedGroups.has(groupKey) && view.entries.filter(e=>e.groupKey===groupKey).length>1 && view.entries.some(e=>e.groupKey===groupKey && !e.decision && !e.delivery)){
-   renderedGroups.add(groupKey);
-   for(const choice of ['APPROVE','REJECT']){
-    const button=text('button',choice==='APPROVE'?'Approve identical undecided emails':'Reject identical undecided emails');
-    button.addEventListener('click',async()=>{button.disabled=true;try{await api('group',{campaignId:campaign,groupKey,decision:choice});await refresh();}catch(e){status.textContent='Could not save group decision.';button.disabled=false;}});
-    card.append(button);
-   }
   }
   main.append(card);
  }

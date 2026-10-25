@@ -99,7 +99,7 @@ test('review preserves decisions/history and permits editorial override while de
  const store=new CampaignStore(adapter),workflow=new ReviewWorkflow({store,adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:'https://review.example'});
  workflow.authenticate=async()=>true;
  const original=structuredClone(state),view=await workflow.view('campaign');
- assert.equal(view.entries.length,1);assert.equal(view.history[0].asset.body,'Previous body');assert.deepEqual(state,original);
+ assert.equal(view.entries.length,1);assert.equal(view.history[0].asset.body,'Previous body');assert.deepEqual(state.decisions,original.decisions);assert.deepEqual(state.assets,original.assets);assert.deepEqual(state.editorial_versions,original.editorial_versions);assert.deepEqual(state.deliveries,original.deliveries);assert.deepEqual(state.email_groups,{});assert.deepEqual(state.group_approvals,{});
  await workflow.decide('campaign',null,null,'journal','APPROVE','saved');assert.equal(state.decisions.journal.decision,'APPROVE');
  await assert.rejects(store.claimDelivery('campaign','journal'),/VERIFIED_RECIPIENT_REQUIRED/);assert.deepEqual(state.deliveries,{});
  await workflow.decide('campaign',null,null,'journal','REJECT','saved');assert.equal(state.decisions.journal.decision,'REJECT');assert.deepEqual(state.assets,original.assets);assert.deepEqual(state.editorial_versions,original.editorial_versions);

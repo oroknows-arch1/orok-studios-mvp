@@ -60,7 +60,7 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
     return res.end('<!doctype html><meta name="referrer" content="no-referrer"><title>Connect X</title><p id="status">Completing your X connection…</p><script nonce="'+nonce+'">(async()=>{const query=new URLSearchParams(location.search);const input={state:query.get("state"),code:query.get("code"),error:query.get("error")};history.replaceState(null,"",location.pathname);const csrf=decodeURIComponent((document.cookie.split("; ").find(x=>x.startsWith("emradar_v3_csrf="))||"").split("=").slice(1).join("="));try{const r=await fetch("/api/review/x/callback",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-emradar-csrf":csrf},body:JSON.stringify(input)});const result=await r.json();if(!r.ok){const stage=/^[A-Z_]+$/.test(result.oauth_stage||"")?result.oauth_stage:"CALLBACK_REQUEST";const ref=/^[0-9a-f-]{36}$/.test(result.diagnostic_id||"")?result.diagnostic_id:"unavailable";document.getElementById("status").textContent="X connection failed at "+stage+". Reference: "+ref+". Nothing was published.";return;}location.replace(result.review_url);}catch{document.getElementById("status").textContent="X callback request could not complete. Nothing was published. Reopen your private review in this browser.";}})();</script>');
    }
    if(req.method!=='POST') return json(res,404,{error:'NOT_FOUND'});
-   if(!['/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
+   if(!['/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
    isCallback=url.pathname==='/api/review/x/callback';
    if(req.headers.origin && req.headers.origin!==workflow.baseUrl) return reply(403,{error:'ORIGIN_DENIED'});
    stage='REQUEST_BODY';
@@ -135,7 +135,15 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
     return json(res,200,await workflow.revise(input.campaignId,session.id,session.secret,input.destinationId,input.fingerprint,input.changes));
    }
    if(url.pathname==='/api/review/group'){
-    await workflow.decideGroup(input.campaignId,session.id,session.secret,input.groupKey,input.decision);
+    await workflow.decideGroup(input.campaignId,session.id,session.secret,input.groupId,input.decision,input.contentHash,input.version);
+    return json(res,200,{saved:true});
+   }
+   if(url.pathname==='/api/review/group-revise'){
+    await workflow.reviseGroup(input.campaignId,session.id,session.secret,input.groupId,input.contentHash,input.version,input.changes);
+    return json(res,200,{saved:true});
+   }
+   if(url.pathname==='/api/review/group-member'){
+    await workflow.removeFromGroup(input.campaignId,session.id,session.secret,input.groupId,input.destinationId,input.contentHash,input.version,input.action);
     return json(res,200,{saved:true});
    }
    return json(res,404,{error:'NOT_FOUND'});

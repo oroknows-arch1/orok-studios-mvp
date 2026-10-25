@@ -3,7 +3,6 @@ import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {randomUUID,createHash,timingSafeEqual} from 'node:crypto';
 import {issueReviewAccess,consumeReviewAccess} from './review-access.js';
 import {createOwnerSession,validateOwnerSession,OWNER_SESSION_TTL_MS} from './owner-sessions.js';
-import {identicalEmailGroupKey} from './contracts.js';
 import {validateNotificationReceipt} from './owner-notification.js';
 
 export class ReviewWorkflow {
@@ -98,8 +97,9 @@ export class ReviewWorkflow {
  }
  async view(campaignId,sessionId,secret) {
   await this.authenticate(campaignId,sessionId,secret);
-  const campaign=(await this.store.adapter.read(campaignId))?.value;
+  const campaign=typeof this.store.ensureEmailGroups==='function'?await this.store.ensureEmailGroups(campaignId):(await this.adapter.read(campaignId))?.value;
   if(!campaign || !isReviewPhase(campaign.phase)) throw Error('REVIEW_NOT_OPEN');
+  const memberGroups=new Map(Object.values(campaign.email_groups??{}).flatMap(group=>group.destination_ids.map(destinationId=>[destinationId,group.id])));
   const describe=(entry,{historical=false,label='',decision=null}={})=>{
    const {asset,fingerprint}=entry;
    const destination=campaign.destinations.find(d=>d.id===asset.destination_id);
@@ -108,7 +108,7 @@ export class ReviewWorkflow {
    return {asset,fingerprint,historical,label,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
     revision:revision?{id:revision.id,fingerprint}:null,
     recipient_warning:asset.recipient_verification?.status==='OWNER_OVERRIDE'?asset.recipient_verification.warning_code:null,
-    groupKey:!historical&&asset.kind==='EMAIL'?identicalEmailGroupKey(asset):null,
+    groupId:!historical?memberGroups.get(asset.destination_id)??null:null,recipientVerified:destination?.contact_verified===true,
     review_action:historical?null:campaign.review_actions?.[asset.destination_id]??null,
     rejection_feedback:historical?null:(campaign.review_feedback??[]).filter(item=>item.destination_id===asset.destination_id),
     decision:historical?decision:campaign.decisions[asset.destination_id]??null,
@@ -118,7 +118,7 @@ export class ReviewWorkflow {
   for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft'}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
-  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history};
+  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
@@ -140,23 +140,14 @@ export class ReviewWorkflow {
   await this.store.revise(campaignId,destinationId,fingerprint,changes,verifiedDestination,recipientCheck);
   return {saved:true,recipient_warning:recipientCheck?.warningCode??null};
  }
- async decideGroup(campaignId,sessionId,secret,groupKey,decision) {
+ async reviseGroup(campaignId,sessionId,secret,groupId,contentHash,version,changes){
   await this.authenticate(campaignId,sessionId,secret);
-  if(!['APPROVE','REJECT'].includes(decision)) throw Error('INVALID_DECISION');
-  if(typeof groupKey!=='string' || !groupKey) throw Error('INVALID_GROUP_KEY');
-  return this.store.mutate(campaignId,state=>{
-   if(!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
-   let count=0;
-   for(const {asset,fingerprint} of Object.values(state.assets)){
-    if(asset.kind!=='EMAIL' || identicalEmailGroupKey(asset)!==groupKey) continue;
-    if(state.deliveries[asset.destination_id]) throw Error('DECISION_AFTER_DISTRIBUTION');
-    // Existing individual decisions are authoritative.
-    if(state.decisions[asset.destination_id]) continue;
-    state.decisions[asset.destination_id]={authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:campaignId,destination_id:asset.destination_id};
-    count++;
-   }
-   if(!count) throw Error('NO_UNDECIDED_GROUP_ITEMS');
-   return state;
-  });
+  return this.store.reviseGroup(campaignId,groupId,contentHash,version,changes);
+ }
+ async decideGroup(campaignId,sessionId,secret,groupId,decision,contentHash,version){
+  await this.authenticate(campaignId,sessionId,secret);return this.store.decideGroup(campaignId,groupId,decision,contentHash,version);
+ }
+ async removeFromGroup(campaignId,sessionId,secret,groupId,destinationId,contentHash,version,action){
+  await this.authenticate(campaignId,sessionId,secret);return this.store.removeFromGroup(campaignId,groupId,destinationId,contentHash,version,action);
  }
 }

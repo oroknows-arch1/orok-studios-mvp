@@ -2,7 +2,20 @@ import {isReviewPhase} from './contracts.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import emailBrand from '../../../src/email-brand.cjs';
 import { randomUUID } from 'node:crypto';
-import { assertScan, assertDestinations, assetFingerprint, assertApproval, assertSendable, sha256 } from './contracts.js';
+import { assertScan, assertDestinations, assetFingerprint, assertApproval, assertSendable, identicalEmailGroupKey, sha256 } from './contracts.js';
+
+const groupIdFor=(campaignId,destinationIds)=>'email-group-'+sha256([campaignId,[...destinationIds].sort()]).slice(0,24);
+const destinationIsVerified=(state,destinationId)=>state.destinations.some(destination=>destination.id===destinationId&&destination.contact_verified===true&&destination.delivery_eligible!==false);
+const groupContent=asset=>({subject:asset.subject,body:asset.body,content_hash:identicalEmailGroupKey(asset)});
+const createEmailGroups=(campaignId,state)=>{
+ const byContent=new Map();
+ for(const {asset} of Object.values(state.assets??{})){
+  if(asset.kind!=='EMAIL'||asset.review_status==='NEEDS_REVISION'||!destinationIsVerified(state,asset.destination_id))continue;
+  const content=groupContent(asset);if(!byContent.has(content.content_hash))byContent.set(content.content_hash,{...content,destination_ids:[]});
+  byContent.get(content.content_hash).destination_ids.push(asset.destination_id);
+ }
+ return Object.fromEntries([...byContent.values()].map(group=>{group.destination_ids.sort();const id=groupIdFor(campaignId,group.destination_ids);return [id,{id,...group,version:1}];}));
+};
 
 export class CampaignStore {
   constructor(adapter) {
@@ -27,7 +40,7 @@ export class CampaignStore {
         if (previous.scan.source_key !== verified.source_key) throw Error('SCAN_IDENTITY_CONFLICT');
         return previous;
       }
-      return {id, scan:verified, phase:'SCAN_VERIFIED', destinations:[], assets:{}, decisions:{}, deliveries:{}, events:[{type:'SCAN_VERIFIED',id:randomUUID()}]};
+      return {id, scan:verified, phase:'SCAN_VERIFIED', destinations:[], assets:{}, email_groups:{}, group_approvals:{}, decisions:{}, deliveries:{}, events:[{type:'SCAN_VERIFIED',id:randomUUID()}]};
     });
     return id;
   }
@@ -54,6 +67,7 @@ export class CampaignStore {
       if (Object.keys(next).length !== state.destinations.length) throw Error('MISSING_DESTINATION_ASSET');
       if (state.phase === 'PUBLICATION_REVIEW' && sha256(next) !== sha256(state.assets)) throw Error('REVIEW_ASSETS_LOCKED');
       state.assets = next;
+      state.email_groups=createEmailGroups(id,state);state.group_approvals??={};
       state.phase = 'PUBLICATION_REVIEW';
       state.preparation_warnings=[...(state.preparation_warnings??[]),...structuredClone(warnings)];
       return state;
@@ -72,9 +86,13 @@ export class CampaignStore {
         state.assets[asset.destination_id]={asset:structuredClone(asset),fingerprint:assetFingerprint(asset)};
       }
       state.destinations.push(...[...additions.values()].map(destination=>structuredClone(destination)));
+      if(!Object.keys(state.group_approvals??{}).length)state.email_groups=createEmailGroups(id,state);
       state.events.push({type:'EDITORIAL_DRAFTS_ADDED',count:additions.size,id:randomUUID()});
       return state;
     });
+  }
+  async ensureEmailGroups(id){
+   return this.mutate(id,state=>{if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');if(state.email_groups===undefined)state.email_groups=createEmailGroups(id,state);state.group_approvals??={};return state;});
   }
   async decide(id, destinationId, decision, fingerprint, feedback='') {
     if(typeof feedback!=='string'||feedback.length>4000)throw Error('INVALID_OWNER_FEEDBACK');
@@ -120,6 +138,7 @@ export class CampaignStore {
       if (!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
       const entry=state.assets[destinationId];
       if (!entry || entry.fingerprint!==fingerprint) throw Error('STALE_ASSET_REVISION');
+      if(Object.values(state.email_groups??{}).some(group=>group.destination_ids.includes(destinationId)&&group.destination_ids.length>1))throw Error('GROUP_REVISION_REQUIRED');
       if (state.deliveries[destinationId]) throw Error('REVISION_AFTER_DISTRIBUTION');
       const destinationIndex=state.destinations.findIndex(item=>item.id===destinationId);
       if(Object.hasOwn(changes,'to')){
@@ -159,6 +178,40 @@ export class CampaignStore {
       state.events.push({type:'ASSET_REVISED',destination_id:destinationId,id:randomUUID(),previous_fingerprint:fingerprint,new_fingerprint:nextFingerprint,previous_decision:priorDecision,changed_fields:Object.keys(changes)});
       return state;
     });
+  }
+  async reviseGroup(id,groupId,contentHash,version,changes){
+   if(!changes||typeof changes!=='object'||Array.isArray(changes)||!Object.keys(changes).length||Object.keys(changes).some(key=>!['subject','body'].includes(key)))throw Error('INVALID_REVISION_FIELDS');
+   for(const value of Object.values(changes))if(typeof value!=='string'||!value.trim()||value.length>50000)throw Error('INVALID_REVISION_TEXT');
+   return this.mutate(id,state=>{
+    if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const group=state.email_groups?.[groupId];
+    if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');
+    if(group.destination_ids.some(destinationId=>state.deliveries[destinationId]))throw Error('REVISION_AFTER_DISTRIBUTION');
+    for(const destinationId of group.destination_ids){const entry=state.assets[destinationId];if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');}
+    const nextContent=groupContent({...state.assets[group.destination_ids[0]].asset,...changes});if(nextContent.content_hash===contentHash)return state;
+    for(const destinationId of group.destination_ids){const entry=state.assets[destinationId],revised={...entry.asset,...changes};if(revised.brand_version)revised.html=emailBrand.render(revised.body);state.editorial_versions??={};state.editorial_versions[destinationId]??=[];state.editorial_versions[destinationId].push(structuredClone(entry));state.assets[destinationId]={asset:revised,fingerprint:assetFingerprint(revised)};delete state.decisions[destinationId];}
+    const priorApproval=state.group_approvals?.[groupId]??null;delete state.group_approvals[groupId];Object.assign(group,nextContent,{version:group.version+1});
+    state.events.push({type:'EMAIL_GROUP_REVISED',group_id:groupId,id:randomUUID(),previous_content_hash:contentHash,new_content_hash:nextContent.content_hash,previous_version:version,new_version:group.version,previous_approval:priorApproval,changed_fields:Object.keys(changes)});return state;
+   });
+  }
+  async decideGroup(id,groupId,decision,contentHash,version){
+   if(!['APPROVE','REJECT'].includes(decision))throw Error('INVALID_DECISION');
+   return this.mutate(id,state=>{
+    if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const group=state.email_groups?.[groupId];
+    if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');const members=[...group.destination_ids];if(!members.length)throw Error('EMPTY_GROUP');
+    for(const destinationId of members){const entry=state.assets[destinationId];if(!destinationIsVerified(state,destinationId))throw Error('UNVERIFIED_RECIPIENT');if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');if(entry.asset.review_status==='NEEDS_REVISION'&&decision==='APPROVE')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');if(state.deliveries[destinationId])throw Error('DECISION_AFTER_DISTRIBUTION');if(state.decisions[destinationId]&&state.decisions[destinationId].decision!==decision)throw Error('GROUP_DECISION_CONFLICT');}
+    const recipientSetHash=sha256(members),prior=state.group_approvals?.[groupId];if(prior?.decision===decision&&prior.content_hash===contentHash&&prior.recipient_set_sha256===recipientSetHash)return state;
+    for(const destinationId of members){const fingerprint=state.assets[destinationId].fingerprint;state.decisions[destinationId]={authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId,group_id:groupId,group_content_hash:contentHash};}
+    state.group_approvals??={};state.group_approvals[groupId]={authority:'OWNER',decision,campaign_id:id,group_id:groupId,content_hash:contentHash,version:group.version,destination_ids:members,recipient_set_sha256:recipientSetHash};state.events.push({type:'EMAIL_GROUP_DECIDED',group_id:groupId,id:randomUUID(),decision,content_hash:contentHash,version:group.version,destination_ids:members});return state;
+   });
+  }
+  async removeFromGroup(id,groupId,destinationId,contentHash,version,action){
+   if(!['EXCLUDE','SPLIT'].includes(action))throw Error('INVALID_GROUP_ACTION');return this.mutate(id,state=>{
+    if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const group=state.email_groups?.[groupId];if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');if(!group.destination_ids.includes(destinationId)||group.destination_ids.length<2)throw Error('INVALID_GROUP_MEMBER');if(state.deliveries[destinationId])throw Error('DECISION_AFTER_DISTRIBUTION');
+    const priorApproval=state.group_approvals?.[groupId]??null;if(priorApproval){delete state.group_approvals[groupId];for(const memberId of group.destination_ids)delete state.decisions[memberId];}
+    group.destination_ids=group.destination_ids.filter(memberId=>memberId!==destinationId);group.version++;delete state.decisions[destinationId];
+    if(action==='EXCLUDE')state.decisions[destinationId]={authority:'OWNER',decision:'EXCLUDE',asset_sha256:state.assets[destinationId].fingerprint,campaign_id:id,destination_id:destinationId};else{const splitId=groupIdFor(id,[destinationId]);state.email_groups[splitId]={id:splitId,...groupContent(state.assets[destinationId].asset),destination_ids:[destinationId],version:1};}
+    state.events.push({type:action==='EXCLUDE'?'EMAIL_GROUP_MEMBER_EXCLUDED':'EMAIL_GROUP_MEMBER_SPLIT',group_id:groupId,destination_id:destinationId,id:randomUUID(),content_hash:contentHash,new_version:group.version,previous_approval:priorApproval});return state;
+   });
   }
   async claimDelivery(id,destinationId) {
     return this.mutate(id, state => {
