@@ -5,12 +5,21 @@ import {CampaignStore} from '../vendor/emradar-v3/src/state.js';
 import {ReviewWorkflow} from '../vendor/emradar-v3/src/review-workflow.js';
 import {MemoryAdapter} from '../vendor/emradar-v3-authoritative/src/adapters/memory.js';
 import verifiedRecipient from './fixtures/v3-verified-recipient.cjs';
+import {enforceSharedProgression} from '../vendor/emradar-v3/src/openai-preparation-providers.js';
+import {validateEditorialCorrespondence,validateEditorialStory} from '../vendor/emradar-v3/src/editorial-reference.js';
 
 const digest='a'.repeat(64);
 const scan={snapshot_date:'2026-10-25',artifact_sha256:digest,live_artifact_sha256:digest,archive_artifact_sha256:digest,publication_verified:true};
 const document={evidence:[{id:'shared',verified:true},{id:'other',verified:true}],uncertainty:[]};
 const destination=(id,evidence=['shared'])=>{const records=document.evidence.filter(item=>evidence.includes(item.id)).map(item=>({...item,fact:item.id,source_url:'https://source.example/'+item.id}));const base=verifiedRecipient(id,records);return {...base,editorial_group_id:'group-'+id,evidence:{ids:evidence}};};
 const email=(campaignId,destination,body)=>({campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',subject:'Shared subject',body,from:'sean@emradar.net',to:destination.contact?.email??null,contact_status:destination.contact_verified?'VERIFIED':'UNVERIFIED',delivery_eligible:destination.contact_verified,evidence_ids:destination.evidence.ids});
+
+test('shared progression fallback remains evidence-bound and passes the existing editorial validator',()=>{
+ const draft=enforceSharedProgression({subject:'Evidence update',analytical_finding:'Verified capacity constraints are slowing the announced expansion.',limitations:'The supplied evidence does not confirm financing or construction.',story_evidence_ids:['shared']});
+ validateEditorialStory(draft,{evidence:[{id:'shared'}]});
+ assert.equal(validateEditorialCorrespondence(draft).standard,'semiconductor-progression-v2');
+ assert.match(draft.body,/Would an article about this evidence interest you\?/);
+});
 
 test('parent runtime prepares one shared proposal and exposes one persisted group',async()=>{
  const store=new CampaignStore(new MemoryAdapter()),calls=[];
