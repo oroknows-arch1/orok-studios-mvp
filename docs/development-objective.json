@@ -623,7 +623,7 @@
     "deployment": "NOT_ATTEMPTED"
     },
     "october_25_group_first_review_integration": {
-        "status": "VERIFIED_INTEGRATION_AWAITING_OWNER_AUTHORIZATION",
+        "status": "DEPLOYED_REPLACEMENT_OPERATION_VERIFIED_PENDING_RELEASE",
         "source_branch": "fix/group-first-review",
         "source_commit": "a82e578b97edc4695004d7a248510a9086088339",
         "parent_branch": "integrate/group-first-review",
@@ -637,11 +637,15 @@
             "harness_v3": "7/7 test files passed",
             "database_tests": "NOT_RUN_NO_V3_TEST_DATABASE_URL"
         },
-        "replacement_campaign": "NOT_CREATED_NO_SUPPORTED_REPLACEMENT_MECHANISM_AND_NOT_DEPLOYED",
+        "source_merge_commit": "70e5740066b1afa7dcd4070db91e65361937a7ee",
+        "parent_merge_commit": "1fecadb4a804f9be75fefc6523d70477d229f288",
+        "deployment_id": "dep-dbeu81jbc2fs738jaq6g",
+        "replacement_request_id": "group-first-review-2026-10-25-v1",
+        "replacement_campaign": "DETERMINISTIC_OPERATION_VERIFIED_PENDING_DEPLOYMENT",
         "owner_invitation": "NOT_SENT",
         "campaign_state_mutations": 0,
         "owner_decisions_changed": 0,
         "external_distribution": 0,
-        "deployment": "NOT_ATTEMPTED_OWNER_AUTHORIZATION_REQUIRED"
+        "deployment": "GROUP_FIRST_RUNTIME_LIVE_REPLACEMENT_OPERATION_PENDING"
   }
 }

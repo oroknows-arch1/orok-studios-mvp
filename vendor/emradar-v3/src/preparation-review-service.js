@@ -21,6 +21,7 @@ import {ReviewWorkflow} from './review-workflow.js';
 import {createPublicationReviewHandoff} from './publication-review-handoff.js';
 import {sha256,MAX_DESTINATIONS,isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
+import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
 
 export async function excludeSourceInstitutionDestinations({store,directory,campaignId}){
  const state=(await store.adapter.read(campaignId))?.value,document=state?.preparation_input?.document;
@@ -248,7 +249,32 @@ export async function createPreparationReviewService({
   return {...result,directory_removed:cleanup.directory_removed,campaign_destinations_removed:cleanup.campaign_destinations_removed,verified_recipients:active.length,owner_decisions_preserved:true,x_unchanged:true,external_distribution:0};
  };
  const reviewCompletion=async campaignId=>assessPublicationReview({state:(await adapter.read(campaignId))?.value,candidates:await directory.list()});
- return {store,directory,workflow,prepare,discover,excludeSourceInstitutions:async campaignId=>{const excluded=await excludeSourceInstitutionDestinations({store,directory,campaignId});if(excluded.length)await saveCompletion(campaignId);return excluded;},refreshUnreviewedXVisual:ensureBrandedX,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,regenerateRejectedAsset,updateRegenerationStatus,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
+ const prepareReplacementReview=async({sourceCampaignId,requestId})=>{
+  if(typeof sourceCampaignId!=='string'||typeof requestId!=='string'||!requestId.trim())throw Error('REPLACEMENT_REQUEST_INVALID');
+  const campaignId='v3-'+sha256('replacement:'+sourceCampaignId+':'+requestId).slice(0,32),existing=(await adapter.read(campaignId))?.value;
+  if(existing?.phase==='PUBLICATION_REVIEW')return {campaignId,status:'PUBLICATION_REVIEW',existing:true,groups:Object.values(existing.email_groups??{}).filter(group=>group.destination_ids.length>1).length,recipients:existing.destinations.filter(item=>item.id!=='x').length};
+  const source=(await adapter.read(sourceCampaignId))?.value;
+  if(source?.phase!=='PUBLICATION_REVIEW'||!source.preparation_input?.document)throw Error('REPLACEMENT_SOURCE_NOT_READY');
+  const verified=source.destinations.filter(item=>item.id!=='x'&&recipientPolicy.verifiedDestination(item));
+  const xDestination=source.destinations.find(item=>item.id==='x'),xEntry=source.assets?.x;
+  if(!verified.length||!xDestination||!xEntry?.asset||!source.deliveries?.x)throw Error('REPLACEMENT_SOURCE_INCOMPLETE');
+  const destinations=[structuredClone(xDestination),...verified.map(item=>structuredClone(item))];
+  const initial={id:campaignId,scan:structuredClone(source.scan),phase:'DESTINATIONS_SELECTED',destinations,assets:{},email_groups:{},group_approvals:{},decisions:{},deliveries:{},events:[{type:'REPLACEMENT_REVIEW_CREATED',source_campaign_id:sourceCampaignId,request_id:requestId}],preparation_input:structuredClone(source.preparation_input),replacement:{source_campaign_id:sourceCampaignId,request_id:requestId}};
+  if(!existing&&!await adapter.compareAndSwap(campaignId,null,initial))return prepareReplacementReview({sourceCampaignId,requestId});
+  if(existing&&(existing.phase!=='DESTINATIONS_SELECTED'||existing.replacement?.source_campaign_id!==sourceCampaignId||existing.replacement?.request_id!==requestId))throw Error('REPLACEMENT_IDENTITY_CONFLICT');
+  const evidenceIds=new Set(source.preparation_input.document.evidence.filter(item=>item?.verified===true).map(item=>item.id)),assets=[];
+  const xAsset={...structuredClone(xEntry.asset),campaign_id:campaignId,replacement_source_campaign_id:sourceCampaignId};assets.push(xAsset);
+  const make=async(destination,sharedDestinations=null)=>{const asset=await write({campaignId,destination,document:source.preparation_input.document,scan:source.scan,...(sharedDestinations?{sharedDestinations}: {})});verifyEditorialAsset(asset,{evidenceIds});asset.review_status='READY';return asset;};
+  for(const batch of planPreparationBatches(verified)){
+   if(batch.length>1){try{const shared=await make(batch[0],batch),copies=batch.map(destination=>envelopeSharedEmail(shared,destination));for(const copy of copies)verifyEditorialAsset(copy,{evidenceIds});assets.push(...copies);continue;}catch{} }
+   for(const destination of batch)assets.push(await make(destination));
+  }
+  await store.prepare(campaignId,assets);
+  await store.mutate(campaignId,current=>{current.preparation_input=structuredClone(source.preparation_input);current.replacement=initial.replacement;current.decisions.x={authority:'SYSTEM',decision:'EXCLUDE',campaign_id:campaignId,destination_id:'x',asset_sha256:current.assets.x.fingerprint,reason:'SOURCE_X_ALREADY_DELIVERED'};current.deliveries.x={...structuredClone(source.deliveries.x),source_campaign_id:sourceCampaignId,preserved_receipt:true};current.review_completion={complete:true,review_ready:true,delivery_ready:true,verified_publications:verified.length,verified_contacts:verified.length,editorial_emails:verified.length,x_ready:true};return current;});
+  const state=(await adapter.read(campaignId)).value;
+  return {campaignId,status:'PUBLICATION_REVIEW',existing:false,groups:Object.values(state.email_groups??{}).filter(group=>group.destination_ids.length>1).length,recipients:verified.length};
+ };
+ return {store,directory,workflow,prepare,discover,excludeSourceInstitutions:async campaignId=>{const excluded=await excludeSourceInstitutionDestinations({store,directory,campaignId});if(excluded.length)await saveCompletion(campaignId);return excluded;},refreshUnreviewedXVisual:ensureBrandedX,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),prepareReplacementReview,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,regenerateRejectedAsset,updateRegenerationStatus,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
   const prior=(await adapter.read(result.campaignId))?.value;
   if(result.status==='ALREADY_PREPARED'&&!prior?.review_completion)await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});
