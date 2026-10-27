@@ -1,0 +1,31 @@
+name: Audience Intelligence isolated verification
+on:
+  push:
+    branches: [feature/audience-intelligence-foundation]
+    paths:
+      - '.github/workflows/audience-isolation-verify.yml'
+      - 'src/audience-intelligence/**'
+      - 'test/audience-intelligence-*.test.cjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  isolated-verification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Audience targeted tests
+        run: node --test test/audience-intelligence-*.test.cjs
+      - name: Repository harness
+        run: npm run harness:verify
+      - name: V3 source integration harness
+        run: npm run harness:v3
