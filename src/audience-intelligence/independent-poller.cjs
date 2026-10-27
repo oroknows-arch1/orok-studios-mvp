@@ -2,12 +2,18 @@
 // Independently scheduled polling cycle: injected read-only snapshot reader,
 // attestation provider and audience-only job sink. Never called from V3.
 const { mapV3Snapshot } = require('./v3-real-receipt-mapper.cjs');
-async function pollOnce({ readSnapshots, attestResearch, saveAudienceJob, maxSnapshots = 20 }) {
+async function pollOnce({ readSnapshots, attestResearch, saveAudienceJob, maxSnapshots = 20, readTimeoutMs = 5000 }) {
   if (typeof readSnapshots !== 'function' || typeof attestResearch !== 'function' ||
       typeof saveAudienceJob !== 'function') throw new TypeError('independent adapters required');
   const stats = { scanned:0, eligible:0, saved:0, ignored:0, errors:0 };
   let snapshots;
-  try { snapshots = await readSnapshots(Math.max(0,Math.min(100,maxSnapshots))); }
+  try {
+    const timeout = Math.max(1,Math.min(30000,readTimeoutMs));
+    snapshots = await Promise.race([
+      Promise.resolve().then(()=>readSnapshots(Math.max(0,Math.min(100,maxSnapshots)))),
+      new Promise((_,reject)=>{ const t=setTimeout(()=>reject(Error('AUDIENCE_READ_TIMEOUT')),timeout); t.unref?.(); })
+    ]);
+  }
   catch { return { status:'AUDIENCE_SOURCE_UNAVAILABLE', ...stats }; }
   if (!Array.isArray(snapshots)) return { status:'AUDIENCE_SOURCE_INVALID', ...stats };
   const seen = new Set();
