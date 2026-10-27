@@ -26,7 +26,7 @@ test('deduplicates and excludes replies', () => {
   assert.equal(result.candidates.length, 1);
 });
 test('unknown view count stays unknown', () => {
-  const result = selectCandidates(discovery, [post('1','battery storage', undefined)]);
+  const result = selectCandidates(discovery, [post('1','battery storage', null)]);
   assert.equal(result.candidates[0].views, null);
   assert.equal(result.candidates[0].starred, false);
 });
