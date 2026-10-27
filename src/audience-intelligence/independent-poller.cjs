@@ -11,10 +11,13 @@ async function pollOnce({ readSnapshots, attestResearch, saveAudienceJob, maxSna
     const timeout = Math.max(1,Math.min(30000,readTimeoutMs));
     snapshots = await Promise.race([
       Promise.resolve().then(()=>readSnapshots(Math.max(0,Math.min(100,maxSnapshots)))),
-      new Promise((_,reject)=>{ const t=setTimeout(()=>reject(Error('AUDIENCE_READ_TIMEOUT')),timeout); t.unref?.(); })
+      new Promise((_,reject)=>{ timer=setTimeout(()=>reject(Error('AUDIENCE_READ_TIMEOUT')),timeout); })
     ]);
+  } catch {
+    return { status:'AUDIENCE_SOURCE_UNAVAILABLE', ...stats };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
-  catch { return { status:'AUDIENCE_SOURCE_UNAVAILABLE', ...stats }; }
   if (!Array.isArray(snapshots)) return { status:'AUDIENCE_SOURCE_INVALID', ...stats };
   const seen = new Set();
   for (const snapshot of snapshots.slice(0,Math.max(0,Math.min(100,maxSnapshots)))) {
