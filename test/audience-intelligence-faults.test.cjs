@@ -21,3 +21,10 @@ test('slow read remains an unresolved timeout risk until bounded by caller',asyn
  const result=await pending;
  assert.equal(result.status,'AUDIENCE_POLL_COMPLETED');
 });
+
+test('stalled source read is bounded and cannot call audience sink',async()=>{
+ let saved=0;
+ const r=await pollOnce({readSnapshots:()=>new Promise(()=>{}),attestResearch:async()=>proof,saveAudienceJob:async()=>{saved++},readTimeoutMs:15});
+ assert.equal(r.status,'AUDIENCE_SOURCE_UNAVAILABLE');
+ assert.equal(saved,0);
+});
