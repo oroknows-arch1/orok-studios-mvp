@@ -647,5 +647,40 @@
         "owner_decisions_changed": 0,
         "external_distribution": 0,
         "deployment": "GROUP_FIRST_RUNTIME_LIVE_REPLACEMENT_OPERATION_PENDING"
+  },
+  "october_28_permanent_automation_repair": {
+    "status": "LOCAL_VERIFIED_NOT_DEPLOYED",
+    "target_date": "2026-10-29",
+    "root_cause": "Archive intake required two redundant publication sidecars before persisting the verified scan document. When both sidecars were absent, PUBLICATION_ATTESTATION_UNAVAILABLE prevented preparation_input.document from being stored; later recovery consequently surfaced EDITORIAL_INPUT_MISSING and V3_PUBLICATION_REVIEW_INCOMPLETE.",
+    "correction": "When and only when both optional sidecars are absent, accept the trusted immutable archive path after its own document declares the matching snapshot PUBLISHED, derive the exact SHA-256 from those bytes, and retain the existing downstream byte-identity verification. Partial, contradictory or explicitly denied attestations remain blocked. Hourly intake now also retries one incomplete persisted campaign without an owner-review record, issuing the idempotent owner review only after completion.",
+    "preserved_safeguards": [
+      "Trusted HTTPS source origin and canonical archive path",
+      "PUBLISHED source authorization and exact snapshot identity",
+      "SHA-256 archive verification before campaign creation",
+      "Explicit invalid attestation fail-closed behavior",
+      "Verified recipient and NEEDS_REVISION isolation",
+      "15 editorial groups and 30 destination maximum",
+      "No approval or external distribution before owner action"
+    ],
+    "repository_ownership": {
+      "authoritative_graph": "oroknows-arch1/emradar-marketing-engine-v3 at pinned commit a82e578b97edc4695004d7a248510a9086088339",
+      "production_runtime": "oroknows-arch1/orok-studios-mvp",
+      "legacy_repository": "oroknows-arch1/emradar-marketing remains excluded and was not available through the configured GitHub access"
+    },
+    "production_constraints": {
+      "logs": "NOT_AVAILABLE: no Render credential binding is configured",
+      "https": "BLOCKED: enforced cloud network policy denies *.onrender.com",
+      "deployment": "NOT_ATTEMPTED_PENDING_FINAL_TESTS_AND_AUTHORISED_ACCESS"
+    },
+    "verification": {
+      "focused_publication_recovery_recipient_and_notification_tests": "45/45 PASS",
+      "harness_verify": "PASS",
+      "harness_v3": "16/16 PASS",
+      "broad_suite_failures": "Seven previously observed failures classified as unrelated legacy relay/harness fixture expectations and an unguarded PostgreSQL setup helper; deferred because none exercises the repaired path"
+    },
+    "campaigns_created": 0,
+    "owner_notifications_sent": 0,
+    "owner_decisions_changed": 0,
+    "external_distribution": 0
   }
 }

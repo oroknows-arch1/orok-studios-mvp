@@ -117,13 +117,44 @@ test('published archive index enumerates attestable scans in chronological order
  assert.throws(()=>mergeCurrentPublishedScan(scans,[{...current,snapshotDate:'2026-10-18'}]),/SCAN_ARCHIVE_IDENTITY_CONFLICT/);
 });
 
+test('published archive bytes replace absent redundant sidecars but never override an explicit invalid attestation',async()=>{
+ const {enumeratePublishedScans}=require('../src/emradar-v3-runtime.cjs');
+ const date='2026-10-28',path=`data/checkpoints/discovery-${date}.json`,archiveUrl=`https://emerging-markets-radar.onrender.com/${path}`;
+ const document={snapshot_date:date,publication_state:'PUBLISHED',run_mode:'SCHEDULED',evidence:[]};
+ const bytes=Buffer.from(JSON.stringify(document));
+ const index={scans:[{snapshot_date:date,path}],snapshots:[]};
+ const response=value=>({ok:true,status:200,arrayBuffer:async()=>Buffer.isBuffer(value)?value:Buffer.from(JSON.stringify(value))});
+ const missingSidecars=async url=>url.endsWith('archive-index.json')?response(index):url===archiveUrl?response(bytes):({ok:false,status:404});
+ const [scan]=await enumeratePublishedScans({fetcher:missingSidecars});
+ assert.equal(scan.publicationAuthorization,'PUBLISHED_ARCHIVE_EXACT_SHA256');
+ assert.equal(scan.expectedSha256,require('node:crypto').createHash('sha256').update(bytes).digest('hex'));
+ const denied={snapshot_date:date,downstream_release_allowed:false};
+ const explicitDenial=await enumeratePublishedScans({fetcher:async url=>url.endsWith('archive-index.json')?response(index):url.endsWith(`publication-${date}.json`)?response(denied):url===archiveUrl?response(bytes):({ok:false,status:404})});
+ assert.equal(explicitDenial.length,0);
+ assert.deepEqual(explicitDenial.blocked,[{snapshotDate:date,reason:'PUBLICATION_ATTESTATION_INVALID'}]);
+});
+
 test('the existing intake worker resumes persisted incomplete discovery without creating a scan or distributing',async()=>{
  const {resumePendingDiscovery}=require('../src/emradar-v3-runtime.cjs');
  const calls=[];
  const client={query:async sql=>{calls.push(sql);return {rows:[{acquired:true}]};},release:()=>calls.push('released')};
- const pool={query:async sql=>{assert.match(sql,/discovery_coverage/);return {rows:[{campaign_id:'existing'}]};},connect:async()=>client};
+ const pool={query:async sql=>{assert.match(sql,/review_completion/);return {rows:[{campaign_id:'existing'}]};},connect:async()=>client};
  const state={phase:'PUBLICATION_REVIEW',discovery_coverage:{complete:false},preparation_input:{document:{evidence:[]}},decisions:{keep:'decision'},deliveries:{keep:'receipt'}};
- const service={store:{adapter:{read:async()=>({value:state})}},resumeIntelligentDiscovery:async id=>{calls.push(id);return {campaignId:id,status:'PUBLICATION_REVIEW'};}};
- assert.equal((await resumePendingDiscovery({pool,service})).campaignId,'existing');
+ const service={store:{adapter:{read:async()=>({value:state})}},resumeIntelligentDiscovery:async id=>{calls.push(id);return {campaignId:id,status:'PUBLICATION_REVIEW'};},reviewCompletion:async()=>({complete:true,missing_destination_ids:[]}),workflow:{issue:async()=>({status:'NOTIFIED'})}};
+ const result=await resumePendingDiscovery({pool,service});
+ assert.equal(result.campaignId,'existing');assert.equal(result.recovery,'COMPLETE');assert.equal(result.notification,'NOTIFIED');
  assert(calls.includes('existing'));assert.equal(calls.at(-1),'released');assert.deepEqual(state.decisions,{keep:'decision'});assert.deepEqual(state.deliveries,{keep:'receipt'});
+});
+
+test('incomplete hourly recovery remains retryable and never notifies early',async()=>{
+ const {resumePendingDiscovery}=require('../src/emradar-v3-runtime.cjs');
+ let resumes=0,notifications=0,complete=false;
+ const client={query:async sql=>({rows:sql.includes('pg_try')?[{acquired:true}]:[]}),release:()=>{}};
+ const pool={query:async()=>({rows:[{campaign_id:'existing'}]}),connect:async()=>client};
+ const state={phase:'PUBLICATION_REVIEW',preparation_input:{document:{evidence:[]}},review_completion:{complete:false}};
+ const service={store:{adapter:{read:async()=>({value:state})}},resumeIntelligentDiscovery:async()=>{resumes++;complete=resumes>1;return {campaignId:'existing',status:'PUBLICATION_REVIEW'};},reviewCompletion:async()=>({complete,missing_destination_ids:complete?[]:['failed']}),workflow:{issue:async()=>{notifications++;return {status:'NOTIFIED'};}}};
+ assert.equal((await resumePendingDiscovery({pool,service})).recovery,'INCOMPLETE');
+ assert.equal(notifications,0);
+ assert.equal((await resumePendingDiscovery({pool,service})).recovery,'COMPLETE');
+ assert.equal(resumes,2);assert.equal(notifications,1);
 });

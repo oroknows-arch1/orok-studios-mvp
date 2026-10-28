@@ -66,7 +66,7 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
   const archiveUrl=SCAN_ORIGIN+'/'+candidate.path;
   const publicationRecord=await getJson(`${SCAN_ORIGIN}/verification/publication-${date}.json`);
   const releaseAttestation=await getJson(`${SCAN_ORIGIN}/verification/downstream-release-attestation-${date}.json`);
-  const expectedSha256=publicationRecord?.public_verification?.artifact_sha256;
+  let expectedSha256=publicationRecord?.public_verification?.artifact_sha256;
   const authorized=publicationRecord?.snapshot_date===date&&
    publicationRecord?.public_verification?.verification_contract==='live-reader-exact-identity-v2'&&
    publicationRecord?.public_verification?.archive_data_url===archiveUrl&&
@@ -79,7 +79,23 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
    releaseAttestation?.campaign_authority?.required_stop==='PUBLICATION_REVIEW'&&
    releaseAttestation?.campaign_authority?.external_publication_allowed===false&&
    /^[a-f0-9]{64}$/.test(expectedSha256||'');
-  if(!authorized){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_UNAVAILABLE'});return null;}
+  if(!authorized){
+   // A published source artifact is an independent authorization and integrity
+   // path only when both optional sidecars are absent. Never override a partial,
+   // contradictory or explicitly denied attestation.
+   if(publicationRecord||releaseAttestation){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;}
+   const response=await fetcher(archiveUrl,{method:'GET',redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
+   if(response.status===404){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_UNAVAILABLE'});return null;}
+   if(!response.ok){blocked.push({snapshotDate:date,reason:'PUBLICATION_ARCHIVE_UNAVAILABLE'});return null;}
+   const bytes=Buffer.from(await response.arrayBuffer());
+   if(bytes.length>10*1024*1024)throw Error('SCAN_TOO_LARGE');
+   const exact=JSON.parse(bytes.toString('utf8'));
+   if(exact.snapshot_date!==date||exact.publication_state!=='PUBLISHED'){
+    blocked.push({snapshotDate:date,reason:'PUBLICATION_ARCHIVE_IDENTITY_INVALID'});return null;
+   }
+   expectedSha256=createHash('sha256').update(bytes).digest('hex');
+   return {snapshotDate:date,expectedSha256,liveUrl:archiveUrl,archiveUrl,publicationAuthorization:'PUBLISHED_ARCHIVE_EXACT_SHA256'};
+  }
   return {snapshotDate:date,expectedSha256,liveUrl:SCAN_ORIGIN+'/data/discovery.json',archiveUrl,publicationRecord,releaseAttestation};
  }));
  const eligible=verified.filter(Boolean).sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
@@ -118,19 +134,25 @@ async function selectNextPublishedScan({published,readCampaign}){
 // Continue already verified, persisted scans independently of new-scan intake.
 // Reopening publication review is not evidence of discovery exhaustion.
 async function resumePendingDiscovery({pool,service}){
- const {rows}=await pool.query(`SELECT campaign_id FROM v3_campaign_state
-  WHERE payload->>'phase'='PUBLICATION_REVIEW'
-  AND payload->'preparation_input'->'document' IS NOT NULL
-  AND payload->'discovery_coverage'->>'complete'='false'
-  ORDER BY updated_at ASC,campaign_id ASC LIMIT 1`);
+ const {rows}=await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
+  LEFT JOIN v3_campaign_state r ON r.campaign_id='review:'||c.campaign_id
+  WHERE c.payload->>'phase'='PUBLICATION_REVIEW'
+  AND c.payload->'preparation_input'->'document' IS NOT NULL
+  AND COALESCE(c.payload->'review_completion'->>'complete','false')<>'true'
+  AND r.campaign_id IS NULL
+  ORDER BY c.updated_at ASC,c.campaign_id ASC LIMIT 1`);
  const campaignId=rows[0]?.campaign_id;if(!campaignId)return null;
  const client=await pool.connect();
  try{
   const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[campaignId]);
   if(!lock.rows[0]?.acquired)return {campaignId,status:'SCAN_PREPARATION_IN_PROGRESS'};
   const state=(await service.store.adapter.read(campaignId))?.value;
-  if(state?.phase!=='PUBLICATION_REVIEW'||state.discovery_coverage?.complete!==false||!state.preparation_input?.document)return null;
-  return await service.resumeIntelligentDiscovery(campaignId);
+  if(state?.phase!=='PUBLICATION_REVIEW'||state.review_completion?.complete===true||!state.preparation_input?.document)return null;
+  const resumed=await service.resumeIntelligentDiscovery(campaignId,{notifyOwner:false});
+  const completion=await service.reviewCompletion(campaignId);
+  if(!completion.complete)return {...resumed,...completion,recovery:'INCOMPLETE'};
+  const notification=(await service.workflow.issue(campaignId)).status;
+  return {...resumed,...completion,notification,recovery:'COMPLETE'};
  }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[campaignId]);client.release();}
 }
 async function runNextPublishedCampaign({published,readCampaign,startCampaign,verify,discover,persistDestinations,prepareAndNotify}){
@@ -318,6 +340,14 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async(snapshotDate)=>{
+   // Retry one persisted incomplete review per hourly poll. A failure is logged
+   // and isolated so it cannot block intake of another independently valid scan.
+   if(!snapshotDate){
+    try{
+     const recovered=await resumePendingDiscovery({pool,service});
+     if(recovered)console.log('V3_INCOMPLETE_REVIEW_RECOVERY',JSON.stringify(recovered));
+    }catch(error){console.warn('V3_INCOMPLETE_REVIEW_RECOVERY_BLOCKED',/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'V3_REVIEW_RECOVERY_FAILED');}
+   }
    // Recover a completed persisted review before attempting fresh archive intake.
    // The durable review record and database lock prevent duplicate invitations.
    const pending=await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
