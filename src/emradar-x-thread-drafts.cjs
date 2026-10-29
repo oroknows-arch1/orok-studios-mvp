@@ -9,13 +9,21 @@ function draftFullScanThread({document,scanUrl}={}){
  const summary=`EMRADAR | ${document.snapshot_date}\nToday's published scan contains ${records.length} discoveries. Each finding below retains its evidence and uncertainty.\nFull scan: ${scanUrl}`;
  return planDailyThread({document,scanUrl,summary,renderRecord:(r,{index,total})=>{
   // Do not infer missing formation names or statuses from other fields.
-  const title=compact(r.title||r.name||r.formation?.name||r.id);
+  const title=compact(r.title||r.name||r.theme||r.formation?.name||r.id);
   const status=compact(r.state||r.status||r.formation_state||'UNKNOWN');
-  const description=compact(r.summary||r.description||r.world_change?.summary||'');
+  const description=compact(r.summary||r.description||r.why_surfaced||r.world_change?.summary||'');
   const evidence=Array.isArray(r.evidence)?r.evidence:[];
-  const sources=evidence.filter(e=>e&&typeof e.url==='string'&&/^https:\/\//.test(e.url)).slice(0,2).map(e=>e.url);
+  const sources=evidence.filter(e=>e&&typeof e.url==='string'&&/^https:\/\//.test(e.url)).map(e=>e.url);
   const lines=[`${index}/${total} | ${title}`,`Evidence state: ${status}`];
   if(description)lines.push(description);
+  for(const key of ['world_change','pressure','bottleneck_or_scarcity','formation','industries','connected_companies_and_tickers','consequences']){
+   const value=r.causal_chain?.[key];
+   if(value?.length)lines.push(key.replaceAll('_',' ')+': '+(Array.isArray(value)?value.map(compact).join('; '):compact(value)));
+  }
+  for(const [label,value] of [['Contradictions',r.contradictions],['Missing evidence',r.missing_evidence],['Unresolved',r.chain_evolution?.unresolved_evidence],['Break conditions',r.chain_evolution?.break_conditions],['Next questions',r.what_to_check_next]]){
+   if(value?.length)lines.push(label+': '+(Array.isArray(value)?value.map(compact).join('; '):compact(value)));
+  }
+  for(const e of evidence)if(e.fact)lines.push('Evidence'+(e.classification?' ('+compact(e.classification)+')':'')+': '+compact(e.fact)+(e.date?' ['+compact(e.date)+']':''));
   if(sources.length)lines.push('Sources: '+sources.join(' '));
   else lines.push('Source details: see the verified scan');
   lines.push('Full record: '+scanUrl);

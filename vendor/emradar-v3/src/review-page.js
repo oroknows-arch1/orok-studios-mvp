@@ -31,6 +31,38 @@ const text=(tag,value)=>{
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
  main.replaceChildren();
+ if(view.xThread){
+  const thread=view.xThread,section=document.createElement('section');
+  section.append(text('h2','Complete X thread'),text('p','All posts appear below in publication order. Each reply attaches to the preceding post.'),text('small',thread.scan?.source_key||''));
+  const images=[];
+  for(const segment of thread.segments){
+   const card=document.createElement('article');
+   card.append(text('h3','Post '+segment.sequence+' · '+segment.kind+(segment.record_id?' · '+segment.record_id:'')),text('p',segment.parent_sequence?'Reply to post '+segment.parent_sequence:'Main post'),text('pre',segment.text));
+   for(const source of segment.source_links??[]){const link=text('a',source);link.href=source;link.rel='noopener noreferrer';link.target='_blank';card.append(link,text('br',''));}
+   if(segment.media){
+    const image=document.createElement('img');image.className='review-graphic';image.alt='Exact graphic for post '+segment.sequence;
+    images.push(new Promise(resolve=>{image.addEventListener('load',()=>resolve(true));image.addEventListener('error',()=>resolve(false));}));
+    image.src='data:'+segment.media.mime+';base64,'+segment.media.base64;card.append(image);
+   }
+   card.append(text('small',segment.asset_sha256));
+   const edit=text('button','Edit post '+segment.sequence);edit.addEventListener('click',async()=>{
+    const revised=prompt('Edit complete X post text',segment.text);if(revised===null||revised===segment.text)return;
+    edit.disabled=true;try{await api('revise',{campaignId:campaign,destinationId:'x',fingerprint:thread.manifest_sha256,changes:{sequence:segment.sequence,text:revised}});await refresh();status.textContent='X edit saved. Previous approval cleared.';}catch{status.textContent='X edit was not saved. Reload and retry.';edit.disabled=false;}
+   });card.append(edit);section.append(card);
+  }
+  for(const problem of thread.problems??[])section.append(text('p','X approval blocked: '+problem));
+  section.append(text('p','Decision: '+(thread.approval?.decision||'Awaiting owner review')));
+  const approve=text('button','Approve complete X thread');approve.disabled=true;
+  approve.addEventListener('click',async()=>{approve.disabled=true;try{await api('decision',{campaignId:campaign,destinationId:'x',decision:'APPROVE',fingerprint:thread.manifest_sha256});await refresh();status.textContent='Exact X thread approval saved.';}catch{status.textContent='X approval was blocked. Reload the complete preview.';}});
+  section.append(approve);
+  const reject=text('button','Reject X thread');reject.disabled=!thread.manifest_sha256;reject.addEventListener('click',async()=>{reject.disabled=true;try{await api('decision',{campaignId:campaign,destinationId:'x',decision:'REJECT',fingerprint:thread.manifest_sha256});await refresh();}catch{status.textContent='X rejection was not saved.';}});section.append(reject);
+  main.append(section);
+  // Acknowledge only after every card is mounted and every graphic decoded.
+  Promise.all(images).then(async loaded=>{
+   if(!thread.ready||loaded.some(ok=>!ok)||!thread.segments.length)return;
+   try{await api('thread-present',{campaignId:campaign,manifest_sha256:thread.manifest_sha256,segment_hashes:thread.segments.map(s=>s.asset_sha256)});approve.disabled=false;}catch{status.textContent='Complete X preview could not be verified. Approval remains unavailable.';}
+  });
+ }
  const counts={approved:0,rejected:0,undecided:0};
  for(const entry of view.entries){
   if(entry.decision?.decision==='APPROVE')counts.approved++;
@@ -61,6 +93,7 @@ async function refresh(){
  }
  for(const item of [...view.entries,...(view.history??[])]){
   const {asset,fingerprint,groupId,decision,delivery,historical}=item;
+  if(view.xThread&&asset.kind==='X'&&!historical)continue;
   if(!historical&&sharedGroups.has(groupId))continue;
   const card=document.createElement('article');
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));

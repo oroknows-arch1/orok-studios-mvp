@@ -2,7 +2,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const {createAudienceApprovalVerifier,sha}=require('../src/emradar-audience-approval-verifier.cjs');
 const segment={sequence:1,kind:'SUMMARY',record_id:null,text:'Approved text',media:{media_ids:['123']},approval_status:'APPROVED'};
-const hash=sha({sequence:1,kind:'SUMMARY',record_id:null,text:'Approved text',media:{media_ids:['123']}});
+const hash=require('../src/emradar-audience-asset-hash.cjs').assetHash(segment);
 const review={campaign_id:'c',review_id:'r',source_sha256:'source',segments:[{...segment,asset_sha256:hash}]};
 const approval={campaign_id:'c',review_id:'r',source_sha256:'source',status:'APPROVED',actor_verified:true,approved_segment_hashes:[hash]};
 function verifier(a=approval,v=review){return createAudienceApprovalVerifier({loadTrustedApproval:async()=>a,loadTrustedReview:async()=>v})}

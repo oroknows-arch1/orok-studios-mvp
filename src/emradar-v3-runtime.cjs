@@ -9,7 +9,7 @@ const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
 const SCAN_ORIGIN='https://emerging-markets-radar.onrender.com';
 const SCAN_INDEX_URL=SCAN_ORIGIN+'/data/archive-index.json';
 const FIXED_X_TEMPLATE_VERSION='emradar-formation-card-v2';
-const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
+const REVIEW_PATHS=new Set(['/review/access','/api/review/thread-present','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
  return readdirSync(attestationDir).filter(name=>/^publication-\d{4}-\d{2}-\d{2}\.json$/.test(name)).map(name=>name.slice(12,-5)).filter(date=>{
@@ -251,6 +251,19 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
    autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
   });
+  if(env.EMRADAR_V3_X_THREAD_REVIEW_ENABLED==='true'){
+   const {createV3AudienceReview}=require('./emradar-audience-v3-review.cjs');
+   service.workflow.audienceThread=createV3AudienceReview({store:service.store,loadPublishedBytes:async scan=>{
+    const url='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+scan.snapshot_date+'.json';
+    const response=await fetcher(url,{redirect:'error',signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw Error('AUDIENCE_PUBLISHED_SCAN_UNAVAILABLE');
+    const length=Number(response.headers?.get?.('content-length')||0);
+    if(length>10*1024*1024)throw Error('AUDIENCE_PUBLISHED_SCAN_TOO_LARGE');
+    const bytes=Buffer.from(await response.arrayBuffer());
+    if(bytes.length>10*1024*1024)throw Error('AUDIENCE_PUBLISHED_SCAN_TOO_LARGE');
+    return bytes;
+   }});
+  }
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
    try{

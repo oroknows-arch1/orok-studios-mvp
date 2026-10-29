@@ -682,5 +682,29 @@
     "owner_notifications_sent": 0,
     "owner_decisions_changed": 0,
     "external_distribution": 0
-  }
+  },
+  "october_29_audience_v3_integration": {
+  "status": "ISOLATED_IMPLEMENTATION_NOT_DEPLOYED",
+  "base_feature_commit": "558a8821a4853c5a2abcb1fef2572dcfd1f5c989",
+  "implementation": [
+    "Existing authenticated V3 review renders complete full-scan thread and exact persisted image bytes",
+    "Existing decision and edit endpoints bind manifest, source scan, review identity and owner session; partial presentation and stale approvals fail closed",
+    "Automatic post-approval checks read persisted V3 authority and exact source bytes; audience failures do not change editorial decisions or deliveries"
+  ],
+  "activation": "EMRADAR_V3_X_THREAD_REVIEW_ENABLED remains opt-in; not enabled in production",
+  "verification": {
+    "audience_thread_and_review": "64 assertions passed, 1 PostgreSQL test skipped; explicitly used --test-isolation=none",
+    "harness_verify": "PASS",
+    "harness_v3": "PASS",
+    "production_read_only": "Existing campaign PUBLICATION_REVIEW, version 158, zero decisions and zero deliveries"
+  },
+  "remaining": [
+    "Finish platform-length validation and safe ordered publication integration",
+    "Full-scan bounded Grok orchestration and durable research budgets",
+    "Real PostgreSQL and end-to-end staging verification",
+    "Controlled deployment approval and provider credentials for live checks"
+  ],
+  "production_records_modified": false,
+  "external_distribution": 0
+}
 }
