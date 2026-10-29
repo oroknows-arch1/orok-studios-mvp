@@ -6,8 +6,10 @@ on:
     paths:
       - 'src/emradar-x-thread-*.cjs'
       - 'src/emradar-grok-*.cjs'
+      - 'src/emradar-audience-*.cjs'
       - 'test/emradar-x-thread-*.test.cjs'
       - 'test/emradar-grok-*.test.cjs'
+      - 'test/emradar-audience-*.test.cjs'
       - '.github/workflows/emradar-audience-pilot.yml'
   workflow_dispatch:
 jobs:
@@ -20,4 +22,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test test/emradar-x-thread-*.test.cjs test/emradar-grok-*.test.cjs
+      - run: node --test test/emradar-x-thread-*.test.cjs test/emradar-grok-*.test.cjs test/emradar-audience-*.test.cjs
