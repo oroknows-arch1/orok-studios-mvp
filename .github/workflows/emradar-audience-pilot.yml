@@ -1,0 +1,23 @@
+name: EMRADAR audience pilot isolated tests
+on:
+  push:
+    branches:
+      - feature/emradar-grok-audience-pilot
+    paths:
+      - 'src/emradar-x-thread-*.cjs'
+      - 'src/emradar-grok-*.cjs'
+      - 'test/emradar-x-thread-*.test.cjs'
+      - 'test/emradar-grok-*.test.cjs'
+      - '.github/workflows/emradar-audience-pilot.yml'
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test test/emradar-x-thread-*.test.cjs test/emradar-grok-*.test.cjs
