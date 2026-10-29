@@ -263,7 +263,26 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     if(bytes.length>10*1024*1024)throw Error('AUDIENCE_PUBLISHED_SCAN_TOO_LARGE');
     return bytes;
    }});
+   const prepareAndNotify=service.prepareAndNotify;
+   service.prepareAndNotify=async input=>{
+    const result=await prepareAndNotify(input);
+    if(result.campaignId)try{await service.workflow.audienceThread.prepare(result.campaignId)}catch{console.error('V3_X_THREAD_PREPARATION_BLOCKED')}
+    return result;
+   };
   }
+  let runThreadPublication=null;
+  if(service.workflow.audienceThread&&env.EMRADAR_V3_X_THREAD_PUBLISH_ENABLED==='true'&&env.EMRADAR_V3_X_PUBLISH_ENABLED==='true'){
+   const {ThreadStore}=require('./emradar-x-thread-store.cjs');
+   const threadStore=new ThreadStore(pool);await threadStore.initialize();
+   runThreadPublication=require('./emradar-audience-v3-publication.cjs').createV3ThreadPublication({campaignStore:service.store,threadStore,review:service.workflow.audienceThread,x:integration.xThread,enabled:true});
+   service.workflow.audienceThread.runPublication=runThreadPublication;
+  }
+  const runPendingThreads=async()=>{
+   if(!runThreadPublication)return {status:'DISABLED'};
+   const {rows}=await pool.query("SELECT campaign_id FROM v3_campaign_state WHERE payload->'audience_x_approval'->>'decision'='APPROVE' AND COALESCE(payload->'audience_x_publication'->>'status','')<>'COMPLETE' ORDER BY campaign_id LIMIT 2");
+   const results=[];for(const row of rows){try{results.push(await runThreadPublication(row.campaign_id))}catch{results.push({status:'BLOCKED',campaign_id:row.campaign_id})}}
+   return {results};
+  };
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
    try{
@@ -536,7 +555,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
    return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
   };
-  return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  return {runPendingThreads,replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

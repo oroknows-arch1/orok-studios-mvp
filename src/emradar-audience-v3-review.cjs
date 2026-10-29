@@ -5,6 +5,8 @@ const {createHash,randomUUID}=require('node:crypto');
 const {assetHash}=require('./emradar-audience-asset-hash.cjs');
 const {draftFullScanThread}=require('./emradar-x-thread-drafts.cjs');
 const {graphic}=require('./emradar-v3-x.cjs');
+const {expandSegments,validText}=require('./emradar-x-thread-text.cjs');
+const {extractUrls}=require('twitter-text');
 const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Object.fromEntries(Object.keys(x).sort().map(k=>[k,canonical(x[k])])):x;
 const hash=x=>createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
 const bytesHash=x=>createHash('sha256').update(x).digest('hex');
@@ -15,21 +17,26 @@ function identity(state){
  if(!scan||!/^\d{4}-\d{2}-\d{2}$/.test(scan.snapshot_date||'')||!/^[a-f0-9]{64}$/.test(scan.artifact_sha256||'')||scan.source_key!==scan.snapshot_date+':'+scan.artifact_sha256)fail('PUBLISHED_SCAN_IDENTITY_REQUIRED');
  return {snapshot_date:scan.snapshot_date,source_key:scan.source_key,artifact_sha256:scan.artifact_sha256};
 }
-function manifest(review){return hash({campaign_id:review.campaign_id,review_id:review.review_id,scan:review.scan,source_sha256:review.source_sha256,discovery_ids:review.discovery_ids,segments:review.segments});}
+function manifest(review){return hash({campaign_id:review.campaign_id,review_id:review.review_id,scan:review.scan,source_sha256:review.source_sha256,discovery_ids:review.discovery_ids,graphic_required:review.graphic_required,segments:review.segments});}
 function validate(review,state){
  const problems=[];
  if(!review||!same(review.scan,identity(state))||review.campaign_id!==state.id)fail('STALE_SCAN');
- if(!Array.isArray(review.segments)||review.segments.length!==review.discovery_ids.length+1)fail('COVERAGE_INCOMPLETE');
+ if(!Array.isArray(review.segments)||!review.segments.length||new Set(review.discovery_ids).size!==review.discovery_ids.length)fail('COVERAGE_INCOMPLETE');
  if(review.manifest_sha256!==manifest(review))fail('MANIFEST_MISMATCH');
+ const groups=[];
  for(const [i,s] of review.segments.entries()){
-  if(s.sequence!==i+1||s.parent_sequence!==(i?i:null)||s.kind!==(i?'DISCOVERY':'SUMMARY')||s.record_id!==(i?review.discovery_ids[i-1]:null)||s.asset_sha256!==assetHash(s))fail('SEGMENT_MISMATCH');
+  if(s.sequence!==i+1||s.parent_sequence!==(i?i:null)||s.kind!==(s.record_id?'DISCOVERY':'SUMMARY')||s.asset_sha256!==assetHash(s)||!validText(s.text))fail('SEGMENT_MISMATCH');
+  if(s.discovery_part===1)groups.push({id:s.record_id,count:s.discovery_parts,seen:0});
+  const group=groups.at(-1);
+  if(!group||group.id!==s.record_id||s.discovery_part!==++group.seen||s.discovery_parts!==group.count)fail('DISCOVERY_ORDER_MISMATCH');
   if(!Array.isArray(s.source_links)||s.source_links.some(url=>{try{const u=new URL(url);return u.protocol!=='https:'||u.username||u.password}catch{return true}}))fail('SOURCE_LINK_INVALID');
   if(!i&&review.graphic_required&&!s.media)problems.push('MAIN_GRAPHIC_MISSING');
-  if(i&&!s.source_links.length)problems.push('SOURCE_LINKS_MISSING:'+s.record_id);
   if(s.media){
    try{const {bytes,mime}=graphic({kind:'X',destination_id:'x',body:s.text,visual_base64:s.media.base64,visual_sha256:s.media.sha256,visual_mime:s.media.mime});if(mime!==s.media.mime||bytesHash(bytes)!==s.media.sha256)fail('GRAPHIC_MISMATCH');}catch{problems.push('GRAPHIC_BYTES_INVALID:'+s.sequence)}
   }
  }
+ if(groups.some(g=>g.seen!==g.count)||!same(groups.map(g=>g.id),[null,...review.discovery_ids]))fail('COVERAGE_INCOMPLETE');
+ for(const id of review.discovery_ids)if(!review.segments.some(s=>s.record_id===id&&s.source_links.length))problems.push('SOURCE_LINKS_MISSING:'+id);
  return problems;
 }
 // Manifest includes segment hashes, but excludes its own digest.
@@ -52,7 +59,7 @@ function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now()}=
   // Preserve the saved evidence-bound graphic only with its exact saved text.
   if(main?.body){segments[0].text=main.body+'\n\nAcross the published scan:\n'+document.records.map(r=>r.theme||r.title||r.id).join(' · ')+'\n\n'+segments[0].text;segments[0].source_links=[...new Set(document.records.flatMap(r=>(r.evidence??[]).map(e=>e.url)).filter(u=>typeof u==='string'&&main.body.includes(u)))];}
   if(main?.visual_base64){graphic(main);segments[0].media={base64:main.visual_base64,mime:main.visual_mime,sha256:main.visual_sha256};}
-  const review=seal({campaign_id:campaignId,review_id:randomUUID(),scan,source_sha256:scan.artifact_sha256,discovery_ids:thread.record_ids,graphic_required:true,segments});
+  const review=seal({campaign_id:campaignId,review_id:randomUUID(),scan,source_sha256:scan.artifact_sha256,discovery_ids:thread.record_ids,graphic_required:true,segments:expandSegments(segments)});
   await store.mutate(campaignId,current=>{
    if(!same(identity(current),scan)||current.deliveries?.x||current.decisions?.x)fail('PREPARATION_STALE');
    if(!current.audience_x_review){current.audience_x_review=review;current.events??=[];current.events.push({type:'X_THREAD_PREPARED',review_id:review.review_id,manifest_sha256:review.manifest_sha256});}
@@ -96,7 +103,7 @@ function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now()}=
   return (await store.adapter.read(campaignId)).value;
  }
  async function revise(campaignId,fingerprint,changes){
-  if(!changes||Object.keys(changes).some(k=>!['sequence','text'].includes(k))||!Number.isInteger(changes.sequence)||typeof changes.text!=='string'||!changes.text.trim()||changes.text.length>25000)fail('REVISION_INVALID');
+  if(!changes||Object.keys(changes).some(k=>!['sequence','text'].includes(k))||!Number.isInteger(changes.sequence)||typeof changes.text!=='string'||!validText(changes.text))fail('REVISION_INVALID');
   return store.mutate(campaignId,state=>{
    const r=state?.audience_x_review;
    if(state.phase!=='PUBLICATION_REVIEW'||state.deliveries?.x||state.audience_x_publication_started)fail('REVISION_AFTER_DISTRIBUTION');
@@ -104,7 +111,7 @@ function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now()}=
    if(r.manifest_sha256!==fingerprint)fail('REVISION_STALE');
    const segment=r.segments[changes.sequence-1];if(!segment)fail('REVISION_INVALID');
    state.audience_x_history??=[];state.audience_x_history.push(structuredClone(r));
-   segment.text=changes.text;r.review_id=randomUUID();seal(r);delete state.audience_x_approval;state.audience_x_presentations={};
+   segment.text=changes.text;segment.source_links=extractUrls(changes.text);r.review_id=randomUUID();seal(r);delete state.audience_x_approval;delete state.audience_x_checks;state.audience_x_presentations={};
    state.events.push({type:'X_THREAD_REVISED',review_id:r.review_id,manifest_sha256:r.manifest_sha256});return state;
   });
  }

@@ -706,5 +706,26 @@
   ],
   "production_records_modified": false,
   "external_distribution": 0
+},
+  "october_29_thread_publication_staging": {
+  "status": "IMPLEMENTED_AND_STAGING_VERIFIED_NOT_DEPLOYED",
+  "implemented": [
+    "Weighted X character validation and numbered per-discovery continuation parts before owner review",
+    "Existing V3 OAuth account verification and exact-byte upload now support approved reply parents",
+    "Durable idempotent registration, upload checkpoints, receipts, bounded continuation and independent reconciliation; ambiguous rows never reset",
+    "Automatic preparation and opt-in post-approval worker reuse existing V3 intake lifecycle"
+  ],
+  "verification": {
+    "full_local_postgres_suite": "252 passed, 0 failed, 0 skipped",
+    "harness_verify": "PASS",
+    "harness_v3": "PASS",
+    "real_published_source_sha256": "160afce4977775448893fa67cd723743bc707fe091a3024bbc871bb6a25c9818",
+    "production_saved_graphic_sha256": "81b5e2b57ed4a733254a8e87485acc407965c73118ed7ada1d37afaea2f38ed3",
+    "real_source_staging": "7 discoveries, 96 standard-length posts; exact upload, lost accepted response, restart, ordered parents and no duplicate posts passed against disposable PostgreSQL 16; X provider simulated",
+    "previous_remote_ci": "Audience CI passed. V3 196/197; stale publication-first expectation corrected to match pre-existing nonblocking review behavior."
+  },
+  "production_deployed": false,
+  "production_records_modified": false,
+  "external_distribution": 0
 }
 }

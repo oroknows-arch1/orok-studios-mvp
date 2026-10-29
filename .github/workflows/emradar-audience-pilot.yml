@@ -23,4 +23,4 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci
-      - run: node --test test/emradar-x-thread-*.test.cjs test/emradar-grok-*.test.cjs test/emradar-audience-*.test.cjs
+      - run: node --test test/emradar-x-thread-*.test.cjs test/emradar-audience-*.test.cjs test/emradar-v3-review-preview.test.mjs

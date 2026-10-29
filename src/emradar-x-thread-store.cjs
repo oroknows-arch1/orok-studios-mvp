@@ -13,6 +13,23 @@ class ThreadStore{
    PRIMARY KEY(campaign_id,sequence),UNIQUE(receipt_id),
    CHECK(status!='ACCEPTED' OR receipt_id IS NOT NULL),
    CHECK(status!='AMBIGUOUS' OR receipt_id IS NULL))`);
+  await this.pool.query('ALTER TABLE emradar_x_thread_posts ADD COLUMN IF NOT EXISTS provider_upload JSONB, ADD COLUMN IF NOT EXISTS provider_receipt JSONB');
+ }
+ async list(campaign_id){return (await this.pool.query('SELECT * FROM emradar_x_thread_posts WHERE campaign_id=$1 ORDER BY sequence',[campaign_id])).rows;}
+ async ensureRegistered({campaign_id,approved_segments}){
+  let rows=await this.list(campaign_id);
+  if(!rows.length){try{await this.register({campaign_id,approved_segments});}catch(error){if(error.message!=='THREAD_ALREADY_REGISTERED')throw error;}rows=await this.list(campaign_id);}
+  if(rows.length!==approved_segments.length||rows.some((row,i)=>row.sequence!==i+1||row.approved_asset_sha256!==assetHash(approved_segments[i])))throw Error('THREAD_REGISTERED_MANIFEST_MISMATCH');
+  return rows;
+ }
+ async saveUpload({campaign_id,sequence,upload}){
+  const q=await this.pool.query("UPDATE emradar_x_thread_posts SET provider_upload=$3,updated_at=now() WHERE campaign_id=$1 AND sequence=$2 AND status='RESERVED' AND provider_upload IS NULL",[campaign_id,sequence,upload]);
+  if(q.rowCount!==1)throw Error('THREAD_UPLOAD_NOT_RESERVED');
+ }
+ async reconcileAccepted({campaign_id,sequence,receipt}){
+  if(receipt?.status!=='VERIFIED_ACCEPTED'||!/^\d+$/.test(receipt.receipt_id??''))throw Error('THREAD_RECONCILIATION_PROOF_REQUIRED');
+  const q=await this.pool.query("UPDATE emradar_x_thread_posts SET status='ACCEPTED',receipt_id=$3,provider_receipt=$4,updated_at=now() WHERE campaign_id=$1 AND sequence=$2 AND status IN ('RESERVED','AMBIGUOUS') RETURNING *",[campaign_id,sequence,receipt.receipt_id,receipt]);
+  if(q.rowCount!==1)throw Error('THREAD_RECONCILIATION_NOT_PENDING');return q.rows[0];
  }
  async register({campaign_id,approved_segments}={}){
   if(typeof campaign_id!=='string'||!campaign_id||!Array.isArray(approved_segments)||approved_segments.length<2)throw Error('THREAD_REGISTER_INVALID');
@@ -50,12 +67,12 @@ class ThreadStore{
    await client.query('COMMIT');return {campaign_id,sequence,parent_receipt_id:parent};
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
  }
- async record({campaign_id,sequence,receipt_id,ambiguous=false}={}){
+ async record({campaign_id,sequence,receipt_id,ambiguous=false,provider_receipt=null}={}){
   if(!campaign_id||!Number.isInteger(sequence)||sequence<1||(!ambiguous&&!/^\d+$/.test(String(receipt_id||''))))throw Error('THREAD_RECORD_INVALID');
   const q=await this.pool.query(`UPDATE emradar_x_thread_posts
-    SET status=$3,receipt_id=$4,updated_at=now()
+    SET status=$3,receipt_id=$4,provider_receipt=$5,updated_at=now()
     WHERE campaign_id=$1 AND sequence=$2 AND status='RESERVED'
-    RETURNING sequence,status,receipt_id,parent_receipt_id`,[campaign_id,sequence,ambiguous?'AMBIGUOUS':'ACCEPTED',ambiguous?null:String(receipt_id)]);
+    RETURNING sequence,status,receipt_id,parent_receipt_id`,[campaign_id,sequence,ambiguous?'AMBIGUOUS':'ACCEPTED',ambiguous?null:String(receipt_id),provider_receipt]);
   if(q.rowCount!==1)throw Error('THREAD_RESERVATION_NOT_FOUND_OR_FINAL');
   return q.rows[0];
  }

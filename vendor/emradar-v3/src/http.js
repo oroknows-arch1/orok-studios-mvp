@@ -133,6 +133,7 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
    }
    if(url.pathname==='/api/review/decision'){
     const state=await workflow.decide(input.campaignId,session.id,session.secret,input.destinationId,input.decision,input.fingerprint,input.feedback??'');
+    if(input.destinationId==='x'&&input.decision==='APPROVE'&&workflow.audienceThread?.runPublication)setImmediate(()=>workflow.audienceThread.runPublication(input.campaignId).catch(()=>console.error('V3_X_THREAD_BLOCKED')));
     const action=state?.review_actions?.[input.destinationId];
     if(action?.status==='PENDING'&&typeof runRegeneration==='function')setImmediate(()=>runRegeneration(input.campaignId,input.destinationId).catch(error=>console.error('V3_REGENERATION_WORKER_FAILED',/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'V3_REGENERATION_FAILED')));
     return json(res,200,{saved:true,regeneration_status:action?.status??null});

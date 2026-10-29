@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({runPendingThreads,replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -698,6 +698,7 @@ if (require.main === module) {
       if(preparing||typeof runCampaign!=='function')return;
       preparing=true;
       try{
+        if(typeof runPendingThreads==='function')await runPendingThreads().catch(()=>console.error('V3_X_THREAD_WORKER_BLOCKED'));
         if(typeof runPendingRegenerations==='function')console.log('V3_REGENERATION_QUEUE_RESULT',JSON.stringify(await runPendingRegenerations()));
         console.log('V3_PREPARATION_RESULT',JSON.stringify(await runCampaign()));
       }

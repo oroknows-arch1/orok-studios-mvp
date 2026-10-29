@@ -17,6 +17,6 @@ function createV3IsolatedWiring({pool,token,reviewOrigin,env,createTransport,fet
   sendOwnerReview:smtp.sendOwnerReview,
   sendApprovedEmail:smtp.sendApprovedEmail,prepareApprovedX
  });
- return {...integration,initialize:async()=>{await integration.initialize();await x.auth.initialize();},xAuth:x.auth,prepareApprovedX,assertXEnabled:x.assertEnabled,verifyXIdentity:x.verifyIdentity,verifyMailTransport:smtp.verifyTransport,inspectOwnerInvitation:smtp.inspectOwnerInvitation,inspectOwnerMailbox:smtp.inspectOwnerMailbox};
+ return {...integration,initialize:async()=>{await integration.initialize();await x.auth.initialize();},xThread:x,xAuth:x.auth,prepareApprovedX,assertXEnabled:x.assertEnabled,verifyXIdentity:x.verifyIdentity,verifyMailTransport:smtp.verifyTransport,inspectOwnerInvitation:smtp.inspectOwnerInvitation,inspectOwnerMailbox:smtp.inspectOwnerMailbox};
 }
 module.exports={createV3IsolatedWiring};
