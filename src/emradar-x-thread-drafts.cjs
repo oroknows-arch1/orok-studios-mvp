@@ -17,17 +17,13 @@ function draftFullScanThread({document,scanUrl}={}){
   const sources=evidence.filter(e=>e&&typeof e.url==='string'&&/^https:\/\//.test(e.url)).map(e=>e.url);
   const lines=[`${index}/${total} | ${title}`,`Evidence state: ${status}`];
   if(description)lines.push(description);
-  for(const key of ['world_change','pressure','bottleneck_or_scarcity','formation','industries','connected_companies_and_tickers','consequences']){
-   const value=r.causal_chain?.[key];
-   if(value?.length)lines.push(key.replaceAll('_',' ')+': '+(Array.isArray(value)?value.map(compact).join('; '):compact(value)));
+  // The public thread is a concise index into the fully evidenced scan, not a duplicate of it.
+  // Do not silently omit a discovery or turn UNKNOWN into a positive assertion.
+  const maxDescription=420;
+  if(description&&description.length>maxDescription){
+   lines[2]=description.slice(0,maxDescription-1).trimEnd()+'…';
   }
-  for(const [label,value] of [['Contradictions',r.contradictions],['Missing evidence',r.missing_evidence],['Unresolved',r.chain_evolution?.unresolved_evidence],['Break conditions',r.chain_evolution?.break_conditions],['Next questions',r.what_to_check_next]]){
-   if(value?.length)lines.push(label+': '+(Array.isArray(value)?value.map(compact).join('; '):compact(value)));
-  }
-  for(const e of evidence)if(e.fact)lines.push('Evidence'+(e.classification?' ('+compact(e.classification)+')':'')+': '+compact(e.fact)+(e.date?' ['+compact(e.date)+']':''));
-  if(sources.length)lines.push('Sources: '+sources.join(' '));
-  else lines.push('Source details: see the verified scan');
-  lines.push('Full record: '+scanUrl);
+  lines.push('Evidence and full causal chain: '+scanUrl);
   return lines.join('\n');
  }});
 }
