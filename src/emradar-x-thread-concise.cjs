@@ -1,5 +1,6 @@
 'use strict';
 const {planDailyThread}=require('./emradar-x-thread-plan.cjs');
+const {parseTweet}=require('twitter-text');
 const compact=x=>String(x??'').replace(/\s+/g,' ').trim();
 function draftConciseThread({document,scanUrl}={}){
  if(typeof scanUrl!=='string'||!/^https:\/\/emradar\.net\//.test(scanUrl))throw Error('THREAD_SCAN_URL_REQUIRED');
@@ -11,10 +12,17 @@ function draftConciseThread({document,scanUrl}={}){
   const description=compact(r.summary||r.description||r.why_surfaced||r.world_change?.summary||'');
   const source=Array.isArray(r.evidence)?r.evidence.find(e=>typeof e?.url==='string'&&/^https:\/\//.test(e.url))?.url:null;
   const lines=[index+'/'+total+' | '+title,'Evidence state: '+status];
-  if(description)lines.push(description.length>350?description.slice(0,349).trimEnd()+'…':description);
-  if(source)lines.push('Source: '+source);
-  lines.push('Evidence and full causal chain: '+scanUrl);
-  return lines.join('\n');
+  // Preserve one source URL and full-scan URL, trimming only optional prose.
+  const footer=(source?'Source: '+source+'\n':'')+'Full evidence: '+scanUrl;
+  const prefix=lines.join('\n')+'\n';
+  let detail=description;
+  let candidate=prefix+(detail?detail+'\n':'')+footer;
+  while(detail&&(!parseTweet(candidate).valid||parseTweet(candidate).weightedLength>280)){
+   detail=detail.slice(0,-1);
+   candidate=prefix+(detail?detail.trimEnd()+'…\n':'')+footer;
+  }
+  if(!parseTweet(candidate).valid||parseTweet(candidate).weightedLength>280)throw Error('CONCISE_POST_LINKS_EXCEED_LIMIT');
+  return candidate;
  }});
 }
 module.exports={draftConciseThread};
