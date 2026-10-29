@@ -7,6 +7,8 @@ async function main(){
  const pool=new Pool({connectionString:process.env.V3_TEST_DATABASE_URL});
  try{
   await pool.query('CREATE TABLE IF NOT EXISTS v3_campaign_state (campaign_id TEXT PRIMARY KEY,version BIGINT NOT NULL,payload JSONB NOT NULL)');
+  await pool.query('ALTER TABLE v3_campaign_state ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT now()');
+  await new (require('../src/emradar-x-thread-store.cjs').ThreadStore)(pool).initialize();
   await new V3Reservations(pool).initialize();
   const {OutletDirectory}=await import('../vendor/emradar-v3/src/outlet-directory.js');
   await new OutletDirectory(pool).initialize();

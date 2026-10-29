@@ -3,7 +3,8 @@ const {planDailyThread}=require('./emradar-x-thread-plan.cjs');
 const compact=x=>String(x??'').replace(/\s+/g,' ').trim();
 const escapeHtml=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function draftFullScanThread({document,scanUrl}={}){
- if(typeof scanUrl!=='string'||!/^https:\/\/emradar\.net\//.test(scanUrl))throw Error('THREAD_SCAN_URL_REQUIRED');
+ const archive='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+document?.snapshot_date+'.json';
+ if(typeof scanUrl!=='string'||(!/^https:\/\/emradar\.net\//.test(scanUrl)&&scanUrl!==archive))throw Error('THREAD_SCAN_URL_REQUIRED');
  const records=document?.records;
  if(!Array.isArray(records)||!records.length)throw Error('THREAD_NO_DISCOVERIES');
  const summary=`EMRADAR | ${document.snapshot_date}\nToday's published scan contains ${records.length} discoveries. Each finding below retains its evidence and uncertainty.\nFull scan: ${scanUrl}`;

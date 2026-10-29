@@ -97,6 +97,20 @@ function createV3X({env={},pool,fetcher=fetch,auth:injectedAuth,clock=()=>Date.n
  }
  return {assertEnabled,prepare,auth:authService,
   prepareThreadPost:({segment,scan,parent_receipt_id=null})=>prepare({scan,parent_receipt_id,threadPost:true,asset:{kind:'X',destination_id:'x',body:segment.text,...(segment.media?{visual_base64:segment.media.base64,visual_mime:segment.media.mime,visual_sha256:segment.media.sha256}:{})}}),
+  readThreadMetrics:async({post_ids})=>{
+   if(!Array.isArray(post_ids)||!post_ids.length||post_ids.length>200||new Set(post_ids).size!==post_ids.length||post_ids.some(id=>!/^\d{1,19}$/.test(id)))fail('METRIC_POST_IDS_INVALID');
+   const auth=await current({allowRefresh:true});assertScopes(auth);const account=await identity(auth),posts=[];
+   for(let offset=0;offset<post_ids.length;offset+=100){
+    const ids=post_ids.slice(offset,offset+100),query=new URLSearchParams({ids:ids.join(','),'tweet.fields':'author_id,created_at,public_metrics'}),result=await request('/2/tweets?'+query,auth.access_token);
+    if(!Array.isArray(result.data)||result.data.length!==ids.length)fail('METRICS_INCOMPLETE');
+    for(const id of ids){const post=result.data.find(p=>p.id===id);if(!post||post.author_id!==account.account_id||!post.public_metrics)fail('METRIC_OWNERSHIP_UNVERIFIED');
+     const metrics={};for(const key of ['like_count','reply_count','retweet_count','quote_count','bookmark_count','impression_count'])if(post.public_metrics[key]!==undefined){if(!Number.isSafeInteger(post.public_metrics[key])||post.public_metrics[key]<0)fail('METRICS_INVALID');metrics[key]=post.public_metrics[key];}
+     if(!Object.keys(metrics).length)fail('METRICS_INCOMPLETE');
+     posts.push({post_id:id,created_at:post.created_at,metrics});
+    }
+   }
+   return {provider:'X_API_V2',account_id:account.account_id,observed_at:new Date(clock()).toISOString(),posts};
+  },
   reconcileThreadPost:async({segment,scan,parent_receipt_id,upload})=>{
    const auth=await current({allowRefresh:true});assertScopes(auth);const account=await identity(auth);
    if(segment.media&&(!upload?.media_key||upload.visual_sha256!==segment.media.sha256||upload.account_id!==account.account_id))return {status:'UNRESOLVED'};

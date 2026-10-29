@@ -270,17 +270,26 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     return result;
    };
   }
-  let runThreadPublication=null;
+  let runThreadPublication=null,runAudienceResearch=null,runAudienceMetrics=null;
   if(service.workflow.audienceThread&&env.EMRADAR_V3_X_THREAD_PUBLISH_ENABLED==='true'&&env.EMRADAR_V3_X_PUBLISH_ENABLED==='true'){
    const {ThreadStore}=require('./emradar-x-thread-store.cjs');
    const threadStore=new ThreadStore(pool);await threadStore.initialize();
-   runThreadPublication=require('./emradar-audience-v3-publication.cjs').createV3ThreadPublication({campaignStore:service.store,threadStore,review:service.workflow.audienceThread,x:integration.xThread,enabled:true});
+   service.workflow.audienceThread.setPublicationRowsReader(id=>threadStore.list(id));
+   if(env.EMRADAR_X_AUDIENCE_METRICS_ENABLED==='true')runAudienceMetrics=require('./emradar-audience-observation.cjs').createAudienceObservation({store:service.store,x:integration.xThread,enabled:true});
+   if(env.EMRADAR_GROK_AUDIENCE_ENABLED==='true'&&env.XAI_API_KEY&&(env.EMRADAR_GROK_MODEL||env.GROK_MODEL)){
+    const pilot=require('./emradar-grok-audience-pilot.cjs').createGrokAudiencePilot({fetcher,apiKey:env.XAI_API_KEY,model:env.EMRADAR_GROK_MODEL||env.GROK_MODEL,enabled:true});
+    runAudienceResearch=require('./emradar-grok-full-scan.cjs').createFullScanResearch({store:service.store,pilot,loadPublishedBytes:service.workflow.audienceThread.loadSourceBytes,loadPublicationRows:id=>threadStore.list(id),enabled:true,maxSpendUsd:Number(env.EMRADAR_GROK_RUN_BUDGET_USD||0),requestReserveUsd:Number(env.EMRADAR_GROK_REQUEST_RESERVE_USD||0),providerSpendLimitVerified:env.EMRADAR_GROK_PROVIDER_SPEND_LIMIT_VERIFIED==='true'});
+   }
+   const publish=require('./emradar-audience-v3-publication.cjs').createV3ThreadPublication({campaignStore:service.store,threadStore,review:service.workflow.audienceThread,x:integration.xThread,enabled:true});
+   runThreadPublication=async id=>{const result=await publish(id);if(result.status==='COMPLETE'&&runAudienceResearch)try{await runAudienceResearch(id)}catch{console.error('V3_GROK_RESEARCH_BLOCKED')}return result;};
    service.workflow.audienceThread.runPublication=runThreadPublication;
   }
   const runPendingThreads=async()=>{
    if(!runThreadPublication)return {status:'DISABLED'};
    const {rows}=await pool.query("SELECT campaign_id FROM v3_campaign_state WHERE payload->'audience_x_approval'->>'decision'='APPROVE' AND COALESCE(payload->'audience_x_publication'->>'status','')<>'COMPLETE' ORDER BY campaign_id LIMIT 2");
    const results=[];for(const row of rows){try{results.push(await runThreadPublication(row.campaign_id))}catch{results.push({status:'BLOCKED',campaign_id:row.campaign_id})}}
+   if(runAudienceResearch){const pending=await pool.query("SELECT campaign_id FROM v3_campaign_state WHERE payload->'audience_x_publication'->>'status'='COMPLETE' AND COALESCE(payload->'audience_x_research'->>'status','') NOT IN ('COMPLETE','BUDGET_EXHAUSTED') ORDER BY campaign_id LIMIT 2");for(const row of pending.rows)try{results.push(await runAudienceResearch(row.campaign_id))}catch{results.push({status:'RESEARCH_BLOCKED',campaign_id:row.campaign_id})}}
+   if(runAudienceMetrics){const pending=await pool.query("SELECT campaign_id FROM v3_campaign_state WHERE payload->'audience_x_publication'->>'status'='COMPLETE' ORDER BY payload->'audience_x_observation'->>'observed_at' ASC NULLS FIRST LIMIT 1");for(const row of pending.rows)try{await runAudienceMetrics(row.campaign_id)}catch{results.push({status:'METRICS_BLOCKED',campaign_id:row.campaign_id})}}
    return {results};
   };
   const runRegeneration=async(campaignId,destinationId)=>{
