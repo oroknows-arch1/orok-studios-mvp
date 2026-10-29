@@ -70,7 +70,8 @@ export function assessPublicationReview({state,candidates}) {
  const incomplete=assets.filter(asset=>asset.review_status==='NEEDS_REVISION');
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
  const xReady=Boolean(x?.body&&(x.visual_url||x.visual_base64));
- const visible=(state.destinations??[]).every(destination=>assets.some(asset=>asset.destination_id===destination.id))&&publications.every(publication=>destinationIds.has(publication.id)&&assets.some(asset=>asset.destination_id===publication.id));
+ // Review availability is independent of unfinished editorial destinations. Only independently ready, verified assets may be approved or distributed.
+ const visible=xReady||emailIds.size>0;
  return {complete:visible,review_ready:visible,delivery_ready:missing.length===0&&incomplete.length===0&&xReady,verified_publications:publications.length,verified_contacts:recipients.length,unresolved_contacts:publications.length-recipients.length,editorial_emails:emailIds.size,x_ready:xReady,needs_revision:incomplete.map(asset=>asset.destination_id),missing_destination_ids:missing};
 }
 
