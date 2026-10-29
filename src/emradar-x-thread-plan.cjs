@@ -2,7 +2,7 @@
 // Pure draft planner. No X API calls or production wiring.
 // Each published record receives a dedicated thread segment.
 function planDailyThread({document,summary,renderRecord,scanUrl}={}) {
- if(document?.publication_state!=='PUBLISHED'||!Array.isArray(document.records)||!/^\\d{4}-\\d{2}-\\d{2}$/.test(document.snapshot_date||''))throw Error('THREAD_PUBLISHED_SCAN_REQUIRED');
+ if(document?.publication_state!=='PUBLISHED'||!Array.isArray(document.records)||!/^\d{4}-\d{2}-\d{2}$/.test(document.snapshot_date||''))throw Error('THREAD_PUBLISHED_SCAN_REQUIRED');
  if(typeof summary!=='string'||!summary.trim()||typeof renderRecord!=='function')throw Error('THREAD_INPUT_INVALID');
  const ids=new Set();
  const segments=document.records.map((record,i)=>{
