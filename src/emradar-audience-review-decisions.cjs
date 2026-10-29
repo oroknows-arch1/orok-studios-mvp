@@ -1,9 +1,10 @@
 'use strict';
 const {createHash,timingSafeEqual}=require('node:crypto');
+const {assetHash}=require('./emradar-audience-asset-hash.cjs');
 const hash=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function prepareDecisionPackage(review){
  if(review?.state!=='PREVIEW_ONLY'||!review.review_id||!Array.isArray(review.thread?.segments))throw Error('AUDIENCE_REVIEW_INVALID');
- const segments=review.thread.segments.map(s=>({sequence:s.sequence,kind:s.kind,record_id:s.record_id||null,text:s.text,asset_sha256:hash({sequence:s.sequence,kind:s.kind,record_id:s.record_id||null,text:s.text}),approval_status:'PENDING'}));
+ const segments=review.thread.segments.map(s=>({sequence:s.sequence,kind:s.kind,record_id:s.record_id||null,text:s.text,media:s.media??null,asset_sha256:assetHash(s),approval_status:'PENDING'}));
  return {review_id:review.review_id,source_sha256:review.source_sha256,state:'AWAITING_OWNER',segments,decision:null};
 }
 function recordOwnerDecision(pkg,{review_id,source_sha256,decisions,actor}={}){
