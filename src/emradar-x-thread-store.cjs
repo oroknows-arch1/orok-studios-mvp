@@ -1,7 +1,6 @@
 'use strict';
 // Independent storage. Never modifies existing V3 send reservations.
-const {createHash}=require('node:crypto');
-const sha=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+const {assetHash}=require('./emradar-audience-asset-hash.cjs');
 class ThreadStore{
  constructor(pool){if(typeof pool?.query!=='function')throw Error('THREAD_POOL_REQUIRED');this.pool=pool;}
  async initialize(){
@@ -23,7 +22,8 @@ class ThreadStore{
    for(let i=0;i<approved_segments.length;i++){
     const s=approved_segments[i];
     if(s.sequence!==i+1||s.approval_status!=='APPROVED'||typeof s.text!=='string'||!s.text.trim())throw Error('THREAD_REGISTER_APPROVAL_REQUIRED');
-    const h=sha({sequence:s.sequence,record_id:s.record_id||null,text:s.text});
+    const h=assetHash(s);
+    if(s.asset_sha256&&s.asset_sha256!==h)throw Error('THREAD_ASSET_HASH_MISMATCH');
     const q=await client.query(`INSERT INTO emradar_x_thread_posts(campaign_id,sequence,record_id,approved_asset_sha256)
       VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING`,[campaign_id,s.sequence,s.record_id||null,h]);
     if(q.rowCount!==1)throw Error('THREAD_ALREADY_REGISTERED');
