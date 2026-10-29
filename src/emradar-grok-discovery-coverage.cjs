@@ -3,9 +3,9 @@
 const {createHash}=require('node:crypto');
 const sha=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
 function buildDiscoveryCoverage({document,post_id,body}={}){
- if(!document||document.publication_state!=='PUBLISHED'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(document.snapshot_date||''))throw Error('AUDIENCE_PUBLISHED_SCAN_REQUIRED');
+ if(!document||document.publication_state!=='PUBLISHED'||!/^\d{4}-\d{2}-\d{2}$/.test(document.snapshot_date||''))throw Error('AUDIENCE_PUBLISHED_SCAN_REQUIRED');
  if(!Array.isArray(document.records))throw Error('AUDIENCE_RECORDS_REQUIRED');
- if(!/^\\d+$/.test(String(post_id||''))||typeof body!=='string'||!body.trim())throw Error('AUDIENCE_POST_REQUIRED');
+ if(!/^\d+$/.test(String(post_id||''))||typeof body!=='string'||!body.trim())throw Error('AUDIENCE_POST_REQUIRED');
  const seen=new Set();
  const discoveries=document.records.map((record,index)=>{
   if(!record||typeof record.id!=='string'||!record.id.trim()||seen.has(record.id))throw Error('AUDIENCE_RECORD_ID_INVALID');
