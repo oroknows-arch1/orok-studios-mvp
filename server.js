@@ -731,7 +731,10 @@ if (require.main === module) {
     }else if(editorialWritingReviewPending){
       runEditorialWritingReview().then(result=>console.log('V3_EDITORIAL_WRITING_REVIEW',JSON.stringify(result)))
         .catch(error=>console.error('V3_EDITORIAL_WRITING_REVIEW_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_PROVIDER_FAILED'));
-    }else prepareLatest();
+    }
+    // Always recover ready, unnotified campaigns at startup, regardless of historical maintenance jobs.
+    // Campaign-level advisory locks and durable review records prevent duplicate invitations.
+    prepareLatest();
     const v3IntakeTimer=setInterval(prepareLatest,60*60*1000);
     v3IntakeTimer.unref();
     require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
