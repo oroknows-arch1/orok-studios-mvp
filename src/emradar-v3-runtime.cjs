@@ -136,7 +136,7 @@ async function selectNextPublishedScan({published,readCampaign}){
 async function resumePendingDiscovery({pool,service}){
  const {rows}=await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
   LEFT JOIN v3_campaign_state r ON r.campaign_id='review:'||c.campaign_id
-  WHERE c.payload->>'phase'='PUBLICATION_REVIEW'
+  WHERE c.payload->>'phase' IN ('PUBLICATION_REVIEW','ASSETS_PREPARED')
   AND c.payload->'preparation_input'->'document' IS NOT NULL
   AND COALESCE(c.payload->'review_completion'->>'complete','false')<>'true'
   AND r.campaign_id IS NULL
@@ -147,7 +147,7 @@ async function resumePendingDiscovery({pool,service}){
   const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[campaignId]);
   if(!lock.rows[0]?.acquired)return {campaignId,status:'SCAN_PREPARATION_IN_PROGRESS'};
   const state=(await service.store.adapter.read(campaignId))?.value;
-  if(state?.phase!=='PUBLICATION_REVIEW'||state.review_completion?.complete===true||!state.preparation_input?.document)return null;
+  if(!['PUBLICATION_REVIEW','ASSETS_PREPARED'].includes(state?.phase)||state.review_completion?.complete===true||!state.preparation_input?.document)return null;
   const resumed=await service.resumeIntelligentDiscovery(campaignId,{notifyOwner:false});
   const completion=await service.reviewCompletion(campaignId);
   if(!completion.complete)return {...resumed,...completion,recovery:'INCOMPLETE'};
