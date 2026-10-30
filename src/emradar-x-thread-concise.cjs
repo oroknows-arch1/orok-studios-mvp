@@ -3,7 +3,7 @@ const {planDailyThread}=require('./emradar-x-thread-plan.cjs');
 const {parseTweet}=require('twitter-text');
 const compact=x=>String(x??'').replace(/\s+/g,' ').trim();
 function draftConciseThread({document,scanUrl}={}){
- if(typeof scanUrl!=='string'||!/^https:\/\/emradar\.net\//.test(scanUrl))throw Error('THREAD_SCAN_URL_REQUIRED');
+ if(typeof scanUrl!=='string'||!/^https:\/\/(?:emradar\.net\/|emerging-markets-radar\.onrender\.com\/data\/checkpoints\/discovery-\d{4}-\d{2}-\d{2}\.json$)/.test(scanUrl))throw Error('THREAD_SCAN_URL_REQUIRED');
  if(!Array.isArray(document?.records)||!document.records.length)throw Error('THREAD_NO_DISCOVERIES');
  const summary='EMRADAR | '+document.snapshot_date+'\n'+document.records.length+' published discoveries. Evidence states and full analysis: '+scanUrl;
  return planDailyThread({document,scanUrl,summary,renderRecord:(r,{index,total})=>{
