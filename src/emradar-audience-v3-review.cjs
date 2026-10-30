@@ -4,6 +4,7 @@
 const {createHash,randomUUID}=require('node:crypto');
 const {assetHash}=require('./emradar-audience-asset-hash.cjs');
 const {draftFullScanThread}=require('./emradar-x-thread-drafts.cjs');
+const {draftConciseThread}=require('./emradar-x-thread-concise.cjs');
 const {graphic}=require('./emradar-v3-x.cjs');
 const {expandSegments,validText}=require('./emradar-x-thread-text.cjs');
 const {extractUrls}=require('twitter-text');
@@ -53,7 +54,8 @@ function validate(review,state){
 }
 // Manifest includes segment hashes, but excludes its own digest.
 function seal(review){review.segments=review.segments.map(s=>({...s,asset_sha256:assetHash(s)}));review.manifest_sha256=manifest(review);return review;}
-function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now()}={}){
+function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now(),threadMode='FULL_EVIDENCE'}={}){
+ if(!['FULL_EVIDENCE','CONCISE'].includes(threadMode))fail('THREAD_MODE_INVALID');
  if(!store?.mutate||!store.adapter?.read||typeof loadPublishedBytes!=='function')fail('V3_REVIEW_DEPENDENCIES_REQUIRED');
  let publicationRowsReader=null;
  async function prepare(campaignId){
@@ -69,7 +71,7 @@ function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now()}=
   // The scanner UI does not expose every checkpoint in its history index.
   // Link the exact published artifact rather than an unsupported date route.
   const scanUrl='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+scan.snapshot_date+'.json';
-  const thread=draftFullScanThread({document,scanUrl});
+  const thread=(threadMode==='CONCISE'?draftConciseThread:draftFullScanThread)({document,scanUrl});
   const source_links_by_record=Object.fromEntries(document.records.map(record=>[record.id,[...(record.evidence??[]).map(e=>e.url).filter(u=>typeof u==='string'),scanUrl]]));
   source_links_by_record.SUMMARY=[...new Set([...Object.values(source_links_by_record).flat(),'https://emradar.net/'])];
   const main=state.assets?.x?.asset;
@@ -77,7 +79,7 @@ function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now()}=
   // Preserve the saved evidence-bound graphic only with its exact saved text.
   if(main?.body){segments[0].text=main.body+'\n\nAcross the published scan:\n'+document.records.map(r=>r.theme||r.title||r.id).join(' · ')+'\n\n'+segments[0].text+'\nEMRADAR: https://emradar.net/';segments[0].source_links=[...new Set(document.records.flatMap(r=>(r.evidence??[]).map(e=>e.url)).filter(u=>typeof u==='string'&&main.body.includes(u)))];}
   if(main?.visual_base64||main?.visual_url?.startsWith('data:image')){try{const {bytes,mime}=graphic(main);segments[0].media={base64:bytes.toString('base64'),mime,sha256:main.visual_sha256,provenance:{campaign_id:campaignId,v3_asset_sha256:hash(main)}};}catch{}}
-  const review=seal({campaign_id:campaignId,review_id:randomUUID(),scan,source_sha256:scan.artifact_sha256,all_discovery_ids:thread.record_ids,excluded_discovery_ids:[],discovery_ids:thread.record_ids,source_links_by_record,graphic_required:true,segments:expandSegments(segments)});
+  const review=seal({campaign_id:campaignId,review_id:randomUUID(),scan,source_sha256:scan.artifact_sha256,all_discovery_ids:thread.record_ids,excluded_discovery_ids:[],discovery_ids:thread.record_ids,source_links_by_record,graphic_required:true,segments:threadMode==='CONCISE'?segments.map((s,i)=>({...s,sequence:i+1,parent_sequence:i||null,discovery_part:1,discovery_parts:1,source_links:extractUrls(s.text)})):expandSegments(segments)});
   await store.mutate(campaignId,current=>{
    if(!same(identity(current),scan)||current.deliveries?.x||current.decisions?.x)fail('PREPARATION_STALE');
    if(!current.audience_x_review){current.audience_x_review=review;current.events??=[];current.events.push({type:'X_THREAD_PREPARED',review_id:review.review_id,manifest_sha256:review.manifest_sha256});}
