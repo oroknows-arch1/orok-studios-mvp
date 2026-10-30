@@ -149,4 +149,14 @@ test('concise V3 review retains one segment per discovery, exact graphic and aut
  assert.equal(await s.audience.verify({campaign_id:s.id}),true);
  assert.deepEqual(s.data.get(s.id).value.decisions,{});
  assert.deepEqual(s.data.get(s.id).value.deliveries,{});
+ const tampered=structuredClone(s.data.get(s.id).value.audience_x_review);
+ tampered.segments[1].text+=' altered';
+ assert.equal(await s.audience.verify({campaign_id:s.id,approved_thread:tampered}),false);
+ await s.workflow.revise(s.id,s.session.sessionId,s.session.secret,'x',r.manifest_sha256,{sequence:2,text:'Corrected discovery. https://example.org/evidence'});
+ assert.equal(await s.audience.verify({campaign_id:s.id}),false);
+ const revised=(await s.view()).xThread;
+ assert.equal(revised.segments.length,3);
+ await assert.rejects(()=>s.decide(revised),/PRESENTATION_REQUIRED/);
+ await s.present(revised);await s.decide(revised);
+ assert.equal(await s.audience.verify({campaign_id:s.id}),true);
 });
