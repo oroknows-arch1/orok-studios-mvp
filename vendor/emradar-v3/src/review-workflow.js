@@ -118,14 +118,17 @@ export class ReviewWorkflow {
   for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft'}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
-  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};
+  const xThread=this.audienceThread?await this.audienceThread.view(campaignId):null;
+  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,xThread,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
+  if(destinationId==='x'&&this.audienceThread)return this.audienceThread.decide(campaignId,sessionId,decision,fingerprint);
   return this.store.decide(campaignId,destinationId,decision,fingerprint,feedback);
  }
  async revise(campaignId,sessionId,secret,destinationId,fingerprint,changes) {
   await this.authenticate(campaignId,sessionId,secret);
+  if(destinationId==='x'&&this.audienceThread){await this.audienceThread.revise(campaignId,fingerprint,changes);return {saved:true};}
   let verifiedDestination=null;
   let recipientCheck=null;
   if(Object.hasOwn(changes??{},'to')){

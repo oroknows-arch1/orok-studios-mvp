@@ -682,5 +682,95 @@
     "owner_notifications_sent": 0,
     "owner_decisions_changed": 0,
     "external_distribution": 0
-  }
+  },
+  "october_29_audience_v3_integration": {
+  "status": "ISOLATED_IMPLEMENTATION_NOT_DEPLOYED",
+  "base_feature_commit": "558a8821a4853c5a2abcb1fef2572dcfd1f5c989",
+  "implementation": [
+    "Existing authenticated V3 review renders complete full-scan thread and exact persisted image bytes",
+    "Existing decision and edit endpoints bind manifest, source scan, review identity and owner session; partial presentation and stale approvals fail closed",
+    "Automatic post-approval checks read persisted V3 authority and exact source bytes; audience failures do not change editorial decisions or deliveries"
+  ],
+  "activation": "EMRADAR_V3_X_THREAD_REVIEW_ENABLED remains opt-in; not enabled in production",
+  "verification": {
+    "audience_thread_and_review": "64 assertions passed, 1 PostgreSQL test skipped; explicitly used --test-isolation=none",
+    "harness_verify": "PASS",
+    "harness_v3": "PASS",
+    "production_read_only": "Existing campaign PUBLICATION_REVIEW, version 158, zero decisions and zero deliveries"
+  },
+  "remaining": [
+    "Finish platform-length validation and safe ordered publication integration",
+    "Full-scan bounded Grok orchestration and durable research budgets",
+    "Real PostgreSQL and end-to-end staging verification",
+    "Controlled deployment approval and provider credentials for live checks"
+  ],
+  "production_records_modified": false,
+  "external_distribution": 0
+},
+  "october_29_thread_publication_staging": {
+  "status": "IMPLEMENTED_AND_STAGING_VERIFIED_NOT_DEPLOYED",
+  "implemented": [
+    "Weighted X character validation and numbered per-discovery continuation parts before owner review",
+    "Existing V3 OAuth account verification and exact-byte upload now support approved reply parents",
+    "Durable idempotent registration, upload checkpoints, receipts, bounded continuation and independent reconciliation; ambiguous rows never reset",
+    "Automatic preparation and opt-in post-approval worker reuse existing V3 intake lifecycle"
+  ],
+  "verification": {
+    "full_local_postgres_suite": "252 passed, 0 failed, 0 skipped",
+    "harness_verify": "PASS",
+    "harness_v3": "PASS",
+    "real_published_source_sha256": "160afce4977775448893fa67cd723743bc707fe091a3024bbc871bb6a25c9818",
+    "production_saved_graphic_sha256": "81b5e2b57ed4a733254a8e87485acc407965c73118ed7ada1d37afaea2f38ed3",
+    "real_source_staging": "7 discoveries, 96 standard-length posts; exact upload, lost accepted response, restart, ordered parents and no duplicate posts passed against disposable PostgreSQL 16; X provider simulated",
+    "previous_remote_ci": "Audience CI passed. V3 196/197; stale publication-first expectation corrected to match pre-existing nonblocking review behavior."
+  },
+  "production_deployed": false,
+  "production_records_modified": false,
+  "external_distribution": 0
+},
+  "october_29_full_scan_audience_verification": {
+  "status": "IMPLEMENTED_AND_POSTGRES_STAGING_VERIFIED_NOT_DEPLOYED",
+  "feature_branch": "feature/emradar-grok-audience-pilot",
+  "authoritative_v3_pin": "a82e578b97edc4695004d7a248510a9086088339",
+  "local_postgres_suite": {
+    "tests": 267,
+    "pass": 267,
+    "fail": 0,
+    "skipped": 0
+  },
+  "published_source_staging": {
+    "scan_sha256": "160afce4977775448893fa67cd723743bc707fe091a3024bbc871bb6a25c9818",
+    "discoveries": 7,
+    "posts": 96,
+    "graphic_sha256": "81b5e2b57ed4a733254a8e87485acc407965c73118ed7ada1d37afaea2f38ed3",
+    "provider": "SIMULATED_X_NO_EXTERNAL_DISTRIBUTION"
+  },
+  "full_scan_research_staging": {
+    "status": "COMPLETE",
+    "discovery_count": 7,
+    "covered": 7,
+    "requests": 7,
+    "cost_usd": 0.007,
+    "outbound_actions": 0,
+    "provider": "SIMULATED_GROK_NO_LIVE_RESEARCH"
+  },
+  "implemented": [
+    "Persisted V3 owner authority, complete image-decoded preview, exact source-link allowlists, text/graphic edits and explicit discovery exclusions",
+    "Ordered X publication with upload checkpoints, confirmed receipts, bounded continuation and independent ambiguous-outcome reconciliation",
+    "Full-source Grok batches, cited tool provenance, billed usage, spending gate, durable claims, cache, retry limits and zero public engagement actions",
+    "Read-only account-owned engagement observations; unavailable referral attribution is explicit"
+  ],
+  "gates": [
+    "Production deployment/activation",
+    "Actual production X credential/account/scopes preflight",
+    "Configured xAI model/key and independently verified provider spending limit",
+    "Owner approval of the exact final proposal; the conservative full-detail proposal is long",
+    "Live provider verification remains separate from simulated staging",
+    "Referral analytics source is not connected"
+  ],
+  "production_deployed": false,
+  "production_records_modified": false,
+  "external_distribution": 0,
+  "source_research_modified": false
+}
 }

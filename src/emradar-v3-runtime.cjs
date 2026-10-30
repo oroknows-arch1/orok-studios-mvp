@@ -9,7 +9,7 @@ const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
 const SCAN_ORIGIN='https://emerging-markets-radar.onrender.com';
 const SCAN_INDEX_URL=SCAN_ORIGIN+'/data/archive-index.json';
 const FIXED_X_TEMPLATE_VERSION='emradar-formation-card-v2';
-const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
+const REVIEW_PATHS=new Set(['/review/access','/api/review/thread-present','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
  return readdirSync(attestationDir).filter(name=>/^publication-\d{4}-\d{2}-\d{2}\.json$/.test(name)).map(name=>name.slice(12,-5)).filter(date=>{
@@ -251,6 +251,47 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
    autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
   });
+  if(env.EMRADAR_V3_X_THREAD_REVIEW_ENABLED==='true'){
+   const {createV3AudienceReview}=require('./emradar-audience-v3-review.cjs');
+   service.workflow.audienceThread=createV3AudienceReview({store:service.store,loadPublishedBytes:async scan=>{
+    const url='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+scan.snapshot_date+'.json';
+    const response=await fetcher(url,{redirect:'error',signal:AbortSignal.timeout(15000)});
+    if(!response.ok)throw Error('AUDIENCE_PUBLISHED_SCAN_UNAVAILABLE');
+    const length=Number(response.headers?.get?.('content-length')||0);
+    if(length>10*1024*1024)throw Error('AUDIENCE_PUBLISHED_SCAN_TOO_LARGE');
+    const bytes=Buffer.from(await response.arrayBuffer());
+    if(bytes.length>10*1024*1024)throw Error('AUDIENCE_PUBLISHED_SCAN_TOO_LARGE');
+    return bytes;
+   }});
+   const prepareAndNotify=service.prepareAndNotify;
+   service.prepareAndNotify=async input=>{
+    const result=await prepareAndNotify(input);
+    if(result.campaignId)try{await service.workflow.audienceThread.prepare(result.campaignId)}catch{console.error('V3_X_THREAD_PREPARATION_BLOCKED')}
+    return result;
+   };
+  }
+  let runThreadPublication=null,runAudienceResearch=null,runAudienceMetrics=null;
+  if(service.workflow.audienceThread&&env.EMRADAR_V3_X_THREAD_PUBLISH_ENABLED==='true'&&env.EMRADAR_V3_X_PUBLISH_ENABLED==='true'){
+   const {ThreadStore}=require('./emradar-x-thread-store.cjs');
+   const threadStore=new ThreadStore(pool);await threadStore.initialize();
+   service.workflow.audienceThread.setPublicationRowsReader(id=>threadStore.list(id));
+   if(env.EMRADAR_X_AUDIENCE_METRICS_ENABLED==='true')runAudienceMetrics=require('./emradar-audience-observation.cjs').createAudienceObservation({store:service.store,x:integration.xThread,enabled:true});
+   if(env.EMRADAR_GROK_AUDIENCE_ENABLED==='true'&&env.XAI_API_KEY&&(env.EMRADAR_GROK_MODEL||env.GROK_MODEL)){
+    const pilot=require('./emradar-grok-audience-pilot.cjs').createGrokAudiencePilot({fetcher,apiKey:env.XAI_API_KEY,model:env.EMRADAR_GROK_MODEL||env.GROK_MODEL,enabled:true});
+    runAudienceResearch=require('./emradar-grok-full-scan.cjs').createFullScanResearch({store:service.store,pilot,loadPublishedBytes:service.workflow.audienceThread.loadSourceBytes,loadPublicationRows:id=>threadStore.list(id),enabled:true,maxSpendUsd:Number(env.EMRADAR_GROK_RUN_BUDGET_USD||0),requestReserveUsd:Number(env.EMRADAR_GROK_REQUEST_RESERVE_USD||0),providerSpendLimitVerified:env.EMRADAR_GROK_PROVIDER_SPEND_LIMIT_VERIFIED==='true'});
+   }
+   const publish=require('./emradar-audience-v3-publication.cjs').createV3ThreadPublication({campaignStore:service.store,threadStore,review:service.workflow.audienceThread,x:integration.xThread,enabled:true});
+   runThreadPublication=async id=>{const result=await publish(id);if(result.status==='COMPLETE'&&runAudienceResearch)try{await runAudienceResearch(id)}catch{console.error('V3_GROK_RESEARCH_BLOCKED')}return result;};
+   service.workflow.audienceThread.runPublication=runThreadPublication;
+  }
+  const runPendingThreads=async()=>{
+   if(!runThreadPublication)return {status:'DISABLED'};
+   const {rows}=await pool.query("SELECT campaign_id FROM v3_campaign_state WHERE payload->'audience_x_approval'->>'decision'='APPROVE' AND COALESCE(payload->'audience_x_publication'->>'status','')<>'COMPLETE' ORDER BY campaign_id LIMIT 2");
+   const results=[];for(const row of rows){try{results.push(await runThreadPublication(row.campaign_id))}catch{results.push({status:'BLOCKED',campaign_id:row.campaign_id})}}
+   if(runAudienceResearch){const pending=await pool.query("SELECT campaign_id FROM v3_campaign_state WHERE payload->'audience_x_publication'->>'status'='COMPLETE' AND COALESCE(payload->'audience_x_research'->>'status','') NOT IN ('COMPLETE','BUDGET_EXHAUSTED') ORDER BY campaign_id LIMIT 2");for(const row of pending.rows)try{results.push(await runAudienceResearch(row.campaign_id))}catch{results.push({status:'RESEARCH_BLOCKED',campaign_id:row.campaign_id})}}
+   if(runAudienceMetrics){const pending=await pool.query("SELECT campaign_id FROM v3_campaign_state WHERE payload->'audience_x_publication'->>'status'='COMPLETE' ORDER BY payload->'audience_x_observation'->>'observed_at' ASC NULLS FIRST LIMIT 1");for(const row of pending.rows)try{await runAudienceMetrics(row.campaign_id)}catch{results.push({status:'METRICS_BLOCKED',campaign_id:row.campaign_id})}}
+   return {results};
+  };
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
    try{
@@ -523,7 +564,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
    return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
   };
-  return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  return {runPendingThreads,replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

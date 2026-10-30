@@ -16,6 +16,21 @@ class Element {
  remove(){}
 }
 const flatten=element=>[element,...element.children.flatMap(flatten)];
+test('complete thread shows every ordered post and graphic and waits for image load before approval',async()=>{
+ const xThread={ready:true,manifest_sha256:'manifest',scan:{source_key:'scan:hash'},segments:[{sequence:1,kind:'SUMMARY',parent_sequence:null,text:'Complete main text',source_links:[],asset_sha256:'h1',media:{mime:'image/png',base64:'aW1hZ2U='}},{sequence:2,kind:'DISCOVERY',record_id:'copper',parent_sequence:1,text:'Complete causal chain and uncertainty',source_links:['https://example.org/source'],asset_sha256:'h2'}]};
+ const result=await render({xThread,entries:[{asset:{kind:'X',destination_id:'x',body:'Old single post'}}]});
+ const nodes=flatten(result.entries),button=nodes.find(n=>n.textContent==='Approve complete X thread');
+ assert(nodes.some(n=>n.textContent==='Complete main text'));assert(nodes.some(n=>n.textContent==='Complete causal chain and uncertainty'));
+ assert(nodes.some(n=>n.textContent==='Reply to post 1'));assert(nodes.some(n=>n.tag==='a'&&n.href==='https://example.org/source'));
+ assert(!nodes.some(n=>n.textContent==='Old single post'));assert.equal(button.disabled,true);assert(!result.calls.includes('/api/review/thread-present'));
+ nodes.find(n=>n.tag==='img').listeners.load();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(button.disabled,false);assert.deepEqual(result.payloads.find(p=>p.segment_hashes)?.segment_hashes,['h1','h2']);
+});
+test('failed thread graphic keeps approval disabled without affecting editorial cards',async()=>{
+ const result=await render({xThread:{ready:true,segments:[{sequence:1,kind:'SUMMARY',text:'Main',media:{mime:'image/png',base64:'bad'},asset_sha256:'h'}]},entries:[{asset:{kind:'EMAIL',destination_id:'editor',subject:'Editorial',body:'Saved email'}}]});
+ const nodes=flatten(result.entries);nodes.find(n=>n.tag==='img').listeners.error();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(nodes.find(n=>n.textContent==='Approve complete X thread').disabled,true);assert(nodes.some(n=>n.textContent==='Saved email'));assert(!result.calls.includes('/api/review/thread-present'));
+});
 async function render(view,onRevise){
  const elements=Object.fromEntries(['status','entries','discover','connect-x','check-x'].map(id=>[id,new Element(id)]));
  const calls=[],payloads=[];
