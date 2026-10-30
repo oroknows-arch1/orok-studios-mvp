@@ -3,7 +3,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
 const {createV3AudienceReview}=require('../src/emradar-audience-v3-review.cjs');
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-async function setup(pool=null){
+async function setup(pool=null,threadMode='FULL_EVIDENCE'){
  const {CampaignStore}=await import('../vendor/emradar-v3/src/state.js');
  const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
  const record={id:'indonesia-equity-market-accessibility-crisis',theme:'Market governance',status:'CONFIRMED',why_surfaced:'A consultation is open.',causal_chain:{world_change:['Index review'],pressure:['Ownership concerns'],bottleneck_or_scarcity:['Verified free float'],formation:['Market governance as access condition'],industries:['Capital markets'],connected_companies_and_tickers:['BREN (IDX)'],consequences:['Potential outflows']},contradictions:['Consultation is not a final downgrade.'],chain_evolution:{unresolved_evidence:['Final decision'],break_conditions:['Reforms accepted']},evidence:[{fact:'Consultation launched',date:'2026-10-15',url:'https://example.org/evidence'}]};
@@ -23,7 +23,7 @@ async function setup(pool=null){
  data.set('review:'+id,{version:1,value:{...access.record,status:'NOTIFIED'}});
  if(pool)await adapter.compareAndSwap('review:'+id,null,data.get('review:'+id).value);
  const session=await workflow.exchange(id,access.token);
- const audience=createV3AudienceReview({store,loadPublishedBytes:async()=>bytes});workflow.audienceThread=audience;
+ const audience=createV3AudienceReview({store,loadPublishedBytes:async()=>bytes,threadMode});workflow.audienceThread=audience;
  const view=()=>workflow.view(id,session.sessionId,session.secret);
  const present=async review=>{await workflow.authenticate(id,session.sessionId,session.secret);await audience.present(id,session.sessionId,{manifest_sha256:review.manifest_sha256,segment_hashes:review.segments.map(s=>s.asset_sha256)});};
  const decide=(review,decision='APPROVE')=>workflow.decide(id,session.sessionId,session.secret,'x',decision,review.manifest_sha256);
@@ -135,4 +135,18 @@ test('PostgreSQL staging: V3 approval, JSONB hashes, exact upload, ambiguous rec
  console.info('STAGING_FULL_SCAN_RESEARCH',JSON.stringify({...audience,provider:'SIMULATED_GROK_NO_LIVE_RESEARCH'}));
  const saved=(await s.adapter.read(s.id)).value.audience_x_research;assert.equal(saved.opportunities.length,1);assert.equal(saved.opportunities[0].discovery_ids.length,r.all_discovery_ids.length);assert.equal(saved.public_action_policy,'DISABLED');
  await pool.query('DELETE FROM emradar_x_thread_posts WHERE campaign_id=$1',[s.id]);await pool.query('DELETE FROM v3_campaign_state WHERE campaign_id IN ($1,$2)',[s.id,'review:'+s.id]);
+});
+
+test('concise V3 review retains one segment per discovery, exact graphic and authenticated approval',async()=>{
+ const s=await setup(null,'CONCISE'),r=(await s.view()).xThread;
+ assert.equal(r.ready,true,JSON.stringify(r.problems));
+ assert.equal(r.segments.length,3);
+ assert.deepEqual(r.segments.map(x=>x.record_id),[null,...r.discovery_ids]);
+ assert(r.segments[0].media?.sha256);
+ assert(r.segments.every(x=>x.discovery_parts===1));
+ await assert.rejects(()=>s.decide(r),/PRESENTATION_REQUIRED/);
+ await s.present(r);await s.decide(r);
+ assert.equal(await s.audience.verify({campaign_id:s.id}),true);
+ assert.deepEqual(s.data.get(s.id).value.decisions,{});
+ assert.deepEqual(s.data.get(s.id).value.deliveries,{});
 });
