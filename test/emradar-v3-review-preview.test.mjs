@@ -12,6 +12,8 @@ class Element {
  setAttribute(key,value){this.attributes[key]=value;}
  addEventListener(name,handler){this.listeners[name]=handler;}
  focus(){}
+ showModal(){}
+ close(){this.listeners.close?.();}
  reportValidity(){return true;}
  remove(){}
 }
@@ -19,10 +21,11 @@ const flatten=element=>[element,...element.children.flatMap(flatten)];
 async function render(view,onRevise){
  const elements=Object.fromEntries(['status','entries','discover','connect-x','check-x'].map(id=>[id,new Element(id)]));
  const calls=[],payloads=[];
- const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
+ const body=new Element('body');
+ const context={document:{body,cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
  const script=reviewPage.match(/<script>([\s\S]*)<\/script>/)[1];
  await new vm.Script(script).runInNewContext(context);
- return {...elements,calls,payloads};
+ return {...elements,body,calls,payloads};
 }
 test('actual review script renders full X text and saved image while publishing is disabled',async()=>{
  const body='Complete approved X text\nwith every saved line.';
@@ -126,6 +129,8 @@ test('Edit draft saves and replaces the active rendered draft before reload',asy
   view.entries[0]={asset:{...view.entries[0].asset,...payload.changes},fingerprint:'edited-hash',revision:{id:'edit-event',fingerprint:'edited-hash'}};
  });
  await flatten(result.entries).find(n=>n.textContent==='Edit draft').listeners.click();
+ flatten(result.body).find(n=>n.tag==='textarea').value='Revised analytical body';
+ await flatten(result.body).find(n=>n.textContent==='Save Changes').listeners.click();
  assert.equal(result.payloads.find(p=>p.changes).changes.body,view.entries[0].asset.body);
  for(const page of [result,await render(structuredClone(view))]){
   assert(flatten(page.entries.children[0]).some(n=>n.textContent===view.entries[0].asset.body));

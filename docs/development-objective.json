@@ -621,32 +621,32 @@
     "owner_decisions_changed": 0,
     "external_distribution": 0,
     "deployment": "NOT_ATTEMPTED"
+  },
+  "october_25_group_first_review_integration": {
+    "status": "DEPLOYED_REPLACEMENT_OPERATION_VERIFIED_PENDING_RELEASE",
+    "source_branch": "fix/group-first-review",
+    "source_commit": "a82e578b97edc4695004d7a248510a9086088339",
+    "parent_branch": "integrate/group-first-review",
+    "root_cause": "The production runtime prepared each destination independently, so personalization made every final subject/body unique; its review overlay also used transient legacy grouping instead of the authoritative persisted group approval state.",
+    "bounded_change": "Prepare compatible verified publications once by exact evidence/destination-class/correspondence identity, clone only recipient envelopes, persist exact-content groups, and connect the existing review controls to versioned group edits, exclusion/split and atomic owner decisions.",
+    "verification": {
+      "source_suite": "104 passed, 5 skipped",
+      "parent_targeted": "8/8 test files passed",
+      "parent_group_runtime": "2/2 passed",
+      "harness_verify": "PASS",
+      "harness_v3": "7/7 test files passed",
+      "database_tests": "NOT_RUN_NO_V3_TEST_DATABASE_URL"
     },
-    "october_25_group_first_review_integration": {
-        "status": "DEPLOYED_REPLACEMENT_OPERATION_VERIFIED_PENDING_RELEASE",
-        "source_branch": "fix/group-first-review",
-        "source_commit": "a82e578b97edc4695004d7a248510a9086088339",
-        "parent_branch": "integrate/group-first-review",
-        "root_cause": "The production runtime prepared each destination independently, so personalization made every final subject/body unique; its review overlay also used transient legacy grouping instead of the authoritative persisted group approval state.",
-        "bounded_change": "Prepare compatible verified publications once by exact evidence/destination-class/correspondence identity, clone only recipient envelopes, persist exact-content groups, and connect the existing review controls to versioned group edits, exclusion/split and atomic owner decisions.",
-        "verification": {
-            "source_suite": "104 passed, 5 skipped",
-            "parent_targeted": "8/8 test files passed",
-            "parent_group_runtime": "2/2 passed",
-            "harness_verify": "PASS",
-            "harness_v3": "7/7 test files passed",
-            "database_tests": "NOT_RUN_NO_V3_TEST_DATABASE_URL"
-        },
-        "source_merge_commit": "70e5740066b1afa7dcd4070db91e65361937a7ee",
-        "parent_merge_commit": "1fecadb4a804f9be75fefc6523d70477d229f288",
-        "deployment_id": "dep-dbeu81jbc2fs738jaq6g",
-        "replacement_request_id": "group-first-review-2026-10-25-v1",
-        "replacement_campaign": "DETERMINISTIC_OPERATION_VERIFIED_PENDING_DEPLOYMENT",
-        "owner_invitation": "NOT_SENT",
-        "campaign_state_mutations": 0,
-        "owner_decisions_changed": 0,
-        "external_distribution": 0,
-        "deployment": "GROUP_FIRST_RUNTIME_LIVE_REPLACEMENT_OPERATION_PENDING"
+    "source_merge_commit": "70e5740066b1afa7dcd4070db91e65361937a7ee",
+    "parent_merge_commit": "1fecadb4a804f9be75fefc6523d70477d229f288",
+    "deployment_id": "dep-dbeu81jbc2fs738jaq6g",
+    "replacement_request_id": "group-first-review-2026-10-25-v1",
+    "replacement_campaign": "DETERMINISTIC_OPERATION_VERIFIED_PENDING_DEPLOYMENT",
+    "owner_invitation": "NOT_SENT",
+    "campaign_state_mutations": 0,
+    "owner_decisions_changed": 0,
+    "external_distribution": 0,
+    "deployment": "GROUP_FIRST_RUNTIME_LIVE_REPLACEMENT_OPERATION_PENDING"
   },
   "october_28_permanent_automation_repair": {
     "status": "LOCAL_VERIFIED_NOT_DEPLOYED",
@@ -682,5 +682,20 @@
     "owner_notifications_sent": 0,
     "owner_decisions_changed": 0,
     "external_distribution": 0
+  },
+  "november_3_review_editor": {
+    "status": "TESTED_READY_FOR_DEPLOYMENT",
+    "authoritative_pr": 4,
+    "authoritative_commit": "b491709c9ea670ae568fab84b40798a1b090e16c",
+    "validation": {
+      "source": "110 passed, 5 disposable PostgreSQL tests skipped",
+      "integration_harness": "16 passed",
+      "focused_integration": "45 passed"
+    },
+    "scope": "Reuse modal editor for individual and shared subject/body; retain failed text, prevent closing during save, distinguish refresh failure after save, retain persisted revision confirmation and release controls.",
+    "campaign_content_recipients_decisions_changed": false,
+    "external_distribution": 0,
+    "daily_workflow_observation": "Existing hourly worker is active; 2026-11-03 scan appears in PUBLICATION_ATTESTATION_INVALID and NO_UNPROCESSED_SCAN. Existing safeguard preserved.",
+    "live_editor_verified": false
   }
 }

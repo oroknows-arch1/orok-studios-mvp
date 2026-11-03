@@ -9,6 +9,7 @@ article{background:white;border:1px solid #d9e2e7;border-radius:10px;padding:18p
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.55}
 button{border:1px solid #123f53;background:white;color:#123f53;padding:10px 14px;border-radius:6px;margin:5px;cursor:pointer}
 button:disabled{opacity:.4}
+dialog{width:min(92vw,850px);max-height:90vh;border:1px solid #bacbd3;border-radius:12px;padding:20px;box-sizing:border-box}dialog::backdrop{background:#102631aa}dialog textarea{width:100%;min-height:48vh;box-sizing:border-box;padding:14px;font:16px/1.55 system-ui,sans-serif;resize:vertical}dialog input{width:100%;box-sizing:border-box;padding:12px;font:16px system-ui,sans-serif}dialog .actions{display:flex;justify-content:flex-end;flex-wrap:wrap} .saved{color:#17633c;font-weight:700}
 button:focus-visible{outline:3px solid #e0a825}
 small{color:#52636d}
 .review-graphic{display:block;max-width:100%;height:auto;margin:16px 0}
@@ -28,6 +29,30 @@ const api=async(path,payload)=>{
 const text=(tag,value)=>{
  const el=document.createElement(tag);el.textContent=String(value??'');return el;
 };
+let lastSaved=null;
+function openEditor({heading,initial,multiline=true,save}){
+ const dialog=document.createElement('dialog');
+ const title=text('h2',heading),field=document.createElement(multiline?'textarea':'input');
+ initial=initial??'';field.value=initial;field.setAttribute('aria-label',heading);
+ const feedback=text('p','Changes are not saved until you select Save Changes.');feedback.setAttribute('role','status');
+ const actions=document.createElement('div');actions.className='actions';
+ const cancel=text('button','Cancel'),commit=text('button','Save Changes');
+ cancel.type='button';commit.type='button';
+ let saving=false;
+ dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
+ cancel.addEventListener('click',()=>dialog.close());
+ commit.addEventListener('click',async()=>{
+  if(field.value===initial){dialog.close();return;}
+  saving=true;field.readOnly=true;commit.disabled=true;cancel.disabled=true;feedback.textContent='Saving…';
+  try{await save(field.value);}
+  catch(e){saving=false;field.readOnly=false;feedback.textContent='Save failed. Your changes are still in this editor. Retry or copy them before closing.';commit.disabled=false;cancel.disabled=false;return;}
+  saving=false;dialog.close();
+  try{await refresh();status.textContent='Edited · Saved. The revised version requires approval.';}
+  catch(e){main.replaceChildren();status.textContent='Edited · Saved. Could not reload the review. Refresh the page before making further decisions.';}
+ });
+ dialog.addEventListener('close',()=>dialog.remove());
+ actions.append(cancel,commit);dialog.append(title,field,feedback,actions);document.body.append(dialog);dialog.showModal();field.focus();
+}
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
  main.replaceChildren();
@@ -52,11 +77,17 @@ async function refresh(){
   }
   card.append(list);
   if(!members.some(member=>member.delivery)){
-   const editSubject=text('button','Edit shared subject');editSubject.addEventListener('click',async()=>{const revised=prompt('Edit shared email subject',group.subject);if(revised===null||revised===group.subject)return;editSubject.disabled=true;try{await api('group-revise',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,changes:{subject:revised}});await refresh();status.textContent='Shared subject saved. The new version requires approval.';}catch{status.textContent='Shared subject was not saved. Reload and retry.';editSubject.disabled=false;}});
-   const editBody=text('button','Edit shared body');editBody.addEventListener('click',async()=>{const revised=prompt('Edit shared email body',group.body);if(revised===null||revised===group.body)return;editBody.disabled=true;try{await api('group-revise',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,changes:{body:revised}});await refresh();status.textContent='Shared body saved. The new version requires approval.';}catch{status.textContent='Shared body was not saved. Reload and retry.';editBody.disabled=false;}});
-   card.append(editSubject,editBody);
+   for(const [field,label] of [['subject','Edit shared subject'],['body','Edit shared body']]){
+    const button=text('button',label);
+    button.addEventListener('click',()=>openEditor({heading:label,initial:group[field],multiline:field==='body',save:async revised=>{
+     await api('group-revise',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,changes:{[field]:revised}});
+     lastSaved='group:'+group.id;
+    }}));
+    card.append(button);
+   }
    if(!group.approval)for(const decision of ['APPROVE','REJECT']){const button=text('button',decision==='APPROVE'?'Approve Group':'Reject Group');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,decision});await refresh();}catch{status.textContent='The group decision was not saved. Reload and retry.';button.disabled=false;}});card.append(button);}
   }
+  if(group.version>1||lastSaved==='group:'+group.id){const saved=text('p','Edited · Saved'+(group.approval?'':' · New approval required'));saved.className='saved';card.append(saved);}
   main.append(card);
  }
  for(const item of [...view.entries,...(view.history??[])]){
@@ -64,7 +95,7 @@ async function refresh(){
   if(!historical&&sharedGroups.has(groupId))continue;
   const card=document.createElement('article');
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
-  if(!historical&&item.revision)card.append(text('p','Edited · Saved · Revision '+item.revision.id+' · '+fingerprint));
+  if(!historical&&(item.revision||lastSaved==='entry:'+asset.destination_id)){const saved=text('p',item.revision?'Edited · Saved · Revision '+item.revision.id+' · '+fingerprint:'Edited · Saved'+(decision?'':' · New approval required'));saved.className='saved';card.append(saved);}
   card.append(text('p','Preparation: '+(asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
   if(!historical&&item.review_action){
    const action=item.review_action;
@@ -82,25 +113,15 @@ async function refresh(){
    const preview=document.createElement('iframe');preview.title='Reviewed email with EMRADAR letterhead';preview.setAttribute('sandbox','');preview.style='width:100%;height:900px;border:1px solid #d9e2e7';preview.srcdoc=asset.html;card.append(preview);
   }
   if(!delivery&&!historical){
-   const edit=text('button','Edit draft');
-   edit.addEventListener('click',async()=>{
-    const revised=prompt('Edit draft text',asset.body);
-    if(revised===null || revised===asset.body)return;
-    edit.disabled=true;
-    try{await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{body:revised}});await refresh();status.textContent='Revision saved. Approve the updated version when ready.';}
-    catch(e){status.textContent='Revision not saved. Reload and retry.';edit.disabled=false;}
-   });
-   card.append(edit);
+   for(const [field,label] of [['body','Edit draft'],...(asset.kind==='EMAIL'?[['subject','Edit subject']]:[])]){
+    const button=text('button',label);
+    button.addEventListener('click',()=>openEditor({heading:label,initial:asset[field],multiline:field==='body',save:async revised=>{
+     await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{[field]:revised}});
+     lastSaved='entry:'+asset.destination_id;
+    }}));
+    card.append(button);
+   }
    if(asset.kind==='EMAIL'){
-    const editSubject=text('button','Edit subject');
-    editSubject.addEventListener('click',async()=>{
-     const revised=prompt('Edit email subject',asset.subject);
-     if(revised===null || revised===asset.subject)return;
-     editSubject.disabled=true;
-     try{await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{subject:revised}});await refresh();status.textContent='Subject saved. Approve the updated email when ready.';}
-     catch(e){status.textContent='Subject not saved. Reload and retry.';editSubject.disabled=false;}
-    });
-    card.append(editSubject);
     const editRecipient=text('button','Edit recipient');
     editRecipient.addEventListener('click',()=>{
      editRecipient.disabled=true;
