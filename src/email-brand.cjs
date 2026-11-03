@@ -24,8 +24,20 @@ function brand(email){
  if(email.features)email.features.email_length_words=email.body.trim().split(/\s+/).length;
  return email;
 }
+// Owner revisions may replace the whole email, including a pasted signature.
+// Reapply the fixed presentation before hashing; rendering and delivery stay strict.
+function reviewBody(body){
+ let lines=body.trimEnd().split('\n');
+ if(lines.at(-1)?.trim()===disclaimer){lines.pop();while(lines.at(-1)?.trim()==='')lines.pop();}
+ for(const suffix of [signature.split('\n'),['Sean Walker','EMRADAR']]){
+  if(lines.length>=suffix.length&&suffix.every((line,index)=>lines[lines.length-suffix.length+index].trim()===line)){
+   lines=lines.slice(0,-suffix.length);break;
+  }
+ }
+ return lines.join('\n').trimEnd()+'\n\n'+tail;
+}
 function envelope(email){
  if(email.brand_version!==version||email.banner_sha256!==banner_sha256||email.from?.name!==identity.name||email.from?.address!==identity.address||email.reply_to!==identity.reply_to||email.html!==render(email.body))throw Error('EXACT_REVIEWED_BRAND_REQUIRED');
  return {from:email.from,to:email.to,subject:email.subject,text:email.body,replyTo:identity.reply_to,html:email.html};
 }
-module.exports={identity,version,banner,banner_sha256,signature,disclaimer,brand,render,correspondence,envelope};
+module.exports={identity,version,banner,banner_sha256,signature,disclaimer,brand,render,reviewBody,correspondence,envelope};

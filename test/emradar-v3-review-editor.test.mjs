@@ -66,3 +66,11 @@ test('a failed refresh after a successful save reports saved and removes stale d
  await ui.button('Edit draft').click();ui.field().value='Saved';await ui.button('Save Changes').click();
  assert.equal(ui.dialog(),undefined);assert.match(ui.status.textContent,/Edited · Saved.*Could not reload/);assert.equal(ui.main.children.length,0);
 });
+
+test('stale save explains recovery while retaining unsaved text and never claiming success',async()=>{
+ const ui=await browser({entries:[entry('one')],groups:[]},async()=>{throw Error('STALE_ASSET_REVISION');});
+ await ui.button('Edit draft').click();ui.field().value='Unsaved owner revision';await ui.button('Save Changes').click();
+ assert.equal(ui.field().value,'Unsaved owner revision');assert.equal(ui.dialog().open,true);
+ assert(walk(ui.dialog()).some(el=>el.textContent.includes('This email changed since you opened it')));
+ assert(!walk(ui.body).some(el=>el.textContent.includes('Edited · Saved')));
+});

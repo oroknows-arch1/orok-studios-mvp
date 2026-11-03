@@ -159,7 +159,7 @@ export class CampaignStore {
           revised.recipient_verification={status:'OWNER_OVERRIDE',warning_code:recipientCheck.warningCode??'CONTACT_VERIFICATION_FAILED'};
         }
       }
-      if(revised.brand_version)revised.html=emailBrand.render(revised.body);
+      if(revised.brand_version){if(Object.hasOwn(changes,'body'))revised.body=emailBrand.reviewBody(revised.body);revised.html=emailBrand.render(revised.body);}
       if (sha256(revised)===sha256(entry.asset)) return state;
       if(Object.hasOwn(changes,'to')&&verifiedDestination)recipientPolicy.assertVerifiedAsset(revised,verifiedDestination);
       const nextFingerprint=assetFingerprint(revised);
@@ -187,8 +187,8 @@ export class CampaignStore {
     if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');
     if(group.destination_ids.some(destinationId=>state.deliveries[destinationId]))throw Error('REVISION_AFTER_DISTRIBUTION');
     for(const destinationId of group.destination_ids){const entry=state.assets[destinationId];if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');}
-    const nextContent=groupContent({...state.assets[group.destination_ids[0]].asset,...changes});if(nextContent.content_hash===contentHash)return state;
-    for(const destinationId of group.destination_ids){const entry=state.assets[destinationId],revised={...entry.asset,...changes};if(revised.brand_version)revised.html=emailBrand.render(revised.body);state.editorial_versions??={};state.editorial_versions[destinationId]??=[];state.editorial_versions[destinationId].push(structuredClone(entry));state.assets[destinationId]={asset:revised,fingerprint:assetFingerprint(revised)};delete state.decisions[destinationId];}
+    const firstRevised={...state.assets[group.destination_ids[0]].asset,...changes};if(firstRevised.brand_version&&Object.hasOwn(changes,'body'))firstRevised.body=emailBrand.reviewBody(firstRevised.body);const nextContent=groupContent(firstRevised);if(nextContent.content_hash===contentHash)return state;
+    for(const destinationId of group.destination_ids){const entry=state.assets[destinationId],revised={...entry.asset,...changes};if(revised.brand_version){if(Object.hasOwn(changes,'body'))revised.body=emailBrand.reviewBody(revised.body);revised.html=emailBrand.render(revised.body);}state.editorial_versions??={};state.editorial_versions[destinationId]??=[];state.editorial_versions[destinationId].push(structuredClone(entry));state.assets[destinationId]={asset:revised,fingerprint:assetFingerprint(revised)};delete state.decisions[destinationId];}
     const priorApproval=state.group_approvals?.[groupId]??null;delete state.group_approvals[groupId];Object.assign(group,nextContent,{version:group.version+1});
     state.events.push({type:'EMAIL_GROUP_REVISED',group_id:groupId,id:randomUUID(),previous_content_hash:contentHash,new_content_hash:nextContent.content_hash,previous_version:version,new_version:group.version,previous_approval:priorApproval,changed_fields:Object.keys(changes)});return state;
    });
