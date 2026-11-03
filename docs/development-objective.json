@@ -721,5 +721,19 @@
     "render_deploy_id": "dep-dbkmtm49v7es73cqfs1g",
     "render_deploy_status": "live",
     "activation_preflight": "PASS"
+  },
+  "november_3_review_controls": {
+    "status": "TESTED_READY_FOR_DEPLOYMENT",
+    "root_cause": "The production overlay appends historical drafts after current proposals and deliberately omits actions on those read-only versions. Production has one historical draft at the page tail. Always-open nested HTML previews also separate long proposal text from its controls.",
+    "correction": "Collapse historical versions with explicit read-only labels and navigation to their current proposal or shared group. Collapse branded HTML previews; retain full text, saved footer and all existing control permissions.",
+    "scope": "Production review-page overlay and focused rendering tests only; authoritative source has no historical-card renderer and is unchanged.",
+    "validation": {
+      "focused_tests": "28 passed",
+      "source_integration": "16 passed",
+      "chromium_layouts": "6 passed: individual/shared at 320, 390 and 1280px; action buttons, history navigation, editor opening, no horizontal overflow; intercepted fixtures only"
+    },
+    "production_campaign_mutations": 0,
+    "external_distribution": 0,
+    "live_buttons_verified": false
   }
 }
