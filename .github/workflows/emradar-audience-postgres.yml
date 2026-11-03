@@ -1,0 +1,54 @@
+name: EMRADAR audience isolated PostgreSQL tests
+on:
+  push:
+    branches:
+      - feature/emradar-grok-audience-pilot
+      - fix/x-audience-eight-originals
+    paths:
+      - 'src/emradar-audience-*'
+      - 'src/emradar-x-thread-*'
+      - 'src/emradar-grok-*'
+      - 'test/emradar-audience-*'
+      - 'test/emradar-x-thread-postgres.test.cjs'
+      - '.github/workflows/emradar-audience-postgres.yml'
+  pull_request:
+    paths:
+      - 'src/emradar-audience-*'
+      - 'src/emradar-x-thread-*'
+      - 'src/emradar-grok-*'
+      - 'test/emradar-audience-*'
+      - '.github/workflows/emradar-audience-postgres.yml'
+  workflow_dispatch:
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: thread_test
+          POSTGRES_PASSWORD: thread_test_only
+          POSTGRES_DB: thread_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U thread_test -d thread_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      V3_TEST_DATABASE_URL: postgresql://thread_test:thread_test_only@localhost:5432/thread_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.EMRADAR_V3_READ_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm run harness:verify
+      - run: npm run harness:v3
+      - run: node --test test/emradar-audience-*.test.cjs test/emradar-audience-review-page.test.mjs test/emradar-x-thread-*.test.cjs test/emradar-grok-full-scan.test.cjs test/audience-database-isolation.test.cjs test/audience-intelligence-faults.test.cjs test/audience-intelligence-poller.test.cjs test/audience-intelligence-v3-adapter.test.cjs test/owner-review-invariant.test.cjs test/emradar-v3-boundary.test.cjs test/emradar-v3-x.test.cjs test/emradar-v3-review-preview.test.mjs
