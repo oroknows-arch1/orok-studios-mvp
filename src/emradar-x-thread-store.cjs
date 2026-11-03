@@ -32,7 +32,7 @@ class ThreadStore{
   if(q.rowCount!==1)throw Error('THREAD_RECONCILIATION_NOT_PENDING');return q.rows[0];
  }
  async register({campaign_id,approved_segments}={}){
-  if(typeof campaign_id!=='string'||!campaign_id||!Array.isArray(approved_segments)||approved_segments.length<2)throw Error('THREAD_REGISTER_INVALID');
+  if(typeof campaign_id!=='string'||!campaign_id||!Array.isArray(approved_segments)||approved_segments.length<1)throw Error('THREAD_REGISTER_INVALID');
   const client=await this.pool.connect();
   try{
    await client.query('BEGIN');
@@ -48,6 +48,8 @@ class ThreadStore{
    await client.query('COMMIT');
   }catch(e){await client.query('ROLLBACK');throw e;}finally{client.release();}
  }
+ async reserveOriginal(input){return require('./emradar-audience-original-boundary.cjs').withOriginalBoundary({...input,pool:this.pool});}
+ async initializeOriginals(){return require('./emradar-audience-original-boundary.cjs').initializeOriginals(this.pool);}
  async reserve({campaign_id,sequence}={}){
   if(!campaign_id||!Number.isInteger(sequence)||sequence<1)throw Error('THREAD_RESERVE_INVALID');
   const client=await this.pool.connect();

@@ -66,7 +66,7 @@ function createV3X({env={},pool,fetcher=fetch,auth:injectedAuth,clock=()=>Date.n
   assertScopes(auth);
   const account=await identity(auth);
   const reconciliation=await reconcile(asset,scan,auth,account.account_id);
-  return {asset_sha256:hash(JSON.stringify(canonical(asset))),publish:async({onMediaUploaded}={})=>{
+  return {account_id:account.account_id,asset_sha256:hash(JSON.stringify(canonical(asset))),publish:async({onMediaUploaded,beforePost}={})=>{
    assertEnabled();
    let id=null,mediaKey=null;
    if(image){
@@ -90,6 +90,7 @@ function createV3X({env={},pool,fetcher=fetch,auth:injectedAuth,clock=()=>Date.n
    if(onMediaUploaded)await onMediaUploaded({media_id:id,media_key:mediaKey,visual_sha256:asset.visual_sha256,account_id:account.account_id});
    }
    const payload={text:asset.body};if(id)payload.media={media_ids:[id]};if(parent_receipt_id!==null)payload.reply={in_reply_to_tweet_id:String(parent_receipt_id)};
+   if(beforePost)await beforePost();
    const post=await request('/2/tweets',auth.access_token,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
    if(!/^\d+$/.test(post.data?.id||''))fail('POST_RECEIPT_REQUIRED');
    return {accepted:true,receipt_id:post.data.id,post_url:'https://x.com/i/web/status/'+post.data.id,account_id:account.account_id,media_id:id,media_key:mediaKey,visual_sha256:asset.visual_sha256,reconciliation};
@@ -130,6 +131,20 @@ function createV3X({env={},pool,fetcher=fetch,auth:injectedAuth,clock=()=>Date.n
    }
    if(next||matches.length!==1)return {status:'UNRESOLVED'};
    return {status:'VERIFIED_ACCEPTED',receipt_id:matches[0].id,account_id:account.account_id,created_at:matches[0].created_at};
+  },
+  originalHistory:async({account_id,day})=>{
+   const {sydneyDay}=require('./emradar-audience-original-boundary.cjs');
+   const auth=await current();assertScopes(auth);const account=await identity(auth);
+   if(account.account_id!==account_id)fail('ACCOUNT_CHANGED');
+   const posts=[];let next;
+   for(let page=0;page<5;page++){
+    const query=new URLSearchParams({max_results:'100',start_time:new Date(clock()-36*3600000).toISOString(),exclude:'replies,retweets','tweet.fields':'created_at,referenced_tweets'});if(next)query.set('pagination_token',next);
+    const result=await request('/2/users/'+account_id+'/tweets?'+query,auth.access_token);
+    if(!result.meta||!Array.isArray(result.data??[])||result.meta.result_count!==(result.data??[]).length)fail('HISTORY_UNKNOWN');
+    for(const post of result.data??[]){if(!/^\d+$/.test(post.id??'')||!Number.isFinite(Date.parse(post.created_at)))fail('HISTORY_UNKNOWN');if(sydneyDay(Date.parse(post.created_at))===day&&!(post.referenced_tweets??[]).some(r=>['replied_to','retweeted'].includes(r.type)))posts.push({id:post.id,created_at:post.created_at});}
+    next=result.meta.next_token;if(!next)break;
+   }
+   if(next)fail('HISTORY_INCOMPLETE');return {complete:true,account_id,day,posts};
   },
   verifyIdentity:async({allowRefresh=false}={})=>identity(await current({allowRefresh})),
   inspect:async({asset,scan})=>{

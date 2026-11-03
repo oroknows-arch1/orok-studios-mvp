@@ -9,8 +9,10 @@ article{background:white;border:1px solid #d9e2e7;border-radius:10px;padding:18p
 pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.55}
 button{border:1px solid #123f53;background:white;color:#123f53;padding:10px 14px;border-radius:6px;margin:5px;cursor:pointer}
 button:disabled{opacity:.4}
+dialog{width:min(92vw,850px);max-height:90vh;border:1px solid #bacbd3;border-radius:12px;padding:20px;box-sizing:border-box}dialog::backdrop{background:#102631aa}dialog textarea{width:100%;min-height:48vh;box-sizing:border-box;padding:14px;font:16px/1.55 system-ui,sans-serif;resize:vertical}dialog input{width:100%;box-sizing:border-box;padding:12px;font:16px system-ui,sans-serif}dialog .actions{display:flex;justify-content:flex-end;flex-wrap:wrap} .saved{color:#17633c;font-weight:700}
 button:focus-visible{outline:3px solid #e0a825}
 small{color:#52636d}
+summary{cursor:pointer;padding:12px 0;overflow-wrap:anywhere}article a{display:inline-block;padding:10px 0}iframe{display:block;max-width:100%;box-sizing:border-box}article{min-width:0;overflow-wrap:anywhere}a:focus-visible,summary:focus-visible{outline:3px solid #e0a825}
 .review-graphic{display:block;max-width:100%;height:auto;margin:16px 0}
 </style></head><body><header><h1>EMRADAR · Publication Review</h1><p>Approval saves your decision. Use the separate release control to distribute approved content.</p></header>
 <p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><button id="connect-x" type="button" disabled>Connect X</button><button id="check-x" type="button" disabled>Check X connection</button><main id="entries"></main>
@@ -22,55 +24,44 @@ const csrf=()=>decodeURIComponent((document.cookie.split('; ').find(x=>x.startsW
 const api=async(path,payload)=>{
  const response=await fetch('/api/review/'+path,{method:'POST',headers:{'content-type':'application/json','x-emradar-csrf':csrf()},body:JSON.stringify(payload),cache:'no-store',credentials:'same-origin'});
  const result=await response.json();
- if(!response.ok)throw Error(result.error||'REQUEST_FAILED');
+ if(!response.ok){const error=Error(result.error||'REQUEST_FAILED');error.reference=result.diagnostic_id;throw error;}
  return result;
 };
 const text=(tag,value)=>{
  const el=document.createElement(tag);el.textContent=String(value??'');return el;
 };
+function saveFailure(error){
+ const messages={ACCESS_DENIED:'Your sign-in expired. Copy your text, then reopen your private review.',CSRF_DENIED:'The security check failed. Copy your text, then refresh the page.',ORIGIN_DENIED:'Open the review on its original secure site.',STALE_ASSET_REVISION:'This email changed since you opened it. Copy your text, then refresh and edit the latest version.',STALE_GROUP_VERSION:'This group changed since you opened it. Copy your text, then refresh and edit the latest version.',GROUP_REVISION_REQUIRED:'Edit this email using the shared-group controls.',GROUP_CONTENT_MISMATCH:'The shared content changed. Copy your text, then refresh the review.',REVISION_AFTER_DISTRIBUTION:'This email has a delivery record and can no longer be edited.',INVALID_REVISION_TEXT:'Enter non-empty text of at most 50,000 characters.',EMAIL_BRAND_TEXT_REQUIRED:'The signature or disclaimer is incomplete. Keep the complete footer and retry.',REQUEST_TOO_LARGE:'The edit exceeds the request size limit.',REVISION_SAVE_FAILED:'The server could not confirm persistence. Copy your text and refresh before retrying.'};
+ const reference=/^[a-f0-9-]{36}$/.test(error.reference||'')?' Reference: '+error.reference+'.':'';
+ return 'Save failed. Your changes are still in this editor. '+(messages[error.message]||'The request could not complete. Retry or copy your text before closing.')+reference;
+}
+let lastSaved=null;
+function openEditor({heading,initial,multiline=true,save}){
+ const dialog=document.createElement('dialog');
+ const title=text('h2',heading),field=document.createElement(multiline?'textarea':'input');
+ initial=initial??'';field.value=initial;field.setAttribute('aria-label',heading);
+ const feedback=text('p','Changes are not saved until you select Save Changes.');feedback.setAttribute('role','status');
+ const actions=document.createElement('div');actions.className='actions';
+ const cancel=text('button','Cancel'),commit=text('button','Save Changes');
+ cancel.type='button';commit.type='button';
+ let saving=false;
+ dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
+ cancel.addEventListener('click',()=>dialog.close());
+ commit.addEventListener('click',async()=>{
+  if(field.value===initial){dialog.close();return;}
+  saving=true;field.readOnly=true;commit.disabled=true;cancel.disabled=true;feedback.textContent='Saving…';
+  try{await save(field.value);}
+  catch(e){saving=false;field.readOnly=false;feedback.textContent=saveFailure(e);commit.disabled=false;cancel.disabled=false;return;}
+  saving=false;dialog.close();
+  try{await refresh();status.textContent='Edited · Saved. The revised version requires approval.';}
+  catch(e){main.replaceChildren();status.textContent='Edited · Saved. Could not reload the review. Refresh the page before making further decisions.';}
+ });
+ dialog.addEventListener('close',()=>dialog.remove());
+ actions.append(cancel,commit);dialog.append(title,field,feedback,actions);document.body.append(dialog);dialog.showModal();field.focus();
+}
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
  main.replaceChildren();
- if(view.xThread){
-  const thread=view.xThread,section=document.createElement('section');
-  section.append(text('h2','Complete X thread'),text('p','All posts appear below in publication order. Each reply attaches to the preceding post.'),text('small',thread.scan?.source_key||''));
-  if(thread.excluded_discovery_ids?.length)section.append(text('p','Explicitly excluded discoveries: '+thread.excluded_discovery_ids.join(', ')));
-  if(thread.publication?.thread_url){const link=text('a','View confirmed X thread');link.href=thread.publication.thread_url;link.target='_blank';link.rel='noopener noreferrer';section.append(link);}
-  if(thread.observation){section.append(text('h3','Observed X engagement'),text('small','Measured at '+thread.observation.observed_at));for(const [key,label] of [['like_count','Likes'],['reply_count','Replies'],['retweet_count','Reposts'],['quote_count','Quotes'],['bookmark_count','Bookmarks'],['impression_count','Impressions']]){const observed=(thread.observation.posts??[]).filter(p=>Number.isInteger(p.metrics?.[key]));if(observed.length)section.append(text('p',label+': '+observed.reduce((total,p)=>total+p.metrics[key],0)+' across '+observed.length+' measured posts'));}section.append(text('p','Referral measurement is not connected.'));}
-  if(thread.research){section.append(text('h3','Audience research · '+thread.research.status));for(const [id,result] of Object.entries(thread.research.results??{})){section.append(text('p',id+' · '+result.status));for(const opportunity of result.report?.opportunities??[]){const card=document.createElement('article'),link=text('a',opportunity.type+' · '+opportunity.url);link.href=opportunity.url;link.target='_blank';link.rel='noopener noreferrer';card.append(link,text('p',opportunity.rationale));if(opportunity.draft_text)card.append(text('pre',opportunity.draft_text));card.append(text('small','Draft only. Public actions are disabled.'));section.append(card);}}}
-  const images=[];
-  for(const segment of thread.segments){
-   const card=document.createElement('article');
-   card.append(text('h3','Post '+segment.sequence+' · '+segment.kind+(segment.record_id?' · '+segment.record_id:'')),text('p',segment.parent_sequence?'Reply to post '+segment.parent_sequence:'Main post'),text('pre',segment.text));
-   const progress=thread.publication_progress?.find(p=>p.sequence===segment.sequence);if(progress)card.append(text('p','Publication: '+progress.status+(progress.post_id?' · Post '+progress.post_id:'')));
-   for(const source of segment.source_links??[]){const link=text('a',source);link.href=source;link.rel='noopener noreferrer';link.target='_blank';card.append(link,text('br',''));}
-   if(segment.media){
-    const image=document.createElement('img');image.className='review-graphic';image.alt='Exact graphic for post '+segment.sequence;
-    images.push(new Promise(resolve=>{image.addEventListener('load',()=>resolve(true));image.addEventListener('error',()=>resolve(false));}));
-    image.src='data:'+segment.media.mime+';base64,'+segment.media.base64;card.append(image);
-   }
-   if(segment.sequence===1&&!thread.publication_started&&thread.graphic_choices?.length&&(thread.graphic_choices.length>1||!segment.media)){const choices=document.createElement('details');choices.append(text('summary','Choose a verified saved graphic'));for(const media of thread.graphic_choices){const image=document.createElement('img');image.className='review-graphic';image.alt='Saved V3 graphic option';image.src='data:'+media.mime+';base64,'+media.base64;const choose=text('button','Use saved graphic '+media.sha256.slice(0,12));choose.addEventListener('click',async()=>{choose.disabled=true;try{await api('revise',{campaignId:campaign,destinationId:'x',fingerprint:thread.manifest_sha256,changes:{sequence:1,graphic_sha256:media.sha256}});await refresh();}catch{status.textContent='Graphic change was not saved.';}});choices.append(image,choose);}card.append(choices);}
-   card.append(text('small',segment.asset_sha256));
-   const edit=text('button','Edit post '+segment.sequence);edit.disabled=!!thread.publication_started;edit.addEventListener('click',async()=>{
-    const revised=prompt('Edit complete X post text',segment.text);if(revised===null||revised===segment.text)return;
-    edit.disabled=true;try{await api('revise',{campaignId:campaign,destinationId:'x',fingerprint:thread.manifest_sha256,changes:{sequence:segment.sequence,text:revised}});await refresh();status.textContent='X edit saved. Previous approval cleared.';}catch{status.textContent='X edit was not saved. Reload and retry.';edit.disabled=false;}
-   });card.append(edit);
-   if(segment.record_id&&segment.discovery_part===1){const exclude=text('button','Exclude discovery '+segment.record_id);exclude.disabled=!!thread.publication_started;exclude.addEventListener('click',async()=>{if(!confirm('Exclude this entire discovery from the X thread?'))return;exclude.disabled=true;try{await api('revise',{campaignId:campaign,destinationId:'x',fingerprint:thread.manifest_sha256,changes:{exclude_record_id:segment.record_id}});await refresh();}catch{status.textContent='Discovery exclusion was not saved.';}});card.append(exclude);}
-   section.append(card);
-  }
-  for(const problem of thread.problems??[])section.append(text('p','X approval blocked: '+problem));
-  section.append(text('p','Decision: '+(thread.approval?.decision||'Awaiting owner review')));
-  const approve=text('button','Approve complete X thread');approve.disabled=true;
-  approve.addEventListener('click',async()=>{approve.disabled=true;try{await api('decision',{campaignId:campaign,destinationId:'x',decision:'APPROVE',fingerprint:thread.manifest_sha256});await refresh();status.textContent='Exact X thread approval saved.';}catch{status.textContent='X approval was blocked. Reload the complete preview.';}});
-  section.append(approve);
-  const reject=text('button','Reject X thread');reject.disabled=!!thread.publication_started||!thread.manifest_sha256;reject.addEventListener('click',async()=>{reject.disabled=true;try{await api('decision',{campaignId:campaign,destinationId:'x',decision:'REJECT',fingerprint:thread.manifest_sha256});await refresh();}catch{status.textContent='X rejection was not saved.';}});section.append(reject);
-  main.append(section);
-  // Acknowledge only after every card is mounted and every graphic decoded.
-  Promise.all(images).then(async loaded=>{
-   if(thread.publication_started||!thread.ready||loaded.some(ok=>!ok)||!thread.segments.length)return;
-   try{await api('thread-present',{campaignId:campaign,manifest_sha256:thread.manifest_sha256,segment_hashes:thread.segments.map(s=>s.asset_sha256)});approve.disabled=false;}catch{status.textContent='Complete X preview could not be verified. Approval remains unavailable.';}
-  });
- }
  const counts={approved:0,rejected:0,undecided:0};
  for(const entry of view.entries){
   if(entry.decision?.decision==='APPROVE')counts.approved++;
@@ -80,7 +71,7 @@ async function refresh(){
  const sharedGroups=new Map((view.groups??[]).filter(group=>group.destination_ids.length>1).map(group=>[group.id,group]));
  for(const group of sharedGroups.values()){
   const members=group.destination_ids.map(id=>view.entries.find(entry=>entry.asset.destination_id===id));
-  const card=document.createElement('article');card.append(text('h2','Shared publication email · '+members.length+' recipients'),text('small','Version '+group.version+' · '+(group.approval?.decision||'Awaiting group decision')));
+  const card=document.createElement('article');card.id='review-group-'+group.id;card.append(text('h2','Shared publication email · '+members.length+' recipients'),text('small','Version '+group.version+' · '+(group.approval?.decision||'Awaiting group decision')));
   if(group.subject)card.append(text('h3',group.subject));card.append(text('pre',group.body),text('p','Included verified publications:'));
   const list=document.createElement('ul');
   for(const member of members){
@@ -92,20 +83,26 @@ async function refresh(){
   }
   card.append(list);
   if(!members.some(member=>member.delivery)){
-   const editSubject=text('button','Edit shared subject');editSubject.addEventListener('click',async()=>{const revised=prompt('Edit shared email subject',group.subject);if(revised===null||revised===group.subject)return;editSubject.disabled=true;try{await api('group-revise',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,changes:{subject:revised}});await refresh();status.textContent='Shared subject saved. The new version requires approval.';}catch{status.textContent='Shared subject was not saved. Reload and retry.';editSubject.disabled=false;}});
-   const editBody=text('button','Edit shared body');editBody.addEventListener('click',async()=>{const revised=prompt('Edit shared email body',group.body);if(revised===null||revised===group.body)return;editBody.disabled=true;try{await api('group-revise',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,changes:{body:revised}});await refresh();status.textContent='Shared body saved. The new version requires approval.';}catch{status.textContent='Shared body was not saved. Reload and retry.';editBody.disabled=false;}});
-   card.append(editSubject,editBody);
+   for(const [field,label] of [['subject','Edit shared subject'],['body','Edit shared body']]){
+    const button=text('button',label);
+    button.addEventListener('click',()=>openEditor({heading:label,initial:group[field],multiline:field==='body',save:async revised=>{
+     await api('group-revise',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,changes:{[field]:revised}});
+     lastSaved='group:'+group.id;
+    }}));
+    card.append(button);
+   }
    if(!group.approval)for(const decision of ['APPROVE','REJECT']){const button=text('button',decision==='APPROVE'?'Approve Group':'Reject Group');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,decision});await refresh();}catch{status.textContent='The group decision was not saved. Reload and retry.';button.disabled=false;}});card.append(button);}
   }
+  if(group.version>1||lastSaved==='group:'+group.id){const saved=text('p','Edited · Saved'+(group.approval?'':' · New approval required'));saved.className='saved';card.append(saved);}
   main.append(card);
  }
  for(const item of [...view.entries,...(view.history??[])]){
   const {asset,fingerprint,groupId,decision,delivery,historical}=item;
-  if(view.xThread&&asset.kind==='X'&&!historical)continue;
   if(!historical&&sharedGroups.has(groupId))continue;
   const card=document.createElement('article');
+  if(!historical)card.id='review-proposal-'+asset.destination_id;
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
-  if(!historical&&item.revision)card.append(text('p','Edited · Saved · Revision '+item.revision.id+' · '+fingerprint));
+  if(!historical&&(item.revision||lastSaved==='entry:'+asset.destination_id)){const saved=text('p',item.revision?'Edited · Saved · Revision '+item.revision.id+' · '+fingerprint:'Edited · Saved'+(decision?'':' · New approval required'));saved.className='saved';card.append(saved);}
   card.append(text('p','Preparation: '+(asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
   if(!historical&&item.review_action){
    const action=item.review_action;
@@ -120,28 +117,19 @@ async function refresh(){
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
   if(asset.kind==='EMAIL' && asset.html){
-   const preview=document.createElement('iframe');preview.title='Reviewed email with EMRADAR letterhead';preview.setAttribute('sandbox','');preview.style='width:100%;height:900px;border:1px solid #d9e2e7';preview.srcdoc=asset.html;card.append(preview);
+   const preview=document.createElement('iframe');preview.title='Reviewed email with EMRADAR letterhead';preview.setAttribute('sandbox','');preview.style='width:100%;height:min(70vh,900px);border:1px solid #d9e2e7';preview.srcdoc=asset.html;
+   const previewDetails=document.createElement('details');previewDetails.append(text('summary','Branded email preview'),preview);card.append(previewDetails);
   }
   if(!delivery&&!historical){
-   const edit=text('button','Edit draft');
-   edit.addEventListener('click',async()=>{
-    const revised=prompt('Edit draft text',asset.body);
-    if(revised===null || revised===asset.body)return;
-    edit.disabled=true;
-    try{await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{body:revised}});await refresh();status.textContent='Revision saved. Approve the updated version when ready.';}
-    catch(e){status.textContent='Revision not saved. Reload and retry.';edit.disabled=false;}
-   });
-   card.append(edit);
+   for(const [field,label] of [['body','Edit draft'],...(asset.kind==='EMAIL'?[['subject','Edit subject']]:[])]){
+    const button=text('button',label);
+    button.addEventListener('click',()=>openEditor({heading:label,initial:asset[field],multiline:field==='body',save:async revised=>{
+     await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{[field]:revised}});
+     lastSaved='entry:'+asset.destination_id;
+    }}));
+    card.append(button);
+   }
    if(asset.kind==='EMAIL'){
-    const editSubject=text('button','Edit subject');
-    editSubject.addEventListener('click',async()=>{
-     const revised=prompt('Edit email subject',asset.subject);
-     if(revised===null || revised===asset.subject)return;
-     editSubject.disabled=true;
-     try{await api('revise',{campaignId:campaign,destinationId:asset.destination_id,fingerprint,changes:{subject:revised}});await refresh();status.textContent='Subject saved. Approve the updated email when ready.';}
-     catch(e){status.textContent='Subject not saved. Reload and retry.';editSubject.disabled=false;}
-    });
-    card.append(editSubject);
     const editRecipient=text('button','Edit recipient');
     editRecipient.addEventListener('click',()=>{
      editRecipient.disabled=true;
@@ -220,7 +208,15 @@ async function refresh(){
    });
    card.append(addFeedback);
   }
-  main.append(card);
+  if(historical){
+   const current=view.entries.find(entry=>entry.asset.destination_id===asset.destination_id);
+   const target=current?(sharedGroups.has(current.groupId)?'review-group-'+current.groupId:'review-proposal-'+asset.destination_id):null;
+   const archived=document.createElement('details');archived.className='review-history';
+   archived.append(text('summary',(item.label||'Previous draft')+' · '+(item.destination?.name||asset.destination_id)+' · Read-only'),card);
+   card.append(text('p','This saved version is read-only. Actions apply to the current proposal.'));
+   main.append(archived);
+   if(target){const link=document.createElement('a');link.href='#'+encodeURIComponent(target);link.textContent='Back to current proposal and review controls';main.append(link);}
+  }else main.append(card);
  }
  status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
 }

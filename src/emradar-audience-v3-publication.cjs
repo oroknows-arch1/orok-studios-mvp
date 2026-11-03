@@ -8,6 +8,7 @@ function createV3ThreadPublication({campaignStore,threadStore,review,x,enabled=f
   let state=(await campaignStore.adapter.read(campaign_id))?.value;
   const r=state?.audience_x_review,a=state?.audience_x_approval,c=state?.audience_x_checks;
   if(!r||!a||c?.manifest_sha256!==r.manifest_sha256||c.approval_id!==a.id||['completeness','exact_assets','authoritative_approval'].some(k=>c[k]!=='PASS')||!await review.verify({campaign_id,approved_thread:r}))throw Error('THREAD_V3_APPROVAL_NOT_VERIFIED');
+  if(r.mode!=='STANDALONE'||r.segments.length>8||r.segments.some(s=>s.kind!=='DISCOVERY'||s.parent_sequence!==null)||typeof threadStore.reserveOriginal!=='function'||typeof x.originalHistory!=='function')throw Error('AUDIENCE_STANDALONE_BOUNDARY_REQUIRED');
   const segments=r.segments.map(s=>({...s,approval_status:'APPROVED'}));
   // Approval status is workflow metadata, excluded from each exact asset hash.
   await threadStore.ensureRegistered({campaign_id,approved_segments:segments});
@@ -29,21 +30,24 @@ function createV3ThreadPublication({campaignStore,threadStore,review,x,enabled=f
     if(receipt.status!=='VERIFIED_ACCEPTED')return {status:'HALTED_AMBIGUOUS',sequence:pending.sequence};
     await threadStore.reconcileAccepted({campaign_id,sequence:pending.sequence,receipt});continue;
    }
-   const parent=pending.sequence===1?null:rows[pending.sequence-2].receipt_id;
+   const parent=null;
    // Identity/history preflight occurs before reserving; it never uploads/posts.
    const prepared=await x.prepareThreadPost({segment,scan:r.scan,parent_receipt_id:parent});
-   const reservation=await threadStore.reserve({campaign_id,sequence:pending.sequence});
-   if(reservation.parent_receipt_id!==parent)throw Error('THREAD_V3_PARENT_CHANGED');
    let receipt;
    try{
-    receipt=await prepared.publish({onMediaUploaded:upload=>threadStore.saveUpload({campaign_id,sequence:pending.sequence,upload})});
-   }catch{
-    await threadStore.record({campaign_id,sequence:pending.sequence,ambiguous:true});return {status:'HALTED_AMBIGUOUS',sequence:pending.sequence};
+    receipt=await threadStore.reserveOriginal({account_id:prepared.account_id,campaign_id,sequence:pending.sequence,segment,source_key:r.scan.source_key,loadHistory:input=>x.originalHistory(input),verifyApproval:()=>review.verify({campaign_id,approved_thread:r}),submit:async({beforePost})=>{
+     const result=await prepared.publish({beforePost,onMediaUploaded:upload=>threadStore.saveUpload({campaign_id,sequence:pending.sequence,upload})});
+     if(result?.accepted!==true||!/^\d+$/.test(result.receipt_id??''))throw Error('AUDIENCE_RECEIPT_REQUIRED');
+     await threadStore.record({campaign_id,sequence:pending.sequence,receipt_id:result.receipt_id,provider_receipt:result});return result;
+    }});
+   }catch(error){
+    if(error.message==='AUDIENCE_DAILY_ORIGINAL_LIMIT')return {status:'DAILY_LIMIT',sent};
+    return {status:'HALTED_AMBIGUOUS',sequence:pending.sequence};
    }
    if(receipt?.accepted!==true||!/^\d+$/.test(receipt.receipt_id??'')){
     await threadStore.record({campaign_id,sequence:pending.sequence,ambiguous:true});return {status:'HALTED_AMBIGUOUS',sequence:pending.sequence};
    }
-   await threadStore.record({campaign_id,sequence:pending.sequence,receipt_id:receipt.receipt_id,provider_receipt:receipt});sent++;
+   sent++;
   }
   return {status:'PARTIAL',sent};
  };

@@ -772,5 +772,25 @@
   "production_records_modified": false,
   "external_distribution": 0,
   "source_research_modified": false
-}
+},
+  "november_3_x_audience_refinement": {
+    "status": "LOCALLY_VERIFIED_READY_FOR_PR_NOT_DEPLOYED",
+    "authoritative_branch": "feature/emradar-grok-audience-pilot",
+    "source_prs": [
+      26,
+      27,
+      28
+    ],
+    "scope": "Standalone evidence-bound financial originals, eight per Sydney day at durable account publication boundary, separate owner-reviewed Grok drafts, independent audience state and composition; upstream hooks removed.",
+    "external_distribution": 0,
+    "production_deployed": false,
+    "activation_blockers": [
+      "Independent controller/hosting and secret-validating owner session integration not verified",
+      "SELECT-only upstream grants and audience-owned database credentials not verified",
+      "Source PRs remain open; no deployment authorisation inferred"
+    ],
+    "focused_tests": "133 passed; 0 failed; 0 skipped, with temporary PostgreSQL and simulated X/Grok",
+    "harness": "harness:verify PASS; harness:v3 16/16 PASS",
+    "upstream_runtime_matches_current_main": true
+  }
 }

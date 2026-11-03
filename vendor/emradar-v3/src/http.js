@@ -21,6 +21,7 @@ function oauthDiagnostic(stage,error,status,log){
  log('V3_X_OAUTH_CALLBACK_FAILURE '+JSON.stringify(result));
  return {stage:result.stage,diagnostic_id:result.diagnostic_id};
 }
+const REVISION_ERRORS=new Set(['STALE_ASSET_REVISION','STALE_GROUP_VERSION','GROUP_REVISION_REQUIRED','GROUP_CONTENT_MISMATCH','REVISION_AFTER_DISTRIBUTION','INVALID_REVISION','INVALID_REVISION_FIELDS','INVALID_REVISION_TEXT','EMAIL_BRAND_TEXT_REQUIRED','REQUEST_TOO_LARGE','CONCURRENT_UPDATE_RETRY_EXHAUSTED']);
 const sessionCookie=campaignId=>'emradar_v3_session_'+createHash('sha256').update(String(campaignId)).digest('hex').slice(0,16);
 const cookie=(req,name)=>{
  const found=(req.headers.cookie??'').split(';').map(s=>s.trim()).find(s=>s.startsWith(name+'='));
@@ -34,10 +35,10 @@ async function body(req) {
  }
  return JSON.parse(value||'{}');
 }
-export function createReviewServer({workflow,runDiscovery,runRegeneration,releaseEmail,xAuth,publishing={email:{enabled:true},x:{enabled:false,reason:'X publishing is disabled.'}},logOAuthDiagnostic=message=>console.info(message),health=()=>({ok:true})}) {
+export function createReviewServer({workflow,runDiscovery,runRegeneration,releaseEmail,xAuth,publishing={email:{enabled:true},x:{enabled:false,reason:'X publishing is disabled.'}},logOAuthDiagnostic=message=>console.info(message),logRevisionDiagnostic=message=>console.info(message),health=()=>({ok:true})}) {
  if(!(workflow instanceof ReviewWorkflow)) throw Error('WORKFLOW_REQUIRED');
  return createServer(async(req,res)=>{
-  let isCallback=false,stage='REQUEST',failure;
+  let isCallback=false,isRevision=false,stage='REQUEST',failure;
   const reply=(status,payload)=>{
    if(isCallback&&status>=400){
     const diagnostic=oauthDiagnostic(stage,failure||new Error(payload.error),status,logOAuthDiagnostic);
@@ -47,6 +48,7 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
   };
   try {
    const url=new URL(req.url,'http://localhost');
+   isRevision=req.method==='POST'&&['/api/review/revise','/api/review/group-revise'].includes(url.pathname);
    if(req.method==='GET' && url.pathname==='/health') return json(res,200,health());
    if(req.method==='GET' && url.pathname==='/review/access') {
     res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','referrer-policy':'no-referrer','x-content-type-options':'nosniff','content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: https:; frame-src 'self' about:; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"});
@@ -60,7 +62,7 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
     return res.end('<!doctype html><meta name="referrer" content="no-referrer"><title>Connect X</title><p id="status">Completing your X connection…</p><script nonce="'+nonce+'">(async()=>{const query=new URLSearchParams(location.search);const input={state:query.get("state"),code:query.get("code"),error:query.get("error")};history.replaceState(null,"",location.pathname);const csrf=decodeURIComponent((document.cookie.split("; ").find(x=>x.startsWith("emradar_v3_csrf="))||"").split("=").slice(1).join("="));try{const r=await fetch("/api/review/x/callback",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-emradar-csrf":csrf},body:JSON.stringify(input)});const result=await r.json();if(!r.ok){const stage=/^[A-Z_]+$/.test(result.oauth_stage||"")?result.oauth_stage:"CALLBACK_REQUEST";const ref=/^[0-9a-f-]{36}$/.test(result.diagnostic_id||"")?result.diagnostic_id:"unavailable";document.getElementById("status").textContent="X connection failed at "+stage+". Reference: "+ref+". Nothing was published.";return;}location.replace(result.review_url);}catch{document.getElementById("status").textContent="X callback request could not complete. Nothing was published. Reopen your private review in this browser.";}})();</script>');
    }
    if(req.method!=='POST') return json(res,404,{error:'NOT_FOUND'});
-   if(!['/api/review/thread-present','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
+   if(!['/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status'].includes(url.pathname)) return json(res,404,{error:'NOT_FOUND'});
    isCallback=url.pathname==='/api/review/x/callback';
    if(req.headers.origin && req.headers.origin!==workflow.baseUrl) return reply(403,{error:'ORIGIN_DENIED'});
    stage='REQUEST_BODY';
@@ -104,12 +106,6 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
    stage='CSRF';
    const csrf=cookie(req,'emradar_v3_csrf');
    if(!csrf || req.headers['x-emradar-csrf']!==csrf) return reply(403,{error:'CSRF_DENIED'});
-   if(url.pathname==='/api/review/thread-present'){
-    await workflow.authenticate(input.campaignId,session.id,session.secret);
-    if(!workflow.audienceThread)return json(res,503,{error:'THREAD_REVIEW_UNAVAILABLE'});
-    await workflow.audienceThread.present(input.campaignId,session.id,input);
-    return json(res,200,{presented:true});
-   }
    if(url.pathname.startsWith('/api/review/x/')){
     if(!xAuth)return reply(503,{error:'X_CONNECTION_UNAVAILABLE'});
     if(req.headers.origin!==workflow.baseUrl)return reply(403,{error:'ORIGIN_DENIED'});
@@ -133,7 +129,6 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
    }
    if(url.pathname==='/api/review/decision'){
     const state=await workflow.decide(input.campaignId,session.id,session.secret,input.destinationId,input.decision,input.fingerprint,input.feedback??'');
-    if(input.destinationId==='x'&&input.decision==='APPROVE'&&workflow.audienceThread?.runPublication)setImmediate(()=>workflow.audienceThread.runPublication(input.campaignId).catch(()=>console.error('V3_X_THREAD_BLOCKED')));
     const action=state?.review_actions?.[input.destinationId];
     if(action?.status==='PENDING'&&typeof runRegeneration==='function')setImmediate(()=>runRegeneration(input.campaignId,input.destinationId).catch(error=>console.error('V3_REGENERATION_WORKER_FAILED',/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'V3_REGENERATION_FAILED')));
     return json(res,200,{saved:true,regeneration_status:action?.status??null});
@@ -156,6 +151,14 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
    return json(res,404,{error:'NOT_FOUND'});
   }catch(error){
    failure=error;
+   if(isRevision){
+    const denied=/ACCESS_DENIED|SESSION_REQUIRED|REVIEW_NOT_OPEN/.test(error.message);
+    const code=denied?'ACCESS_DENIED':REVISION_ERRORS.has(error.message)?error.message:'REVISION_SAVE_FAILED';
+    const status=denied?403:/STALE_|GROUP_CONTENT_MISMATCH|CONCURRENT_UPDATE/.test(code)?409:code==='REVISION_SAVE_FAILED'?500:400;
+    const diagnostic_id=randomUUID();
+    logRevisionDiagnostic('V3_REVIEW_REVISION_FAILED '+JSON.stringify({reason:code,status,diagnostic_id}));
+    return reply(status,{error:code,diagnostic_id});
+   }
    const status=/ACCESS_DENIED|SESSION_REQUIRED|REVIEW_NOT_OPEN/.test(error.message)?403:400;
    return reply(status,{error:status===403?'ACCESS_DENIED':'INVALID_REQUEST'});
   }

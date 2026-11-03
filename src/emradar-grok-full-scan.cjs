@@ -46,7 +46,7 @@ function createFullScanResearch({store,pilot,loadPublishedBytes,loadPublicationR
   if(p?.status!=='COMPLETE'||p.manifest_sha256!==r?.manifest_sha256||rows.length!==r.segments.length||rows.some((row,i)=>row.status!=='ACCEPTED'||row.sequence!==i+1||row.receipt_id!==p.posts[i]?.post_id||row.approved_asset_sha256!==r.segments[i].asset_sha256))throw Error('GROK_CONFIRMED_FULL_THREAD_REQUIRED');
   const bytes=await loadPublishedBytes(r.scan);
   if(createHash('sha256').update(bytes).digest('hex')!==r.source_sha256)throw Error('GROK_SOURCE_MISMATCH');
-  const document=JSON.parse(bytes.toString('utf8')),coverage=buildDiscoveryCoverage({document,post_id:rows[0].receipt_id,body:r.segments.filter(s=>s.kind==='SUMMARY').map(s=>s.text).join('\n')});
+  const document=JSON.parse(bytes.toString('utf8')),coverage=buildDiscoveryCoverage({document,post_id:rows[0].receipt_id,body:r.segments.map(s=>s.text).join('\n')});
   if(JSON.stringify(coverage.discovery_ids)!==JSON.stringify(r.all_discovery_ids??r.discovery_ids))throw Error('GROK_FULL_SCAN_MISMATCH');
   await store.mutate(campaign_id,current=>{
    if(!current.audience_x_research)current.audience_x_research={run_id:randomUUID(),source_sha256:r.source_sha256,discovery_ids:coverage.discovery_ids,results:{},requests:0,total_tokens:0,cost_ticks:0,reserved_ticks:0,status:'PENDING'};
