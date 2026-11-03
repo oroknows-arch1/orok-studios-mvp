@@ -96,7 +96,7 @@ test('a hash-matching but undecodable graphic cannot be presented or approved',a
 });
 test('PostgreSQL staging: V3 approval, JSONB hashes, exact upload, ambiguous reconciliation and restart without duplicate posts',{skip:!process.env.V3_TEST_DATABASE_URL},async t=>{
  const {Pool}=require('pg'),{ThreadStore}=require('../src/emradar-x-thread-store.cjs'),{createV3ThreadPublication}=require('../src/emradar-audience-v3-publication.cjs'),{createV3X}=require('../src/emradar-v3-x.cjs');
- const pool=new Pool({connectionString:process.env.V3_TEST_DATABASE_URL});let cleanupId;
+ const pool=await require('./audience-postgres-fixture.cjs').isolatedAudiencePool(process.env.V3_TEST_DATABASE_URL);let cleanupId;
  t.after(async()=>{if(cleanupId){await pool.query('DELETE FROM emradar_x_thread_posts WHERE campaign_id=$1',[cleanupId]).catch(()=>{});await pool.query('DELETE FROM v3_campaign_state WHERE campaign_id IN ($1,$2)',[cleanupId,'review:'+cleanupId]).catch(()=>{});}await pool.end();});
  const s=await setup(pool,'STANDALONE'),r=(await s.view()).xThread;
  cleanupId=s.id;

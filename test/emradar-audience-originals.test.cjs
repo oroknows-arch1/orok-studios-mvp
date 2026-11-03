@@ -54,7 +54,7 @@ test('owner approval, complete review, provenance hashing and edited approval in
 });
 const url=process.env.V3_TEST_DATABASE_URL;
 test('PostgreSQL: concurrent workers, account ceiling, external originals, retries, ambiguity and midnight', {skip:!url},async()=>{
- const {Pool}=require('pg'),{ThreadStore}=require('../src/emradar-x-thread-store.cjs');const pool=new Pool({connectionString:url,max:12}),store=new ThreadStore(pool);
+ const {Pool}=require('pg'),{ThreadStore}=require('../src/emradar-x-thread-store.cjs');const pool=await require('./audience-postgres-fixture.cjs').isolatedAudiencePool(url),store=new ThreadStore(pool);
  const account=String(Date.now()),prefix='originals-'+account;let now=Date.parse('2026-11-03T12:59:00Z'),history=[];
  const loadHistory=async({account_id,day})=>({complete:true,account_id,day,posts:history.filter(p=>sydneyDay(Date.parse(p.created_at))===day)});
  const attempts=[];
@@ -93,7 +93,7 @@ test('publisher refuses legacy thread manifests before any external action',asyn
 
 test('independent composition authenticates review, writes audience-only state and contains failed publication', {skip:!url},async()=>{
  const {Pool}=require('pg'),{createIndependentAudience}=require('../src/emradar-audience-independent.cjs');
- const source=await reviewSetup(3),pool=new Pool({connectionString:url,max:4}),before=JSON.stringify([...source.values]);
+ const source=await reviewSetup(3),pool=await require('./audience-postgres-fixture.cjs').isolatedAudiencePool(url,4),before=JSON.stringify([...source.values]);
  const id=source.id;let calls=0;
  const x={originalHistory:async({account_id,day})=>({complete:true,account_id,day,posts:[]}),prepareThreadPost:async()=>({account_id:'998877',publish:async({beforePost})=>{await beforePost();calls++;if(calls===2)throw Error('X_API_503');return {accepted:true,receipt_id:'99880001'};}}),reconcileThreadPost:async()=>({status:'UNRESOLVED'})};
  try{
