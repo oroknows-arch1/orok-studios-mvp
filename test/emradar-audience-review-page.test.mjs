@@ -1,0 +1,150 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import {reviewPage} from '../src/emradar-audience-review-page.mjs';
+import {ReviewWorkflow} from '../vendor/emradar-v3/src/review-workflow.js';
+import {CampaignStore} from '../vendor/emradar-v3/src/state.js';
+
+class Element {
+ constructor(tag){this.tag=tag;this.children=[];this.listeners={};this.attributes={};this.textContent='';}
+ append(...children){this.children.push(...children);}
+ replaceChildren(...children){this.children=children;}
+ setAttribute(key,value){this.attributes[key]=value;}
+ addEventListener(name,handler){this.listeners[name]=handler;}
+ focus(){}
+ reportValidity(){return true;}
+ remove(){}
+}
+const flatten=element=>[element,...element.children.flatMap(flatten)];
+test('complete thread shows every ordered post and graphic and waits for image load before approval',async()=>{
+ const xThread={ready:true,manifest_sha256:'manifest',scan:{source_key:'scan:hash'},segments:[{sequence:1,kind:'SUMMARY',parent_sequence:null,text:'Complete main text',source_links:[],asset_sha256:'h1',media:{mime:'image/png',base64:'aW1hZ2U='}},{sequence:2,kind:'DISCOVERY',record_id:'copper',parent_sequence:1,text:'Complete causal chain and uncertainty',source_links:['https://example.org/source'],asset_sha256:'h2'}]};
+ const result=await render({xThread,entries:[{asset:{kind:'X',destination_id:'x',body:'Old single post'}}]});
+ const nodes=flatten(result.entries),button=nodes.find(n=>n.textContent==='Approve selected X posts');
+ assert(nodes.some(n=>n.textContent==='Complete main text'));assert(nodes.some(n=>n.textContent==='Complete causal chain and uncertainty'));
+ assert(nodes.some(n=>n.textContent==='Reply to post 1'));assert(nodes.some(n=>n.tag==='a'&&n.href==='https://example.org/source'));
+ assert(!nodes.some(n=>n.textContent==='Old single post'));assert.equal(button.disabled,true);assert(!result.calls.includes('/api/review/thread-present'));
+ nodes.find(n=>n.tag==='img').listeners.load();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(button.disabled,false);assert.deepEqual(result.payloads.find(p=>p.segment_hashes)?.segment_hashes,['h1','h2']);
+});
+test('failed thread graphic keeps approval disabled without affecting editorial cards',async()=>{
+ const result=await render({xThread:{ready:true,segments:[{sequence:1,kind:'SUMMARY',text:'Main',media:{mime:'image/png',base64:'bad'},asset_sha256:'h'}]},entries:[{asset:{kind:'EMAIL',destination_id:'editor',subject:'Editorial',body:'Saved email'}}]});
+ const nodes=flatten(result.entries);nodes.find(n=>n.tag==='img').listeners.error();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(nodes.find(n=>n.textContent==='Approve selected X posts').disabled,true);assert(nodes.some(n=>n.textContent==='Saved email'));assert(!result.calls.includes('/api/review/thread-present'));
+});
+async function render(view,onRevise){
+ const elements=Object.fromEntries(['status','entries','discover','connect-x','check-x'].map(id=>[id,new Element(id)]));
+ const calls=[],payloads=[];
+ const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
+ const script=reviewPage.match(/<script>([\s\S]*)<\/script>/)[1];
+ await new vm.Script(script).runInNewContext(context);
+ return {...elements,calls,payloads};
+}
+test('actual review script renders full X text and saved image while publishing is disabled',async()=>{
+ const body='Complete approved X text\nwith every saved line.';
+ const image=Buffer.from('saved graphic bytes').toString('base64');
+ const result=await render({entries:[{asset:{kind:'X',destination_id:'x',body,visual_mime:'image/png',visual_base64:image},decision:{decision:'APPROVE'}}],publishing:{x:{enabled:false,reason:'X publishing is disabled.'}}});
+ const nodes=flatten(result.entries),graphic=nodes.find(n=>n.tag==='img');
+ assert.equal(graphic.src,'data:image/png;base64,'+image);assert.equal(graphic.className,'review-graphic');
+ assert.equal(nodes.find(n=>n.tag==='pre').textContent,body);
+ assert(nodes.some(n=>n.textContent==='X publishing is disabled.'));
+ assert.equal(nodes.find(n=>n.textContent==='Publish approved X post').disabled,true);
+ for(const label of ['Edit draft','Approve','Reject'])assert(!nodes.find(n=>n.textContent===label).disabled);
+ assert.deepEqual(result.calls,['/api/review/view']);
+});
+test('owner review captures rejection feedback and displays the durable regeneration state',async()=>{
+ const view={entries:[{asset:{kind:'EMAIL',destination_id:'journal',subject:'A story',body:'Draft text',review_status:'READY'},fingerprint:'asset-hash',review_action:{action:'REGENERATE',status:'NEEDS_FEEDBACK'},rejection_feedback:[]}],publishing:{email:{enabled:true}}};
+ const result=await render(view),nodes=flatten(result.entries);
+ assert(nodes.some(node=>node.textContent==='Rejection saved — owner feedback is needed before regeneration.'));
+ await nodes.find(node=>node.textContent==='Reject').listeners.click();
+ const decision=result.payloads.find(payload=>payload.decision);
+ assert.equal(decision.decision,'REJECT');assert.equal(decision.feedback,'Make the analytical contribution clearer without changing the verified finding.');
+ assert.equal(result.calls.filter(path=>path==='/api/review/decision').length,1);
+});
+test('all saved email content is visible, including unresolved drafts and historical alternatives',async()=>{
+ const asset={kind:'EMAIL',destination_id:'journal',subject:'Specific article idea',body:'Complete body\nwith signature.',html:'<p>Complete HTML email</p>'};
+ const result=await render({entries:[{asset,recipient_ready:false,destination:{name:'Publication'},decision:{decision:'REJECT'}}],history:[{asset:{...asset,body:'Previous saved body'},historical:true,label:'Previous draft'}]});
+ const nodes=flatten(result.entries);assert.equal(result.entries.children.length,2);
+ for(const value of ['Publication',asset.subject,asset.body,'Previous saved body','Recipient unavailable','Editorial decision: REJECT','Delivery: Not released'])assert(nodes.some(n=>n.textContent===value));
+ assert.equal(nodes.find(n=>n.tag==='iframe').srcdoc,asset.html);assert.equal(nodes.find(n=>n.tag==='iframe').attributes.sandbox,'');
+ assert.equal(nodes.find(n=>n.textContent==='Send approved email').disabled,true);
+ for(const label of ['Edit draft','Edit subject','Edit recipient','Approve','Reject'])assert(!nodes.find(n=>n.textContent===label).disabled);
+ assert(!flatten(result.entries.children[1]).some(n=>n.tag==='button'));
+});
+test('recipient editor exposes Save and Cancel and submits only the edited address',async()=>{
+ const view={entries:[{asset:{kind:'EMAIL',destination_id:'epoch',to:'donate@epoch.ai',subject:'Saved subject',body:'Saved body'},fingerprint:'saved-fingerprint',recipient_ready:false,destination:{name:'Epoch AI'}}],publishing:{email:{enabled:true}}};
+ const result=await render(view),button=flatten(result.entries).find(node=>node.textContent==='Edit recipient');
+ assert(button);await button.listeners.click();
+ const form=flatten(result.entries).find(node=>node.tag==='form'),formNodes=flatten(form),input=formNodes.find(node=>node.tag==='input');
+ assert.equal(input.value,'donate@epoch.ai');assert(formNodes.some(node=>node.textContent==='Save'));assert(formNodes.some(node=>node.textContent==='Cancel'));
+ input.value='press@epoch.ai';await form.listeners.submit({preventDefault(){}});
+ const revision=result.payloads.find(payload=>payload.changes?.to);
+ assert.deepEqual(revision.changes,{to:'press@epoch.ai'});assert.equal(revision.fingerprint,'saved-fingerprint');
+ assert(result.status.textContent.includes('Previous approval cleared'));
+ const cancelled=await render(view);await flatten(cancelled.entries).find(node=>node.textContent==='Edit recipient').listeners.click();
+ const cancelForm=flatten(cancelled.entries).find(node=>node.tag==='form');await flatten(cancelForm).find(node=>node.textContent==='Cancel').listeners.click();
+ assert.deepEqual(cancelled.calls,['/api/review/view']);
+});
+test('owner override warning is visible but does not block approval of the exact recipient',async()=>{
+ const asset={kind:'EMAIL',destination_id:'epoch',to:'press@epoch.ai',contact_status:'OWNER_OVERRIDE',recipient_owner_override:true,recipient_verification:{status:'OWNER_OVERRIDE',warning_code:'CONTACT_HTTP_403'},subject:'Saved subject',body:'Saved body'};
+ const result=await render({entries:[{asset,fingerprint:'override-fingerprint',recipient_ready:true,recipient_warning:'CONTACT_HTTP_403',destination:{name:'Epoch AI'}}],publishing:{email:{enabled:true}}});
+ const nodes=flatten(result.entries);
+ assert(nodes.some(node=>node.textContent.includes('Automated verification warning: CONTACT_HTTP_403')));
+ assert.equal(nodes.find(node=>node.textContent==='Approve').disabled,false);
+ assert(nodes.some(node=>node.textContent==='Send approved email'));
+ assert(nodes.some(node=>node.textContent==='Approve this draft before releasing it.'));
+});
+test('accepted email remains fully visible with receipt, with resend and post-delivery edits disabled',async()=>{
+ const result=await render({entries:[{asset:{kind:'EMAIL',destination_id:'journal',to:'editor@example.org',subject:'Approved subject',body:'Already sent body'},decision:{decision:'APPROVE'},delivery:{status:'ACCEPTED',receipt:{provider_id:'message-id',sent_folder:{status:'FILED'}}}}]});
+ const nodes=flatten(result.entries);
+ for(const value of ['Already sent body','Editorial decision: APPROVE','Delivery: ACCEPTED','Mail receipt: message-id · Sent folder: FILED'])assert(nodes.some(n=>n.textContent===value));
+ assert.equal(nodes.find(n=>n.textContent==='Send approved email').disabled,true);
+ assert.equal(nodes.find(n=>n.textContent==='Approve').disabled,true);assert(!nodes.some(n=>n.textContent==='Edit draft'));
+});
+test('HTTPS and saved data graphics render; unsafe graphic schemes do not',async()=>{
+ for(const source of ['https://assets.example/graphic.png','data:image/png;base64,aW1hZ2U=','javascript:alert(1)']){
+  const result=await render({entries:[{asset:{kind:'X',destination_id:'x',visual_url:source,body:'Text'}}]});
+  const graphic=flatten(result.entries).find(n=>n.tag==='img');
+  if(source.startsWith('javascript:'))assert.equal(graphic,undefined);else assert.equal(graphic.src,source);
+ }
+});
+test('review preserves decisions/history and permits editorial override while delivery still rejects unsupported recipients',async()=>{
+ let state={phase:'PUBLICATION_REVIEW',scan:{},destinations:[{id:'journal'}],assets:{journal:{asset:{kind:'EMAIL',destination_id:'journal',subject:'Idea',body:'Saved body'},fingerprint:'saved'}},decisions:{journal:{decision:'REJECT'}},deliveries:{},events:[],editorial_versions:{journal:[{asset:{kind:'EMAIL',destination_id:'journal',body:'Previous body'},fingerprint:'previous'}]}};
+ let version=1;
+ const adapter={read:async()=>({version,value:structuredClone(state)}),compareAndSwap:async(_key,prior,next)=>{assert.equal(prior,version);version++;state=structuredClone(next);return true;}};
+ const store=new CampaignStore(adapter),workflow=new ReviewWorkflow({store,adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:'https://review.example'});
+ workflow.authenticate=async()=>true;
+ const original=structuredClone(state),view=await workflow.view('campaign');
+ assert.equal(view.entries.length,1);assert.equal(view.history[0].asset.body,'Previous body');assert.deepEqual(state.decisions,original.decisions);assert.deepEqual(state.assets,original.assets);assert.deepEqual(state.editorial_versions,original.editorial_versions);assert.deepEqual(state.deliveries,original.deliveries);assert.deepEqual(state.email_groups,{});assert.deepEqual(state.group_approvals,{});
+ await workflow.decide('campaign',null,null,'journal','APPROVE','saved');assert.equal(state.decisions.journal.decision,'APPROVE');
+ await assert.rejects(store.claimDelivery('campaign','journal'),/VERIFIED_RECIPIENT_REQUIRED/);assert.deepEqual(state.deliveries,{});
+ await workflow.decide('campaign',null,null,'journal','REJECT','saved');assert.equal(state.decisions.journal.decision,'REJECT');assert.deepEqual(state.assets,original.assets);assert.deepEqual(state.editorial_versions,original.editorial_versions);
+});
+
+test('saved revision confirmation survives a fresh page render and history stays distinct',async()=>{
+ const asset={kind:'EMAIL',destination_id:'journal',body:'Persisted edited body'};
+ const view={entries:[{asset,fingerprint:'saved-hash',revision:{id:'revision-id',fingerprint:'saved-hash'}}],history:[{asset:{...asset,body:'Original body'},historical:true,label:'Previous draft'}]};
+ for(let reload=0;reload<2;reload++){
+  const result=await render(structuredClone(view));
+  assert(flatten(result.entries.children[0]).some(n=>n.textContent==='Edited · Saved · Revision revision-id · saved-hash'));
+  assert(!flatten(result.entries.children[1]).some(n=>n.textContent.includes('Edited · Saved')));
+  await flatten(result.entries.children[0]).find(n=>n.textContent==='Approve').listeners.click();
+  assert.equal(result.payloads.find(p=>p.decision).fingerprint,'saved-hash');
+ }
+});
+
+
+test('Edit draft saves and replaces the active rendered draft before reload',async()=>{
+ const view={entries:[{asset:{kind:'EMAIL',destination_id:'journal',body:'Original body'},fingerprint:'original-hash'}],history:[]};
+ const result=await render(view,payload=>{
+  assert.equal(payload.fingerprint,'original-hash');
+  view.history.push({...structuredClone(view.entries[0]),historical:true,label:'Previous draft'});
+  view.entries[0]={asset:{...view.entries[0].asset,...payload.changes},fingerprint:'edited-hash',revision:{id:'edit-event',fingerprint:'edited-hash'}};
+ });
+ await flatten(result.entries).find(n=>n.textContent==='Edit draft').listeners.click();
+ assert.equal(result.payloads.find(p=>p.changes).changes.body,view.entries[0].asset.body);
+ for(const page of [result,await render(structuredClone(view))]){
+  assert(flatten(page.entries.children[0]).some(n=>n.textContent===view.entries[0].asset.body));
+  assert(flatten(page.entries.children[0]).some(n=>n.textContent==='Edited · Saved · Revision edit-event · edited-hash'));
+  assert(flatten(page.entries.children[1]).some(n=>n.textContent==='Original body'));
+ }
+});

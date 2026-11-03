@@ -8,7 +8,7 @@ async function setup(pool=null,threadMode='FULL_EVIDENCE'){
  const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
  const record={id:'indonesia-equity-market-accessibility-crisis',theme:'Market governance',status:'CONFIRMED',why_surfaced:'A consultation is open.',causal_chain:{world_change:['Index review'],pressure:['Ownership concerns'],bottleneck_or_scarcity:['Verified free float'],formation:['Market governance as access condition'],industries:['Capital markets'],connected_companies_and_tickers:['BREN (IDX)'],consequences:['Potential outflows']},contradictions:['Consultation is not a final downgrade.'],chain_evolution:{unresolved_evidence:['Final decision'],break_conditions:['Reforms accepted']},evidence:[{fact:'Consultation launched',date:'2026-10-15',url:'https://example.org/evidence'}]};
  const source=pool&&process.env.EMRADAR_STAGING_PUBLISHED_FILE?require('node:fs').readFileSync(process.env.EMRADAR_STAGING_PUBLISHED_FILE):null;
- const document=source?JSON.parse(source):{publication_state:'PUBLISHED',snapshot_date:'2026-10-17',records:[record,{...record,id:'copper',status:'INVESTIGATE'}]};
+ const document=source?JSON.parse(source):{publication_state:'PUBLISHED',snapshot_date:'2026-10-17',records:[record,{...record,id:'copper',status:'INVESTIGATE',causal_chain:{...record.causal_chain,consequences:['Copper financing costs may rise.']}}]};
  const bytes=source??Buffer.from(JSON.stringify(document)),digest=hash(bytes),id=pool?'staging-'+require('node:crypto').randomUUID():'staging-campaign';
  const sharp=require('sharp'),png=await sharp({create:{width:40,height:40,channels:3,background:'#164258'}}).png().toBuffer();
  const asset={kind:'X',destination_id:'x',campaign_id:id,body:'Consultation is not a final downgrade.',visual_base64:png.toString('base64'),visual_sha256:hash(png),visual_mime:'image/png'};
@@ -24,6 +24,10 @@ async function setup(pool=null,threadMode='FULL_EVIDENCE'){
  if(pool)await adapter.compareAndSwap('review:'+id,null,data.get('review:'+id).value);
  const session=await workflow.exchange(id,access.token);
  const audience=createV3AudienceReview({store,loadPublishedBytes:async()=>bytes,threadMode});workflow.audienceThread=audience;
+ const upstreamView=workflow.view.bind(workflow),upstreamDecide=workflow.decide.bind(workflow),upstreamRevise=workflow.revise.bind(workflow);
+ workflow.view=async(...args)=>({...await upstreamView(...args),xThread:await workflow.audienceThread.view(id)});
+ workflow.decide=async(cid,sid,secret,destination,decision,fingerprint)=>{await workflow.authenticate(cid,sid,secret);return destination==='x'?workflow.audienceThread.decide(cid,sid,decision,fingerprint):upstreamDecide(cid,sid,secret,destination,decision,fingerprint)};
+ workflow.revise=async(cid,sid,secret,destination,fingerprint,changes)=>{await workflow.authenticate(cid,sid,secret);return destination==='x'?workflow.audienceThread.revise(cid,fingerprint,changes):upstreamRevise(cid,sid,secret,destination,fingerprint,changes)};
  const view=()=>workflow.view(id,session.sessionId,session.secret);
  const present=async review=>{await workflow.authenticate(id,session.sessionId,session.secret);await audience.present(id,session.sessionId,{manifest_sha256:review.manifest_sha256,segment_hashes:review.segments.map(s=>s.asset_sha256)});};
  const decide=(review,decision='APPROVE')=>workflow.decide(id,session.sessionId,session.secret,'x',decision,review.manifest_sha256);
@@ -94,7 +98,7 @@ test('PostgreSQL staging: V3 approval, JSONB hashes, exact upload, ambiguous rec
  const {Pool}=require('pg'),{ThreadStore}=require('../src/emradar-x-thread-store.cjs'),{createV3ThreadPublication}=require('../src/emradar-audience-v3-publication.cjs'),{createV3X}=require('../src/emradar-v3-x.cjs');
  const pool=new Pool({connectionString:process.env.V3_TEST_DATABASE_URL});let cleanupId;
  t.after(async()=>{if(cleanupId){await pool.query('DELETE FROM emradar_x_thread_posts WHERE campaign_id=$1',[cleanupId]).catch(()=>{});await pool.query('DELETE FROM v3_campaign_state WHERE campaign_id IN ($1,$2)',[cleanupId,'review:'+cleanupId]).catch(()=>{});}await pool.end();});
- const s=await setup(pool),r=(await s.view()).xThread;
+ const s=await setup(pool,'STANDALONE'),r=(await s.view()).xThread;
  cleanupId=s.id;
  console.info('STAGING_X_THREAD_INPUT',JSON.stringify({scan_sha256:hash(s.bytes),discoveries:r.discovery_ids.length,posts:r.segments.length,graphic_sha256:r.segments[0].media?.sha256,provider:'SIMULATED_X_NO_EXTERNAL_DISTRIBUTION'}));
  assert.equal(r.ready,true);await s.present(r);await s.decide(r);assert.equal(await s.audience.verify({campaign_id:s.id}),true);
@@ -113,13 +117,13 @@ test('PostgreSQL staging: V3 approval, JSONB hashes, exact upload, ambiguous rec
   return {ok:true,json:async()=>result};
  };
  const x=createV3X({env:{EMRADAR_V3_X_PUBLISH_ENABLED:'true'},fetcher,auth:{current:async()=>({access_token:'staging-only',scope:'tweet.read tweet.write users.read media.write offline.access'}),verifyAccount:async()=>({account_id:'42'})}});
- const threadStore=new ThreadStore(pool);await threadStore.initialize();
+ const threadStore=new ThreadStore(pool);await threadStore.initialize();await threadStore.initializeOriginals();
  const makeWorker=()=>createV3ThreadPublication({campaignStore:s.store,threadStore:new ThreadStore(pool),review:s.audience,x,enabled:true,maxPostsPerRun:2});
  let result=await makeWorker()(s.id);assert.equal(result.status,'HALTED_AMBIGUOUS');assert.equal(posts.length,2);
  // A newly constructed worker independently reconciles the lost receipt.
  for(let i=0;i<r.segments.length&&result.status!=='COMPLETE';i++)result=await makeWorker()(s.id);
  assert.equal(result.status,'COMPLETE');assert.equal(posts.length,r.segments.length);
- for(const [i,post] of posts.entries()){assert.equal(post.text,r.segments[i].text);assert.equal(post.referenced_tweets[0]?.id??null,i?posts[i-1].id:null);}
+ for(const [i,post] of posts.entries()){assert.equal(post.text,r.segments[i].text);assert.equal(post.referenced_tweets[0]?.id??null,null);}
  const before=posts.length;assert.equal((await makeWorker()(s.id)).status,'COMPLETE');assert.equal(posts.length,before);
  await assert.rejects(()=>s.workflow.revise(s.id,s.session.sessionId,s.session.secret,'x',r.manifest_sha256,{sequence:2,text:'No edits after start.'}),/REVISION_AFTER_DISTRIBUTION/);
  assert.deepEqual((await s.adapter.read(s.id)).value.deliveries,{});
@@ -140,8 +144,8 @@ test('PostgreSQL staging: V3 approval, JSONB hashes, exact upload, ambiguous rec
 test('concise V3 review retains one segment per discovery, exact graphic and authenticated approval',async()=>{
  const s=await setup(null,'CONCISE'),r=(await s.view()).xThread;
  assert.equal(r.ready,true,JSON.stringify(r.problems));
- assert.equal(r.segments.length,3);
- assert.deepEqual(r.segments.map(x=>x.record_id),[null,...r.discovery_ids]);
+ assert.equal(r.segments.length,2);
+ assert.deepEqual(r.segments.map(x=>x.record_id),r.discovery_ids);
  assert(r.segments[0].media?.sha256);
  assert(r.segments.every(x=>x.discovery_parts===1));
  await assert.rejects(()=>s.decide(r),/PRESENTATION_REQUIRED/);
@@ -155,7 +159,7 @@ test('concise V3 review retains one segment per discovery, exact graphic and aut
  await s.workflow.revise(s.id,s.session.sessionId,s.session.secret,'x',r.manifest_sha256,{sequence:2,text:'Corrected discovery. https://example.org/evidence'});
  assert.equal(await s.audience.verify({campaign_id:s.id}),false);
  const revised=(await s.view()).xThread;
- assert.equal(revised.segments.length,3);
+ assert.equal(revised.segments.length,2);
  await assert.rejects(()=>s.decide(revised),/PRESENTATION_REQUIRED/);
  await s.present(revised);await s.decide(revised);
  assert.equal(await s.audience.verify({campaign_id:s.id}),true);

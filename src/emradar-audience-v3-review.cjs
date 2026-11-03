@@ -28,16 +28,18 @@ function identity(state){
  if(!scan||!/^\d{4}-\d{2}-\d{2}$/.test(scan.snapshot_date||'')||!/^[a-f0-9]{64}$/.test(scan.artifact_sha256||'')||scan.source_key!==scan.snapshot_date+':'+scan.artifact_sha256)fail('PUBLISHED_SCAN_IDENTITY_REQUIRED');
  return {snapshot_date:scan.snapshot_date,source_key:scan.source_key,artifact_sha256:scan.artifact_sha256};
 }
-function manifest(review){return hash({campaign_id:review.campaign_id,review_id:review.review_id,scan:review.scan,source_sha256:review.source_sha256,all_discovery_ids:review.all_discovery_ids,excluded_discovery_ids:review.excluded_discovery_ids,discovery_ids:review.discovery_ids,source_links_by_record:review.source_links_by_record,graphic_required:review.graphic_required,segments:review.segments});}
+function manifest(review){return hash({campaign_id:review.campaign_id,review_id:review.review_id,scan:review.scan,source_sha256:review.source_sha256,all_discovery_ids:review.all_discovery_ids,excluded_discovery_ids:review.excluded_discovery_ids,discovery_ids:review.discovery_ids,source_links_by_record:review.source_links_by_record,graphic_required:review.graphic_required,mode:review.mode,exclusions:review.exclusions,segments:review.segments});}
 function validate(review,state){
  const problems=[];
  if(!review||!same(review.scan,identity(state))||review.campaign_id!==state.id)fail('STALE_SCAN');
  if(!Array.isArray(review.segments)||!review.segments.length||new Set(review.discovery_ids).size!==review.discovery_ids.length)fail('COVERAGE_INCOMPLETE');
  if(!Array.isArray(review.all_discovery_ids)||!Array.isArray(review.excluded_discovery_ids)||new Set(review.all_discovery_ids).size!==review.all_discovery_ids.length||new Set(review.excluded_discovery_ids).size!==review.excluded_discovery_ids.length||review.excluded_discovery_ids.some(id=>!review.all_discovery_ids.includes(id))||!same(review.all_discovery_ids.filter(id=>!review.excluded_discovery_ids.includes(id)),review.discovery_ids))fail('EXCLUSIONS_MISMATCH');
  if(review.manifest_sha256!==manifest(review))fail('MANIFEST_MISMATCH');
+ const standalone=review.mode==='STANDALONE';
+ if(standalone&&(review.segments.length>8||review.segments.some(s=>!s.record_id)||new Set(review.segments.map(s=>s.text)).size!==review.segments.length))fail('ORIGINAL_POSTS_INVALID');
  const groups=[];
  for(const [i,s] of review.segments.entries()){
-  if(s.sequence!==i+1||s.parent_sequence!==(i?i:null)||s.kind!==(s.record_id?'DISCOVERY':'SUMMARY')||s.asset_sha256!==assetHash(s)||!validText(s.text))fail('SEGMENT_MISMATCH');
+  if(s.sequence!==i+1||s.parent_sequence!==(standalone?null:(i?i:null))||s.kind!==(s.record_id?'DISCOVERY':'SUMMARY')||s.asset_sha256!==assetHash(s)||!validText(s.text))fail('SEGMENT_MISMATCH');
   if(s.discovery_part===1)groups.push({id:s.record_id,count:s.discovery_parts,seen:0});
   const group=groups.at(-1);
   if(!group||group.id!==s.record_id||s.discovery_part!==++group.seen||s.discovery_parts!==group.count)fail('DISCOVERY_ORDER_MISMATCH');
@@ -48,14 +50,14 @@ function validate(review,state){
    try{const {bytes,mime}=graphic({kind:'X',destination_id:'x',body:s.text,visual_base64:s.media.base64,visual_sha256:s.media.sha256,visual_mime:s.media.mime});if(mime!==s.media.mime||bytesHash(bytes)!==s.media.sha256)fail('GRAPHIC_MISMATCH');}catch{problems.push('GRAPHIC_BYTES_INVALID:'+s.sequence)}
   }
  }
- if(groups.some(g=>g.seen!==g.count)||!same(groups.map(g=>g.id),[null,...review.discovery_ids]))fail('COVERAGE_INCOMPLETE');
+ if(groups.some(g=>g.seen!==g.count)||!same(groups.map(g=>g.id),(standalone?review.discovery_ids:[null,...review.discovery_ids])))fail('COVERAGE_INCOMPLETE');
  for(const id of review.discovery_ids)if(!review.segments.some(s=>s.record_id===id&&s.source_links.length))problems.push('SOURCE_LINKS_MISSING:'+id);
  return problems;
 }
 // Manifest includes segment hashes, but excludes its own digest.
 function seal(review){review.segments=review.segments.map(s=>({...s,asset_sha256:assetHash(s)}));review.manifest_sha256=manifest(review);return review;}
-function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now(),threadMode='FULL_EVIDENCE'}={}){
- if(!['FULL_EVIDENCE','CONCISE'].includes(threadMode))fail('THREAD_MODE_INVALID');
+function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now(),threadMode='STANDALONE',writePosts}={}){
+ if(!['FULL_EVIDENCE','CONCISE','STANDALONE'].includes(threadMode))fail('THREAD_MODE_INVALID');
  if(!store?.mutate||!store.adapter?.read||typeof loadPublishedBytes!=='function')fail('V3_REVIEW_DEPENDENCIES_REQUIRED');
  let publicationRowsReader=null;
  async function prepare(campaignId){
@@ -71,15 +73,21 @@ function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now(),t
   // The scanner UI does not expose every checkpoint in its history index.
   // Link the exact published artifact rather than an unsupported date route.
   const scanUrl='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+scan.snapshot_date+'.json';
-  const thread=(threadMode==='CONCISE'?draftConciseThread:draftFullScanThread)({document,scanUrl});
+  let thread=(threadMode==='FULL_EVIDENCE'?draftFullScanThread:draftConciseThread)({document,scanUrl});
+  if(threadMode==='STANDALONE'&&writePosts&&thread.segments.length){
+   const drafts=await writePosts({instructions:thread.writing_instructions,discoveries:thread.segments.map(s=>({record:document.records.find(r=>r.id===s.record_id),financial_finding:s.provenance.financial_finding,material_caveat:s.provenance.material_caveat}))});
+   if(!drafts||thread.record_ids.some(id=>typeof drafts[id]?.text!=='string'))fail('WRITER_COVERAGE_REQUIRED');
+   thread=draftConciseThread({document,scanUrl,drafts});
+  }
+  if(!thread.segments.length)fail('NO_SUPPORTED_ORIGINAL_POSTS');
   const source_links_by_record=Object.fromEntries(document.records.map(record=>[record.id,[...(record.evidence??[]).map(e=>e.url).filter(u=>typeof u==='string'),scanUrl]]));
   source_links_by_record.SUMMARY=[...new Set([...Object.values(source_links_by_record).flat(),'https://emradar.net/'])];
   const main=state.assets?.x?.asset;
-  const segments=thread.segments.map((s,i)=>({...s,record_id:s.record_id??null,parent_sequence:i?i:null,source_links:i?(document.records[i-1].evidence??[]).map(e=>e.url).filter(u=>typeof u==='string'):[],media:null}));
+  const segments=thread.segments.map((s,i)=>({...s,record_id:s.record_id??null,parent_sequence:i?i:null,source_links:s.source_links??(i?(document.records[i-1].evidence??[]).map(e=>e.url).filter(u=>typeof u==='string'):[]),media:null}));
   // Preserve the saved evidence-bound graphic only with its exact saved text.
   if(threadMode==='FULL_EVIDENCE'&&main?.body){segments[0].text=main.body+'\n\nAcross the published scan:\n'+document.records.map(r=>r.theme||r.title||r.id).join(' · ')+'\n\n'+segments[0].text+'\nEMRADAR: https://emradar.net/';segments[0].source_links=[...new Set(document.records.flatMap(r=>(r.evidence??[]).map(e=>e.url)).filter(u=>typeof u==='string'&&main.body.includes(u)))];}
   if(main?.visual_base64||main?.visual_url?.startsWith('data:image')){try{const {bytes,mime}=graphic(main);segments[0].media={base64:bytes.toString('base64'),mime,sha256:main.visual_sha256,provenance:{campaign_id:campaignId,v3_asset_sha256:hash(main)}};}catch{}}
-  const review=seal({campaign_id:campaignId,review_id:randomUUID(),scan,source_sha256:scan.artifact_sha256,all_discovery_ids:thread.record_ids,excluded_discovery_ids:[],discovery_ids:thread.record_ids,source_links_by_record,graphic_required:true,segments:threadMode==='CONCISE'?segments.map((s,i)=>({...s,sequence:i+1,parent_sequence:i||null,discovery_part:1,discovery_parts:1,source_links:extractUrls(s.text)})):expandSegments(segments)});
+  const review=seal({campaign_id:campaignId,review_id:randomUUID(),scan,source_sha256:scan.artifact_sha256,mode:threadMode==='FULL_EVIDENCE'?'LEGACY_THREAD':'STANDALONE',all_discovery_ids:thread.all_record_ids??thread.record_ids,excluded_discovery_ids:(thread.all_record_ids??thread.record_ids).filter(id=>!thread.record_ids.includes(id)),exclusions:thread.excluded??[],discovery_ids:thread.record_ids,source_links_by_record,graphic_required:true,segments:threadMode!=='FULL_EVIDENCE'?segments.map((s,i)=>({...s,sequence:i+1,parent_sequence:null,discovery_part:1,discovery_parts:1})):expandSegments(segments)});
   await store.mutate(campaignId,current=>{
    if(!same(identity(current),scan)||current.deliveries?.x||current.decisions?.x)fail('PREPARATION_STALE');
    if(!current.audience_x_review){current.audience_x_review=review;current.events??=[];current.events.push({type:'X_THREAD_PREPARED',review_id:review.review_id,manifest_sha256:review.manifest_sha256});}
@@ -140,9 +148,10 @@ function createV3AudienceReview({store,loadPublishedBytes,clock=()=>Date.now(),t
    state.audience_x_history??=[];state.audience_x_history.push(structuredClone(r));
    if(exclude){
     if(!r.discovery_ids.includes(changes.exclude_record_id))fail('EXCLUSION_INVALID');
-    r.excluded_discovery_ids.push(changes.exclude_record_id);r.discovery_ids=r.discovery_ids.filter(id=>id!==changes.exclude_record_id);r.segments=r.segments.filter(s=>s.record_id!==changes.exclude_record_id).map((s,i)=>({...s,sequence:i+1,parent_sequence:i||null}));
+    r.excluded_discovery_ids.push(changes.exclude_record_id);r.exclusions??=[];r.exclusions.push({record_id:changes.exclude_record_id,reason:'OWNER_EXCLUDED'});r.discovery_ids=r.discovery_ids.filter(id=>id!==changes.exclude_record_id);r.segments=r.segments.filter(s=>s.record_id!==changes.exclude_record_id).map((s,i)=>({...s,sequence:i+1,parent_sequence:r.mode==='STANDALONE'?null:(i||null)}));
    }else if(replaceGraphic){const media=savedGraphics(state).find(m=>m.sha256===changes.graphic_sha256);if(!media)fail('TRUSTED_GRAPHIC_REQUIRED');r.segments[0].media=media;}
    else{const segment=r.segments[changes.sequence-1];if(!segment)fail('REVISION_INVALID');segment.text=changes.text;segment.source_links=extractUrls(changes.text);}
+   r.excluded_discovery_ids=r.all_discovery_ids.filter(id=>!r.discovery_ids.includes(id));
    r.review_id=randomUUID();seal(r);delete state.audience_x_approval;delete state.audience_x_checks;state.audience_x_presentations={};
    state.events.push({type:'X_THREAD_REVISED',review_id:r.review_id,manifest_sha256:r.manifest_sha256});return state;
   });

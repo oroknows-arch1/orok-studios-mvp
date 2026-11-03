@@ -12,32 +12,20 @@ class Element {
  setAttribute(key,value){this.attributes[key]=value;}
  addEventListener(name,handler){this.listeners[name]=handler;}
  focus(){}
+ showModal(){}
+ close(){this.listeners.close?.();}
  reportValidity(){return true;}
  remove(){}
 }
 const flatten=element=>[element,...element.children.flatMap(flatten)];
-test('complete thread shows every ordered post and graphic and waits for image load before approval',async()=>{
- const xThread={ready:true,manifest_sha256:'manifest',scan:{source_key:'scan:hash'},segments:[{sequence:1,kind:'SUMMARY',parent_sequence:null,text:'Complete main text',source_links:[],asset_sha256:'h1',media:{mime:'image/png',base64:'aW1hZ2U='}},{sequence:2,kind:'DISCOVERY',record_id:'copper',parent_sequence:1,text:'Complete causal chain and uncertainty',source_links:['https://example.org/source'],asset_sha256:'h2'}]};
- const result=await render({xThread,entries:[{asset:{kind:'X',destination_id:'x',body:'Old single post'}}]});
- const nodes=flatten(result.entries),button=nodes.find(n=>n.textContent==='Approve complete X thread');
- assert(nodes.some(n=>n.textContent==='Complete main text'));assert(nodes.some(n=>n.textContent==='Complete causal chain and uncertainty'));
- assert(nodes.some(n=>n.textContent==='Reply to post 1'));assert(nodes.some(n=>n.tag==='a'&&n.href==='https://example.org/source'));
- assert(!nodes.some(n=>n.textContent==='Old single post'));assert.equal(button.disabled,true);assert(!result.calls.includes('/api/review/thread-present'));
- nodes.find(n=>n.tag==='img').listeners.load();await new Promise(resolve=>setImmediate(resolve));
- assert.equal(button.disabled,false);assert.deepEqual(result.payloads.find(p=>p.segment_hashes)?.segment_hashes,['h1','h2']);
-});
-test('failed thread graphic keeps approval disabled without affecting editorial cards',async()=>{
- const result=await render({xThread:{ready:true,segments:[{sequence:1,kind:'SUMMARY',text:'Main',media:{mime:'image/png',base64:'bad'},asset_sha256:'h'}]},entries:[{asset:{kind:'EMAIL',destination_id:'editor',subject:'Editorial',body:'Saved email'}}]});
- const nodes=flatten(result.entries);nodes.find(n=>n.tag==='img').listeners.error();await new Promise(resolve=>setImmediate(resolve));
- assert.equal(nodes.find(n=>n.textContent==='Approve complete X thread').disabled,true);assert(nodes.some(n=>n.textContent==='Saved email'));assert(!result.calls.includes('/api/review/thread-present'));
-});
 async function render(view,onRevise){
  const elements=Object.fromEntries(['status','entries','discover','connect-x','check-x'].map(id=>[id,new Element(id)]));
  const calls=[],payloads=[];
- const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
+ const body=new Element('body');
+ const context={document:{body,cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
  const script=reviewPage.match(/<script>([\s\S]*)<\/script>/)[1];
  await new vm.Script(script).runInNewContext(context);
- return {...elements,calls,payloads};
+ return {...elements,body,calls,payloads};
 }
 test('actual review script renders full X text and saved image while publishing is disabled',async()=>{
  const body='Complete approved X text\nwith every saved line.';
@@ -63,7 +51,7 @@ test('owner review captures rejection feedback and displays the durable regenera
 test('all saved email content is visible, including unresolved drafts and historical alternatives',async()=>{
  const asset={kind:'EMAIL',destination_id:'journal',subject:'Specific article idea',body:'Complete body\nwith signature.',html:'<p>Complete HTML email</p>'};
  const result=await render({entries:[{asset,recipient_ready:false,destination:{name:'Publication'},decision:{decision:'REJECT'}}],history:[{asset:{...asset,body:'Previous saved body'},historical:true,label:'Previous draft'}]});
- const nodes=flatten(result.entries);assert.equal(result.entries.children.length,2);
+ const nodes=flatten(result.entries);assert.equal(result.entries.children.length,3);
  for(const value of ['Publication',asset.subject,asset.body,'Previous saved body','Recipient unavailable','Editorial decision: REJECT','Delivery: Not released'])assert(nodes.some(n=>n.textContent===value));
  assert.equal(nodes.find(n=>n.tag==='iframe').srcdoc,asset.html);assert.equal(nodes.find(n=>n.tag==='iframe').attributes.sandbox,'');
  assert.equal(nodes.find(n=>n.textContent==='Send approved email').disabled,true);
@@ -141,10 +129,34 @@ test('Edit draft saves and replaces the active rendered draft before reload',asy
   view.entries[0]={asset:{...view.entries[0].asset,...payload.changes},fingerprint:'edited-hash',revision:{id:'edit-event',fingerprint:'edited-hash'}};
  });
  await flatten(result.entries).find(n=>n.textContent==='Edit draft').listeners.click();
+ flatten(result.body).find(n=>n.tag==='textarea').value='Revised analytical body';
+ await flatten(result.body).find(n=>n.textContent==='Save Changes').listeners.click();
  assert.equal(result.payloads.find(p=>p.changes).changes.body,view.entries[0].asset.body);
  for(const page of [result,await render(structuredClone(view))]){
   assert(flatten(page.entries.children[0]).some(n=>n.textContent===view.entries[0].asset.body));
   assert(flatten(page.entries.children[0]).some(n=>n.textContent==='Edited · Saved · Revision edit-event · edited-hash'));
   assert(flatten(page.entries.children[1]).some(n=>n.textContent==='Original body'));
  }
+});
+
+test('final edited proposal retains actions and historical tail links back to its current version',async()=>{
+ const asset={kind:'EMAIL',destination_id:'final',to:'editor@example.org',subject:'Proposal',body:'Complete proposal with footer and disclaimer',html:'<p>Complete branded proposal</p>'};
+ const result=await render({entries:[{asset,fingerprint:'current-sha',revision:{id:'revision',fingerprint:'current-sha'}}],history:[{asset:{...asset,body:'Old proposal'},historical:true,label:'Previous draft'}]});
+ const active=result.entries.children[0],nodes=flatten(active);
+ assert.equal(active.id,'review-proposal-final');
+ for(const label of ['Edit draft','Edit subject','Edit recipient','Approve','Reject','Regenerate','Exclude'])assert(nodes.some(n=>n.tag==='button'&&n.textContent===label&&!n.disabled));
+ assert.equal(nodes.find(n=>n.textContent==='Send approved email').disabled,true);
+ const preview=nodes.find(n=>n.tag==='details');assert(!preview.open);assert(flatten(preview).some(n=>n.tag==='iframe'));
+ const history=result.entries.children[1];assert.equal(history.tag,'details');assert(!history.open);assert(!flatten(history).some(n=>n.tag==='button'));
+ assert(flatten(history).some(n=>n.textContent.includes('Read-only')));
+ const back=result.entries.children[2];assert.equal(back.tag,'a');assert.equal(back.href,'#review-proposal-final');
+ await nodes.find(n=>n.textContent==='Approve').listeners.click();assert.equal(result.payloads.find(p=>p.decision).fingerprint,'current-sha');
+});
+test('historical group member returns to shared controls without offering individual approval',async()=>{
+ const assets=['one','two'].map(destination_id=>({kind:'EMAIL',destination_id,to:destination_id+'@example.org',subject:'Shared',body:'Shared copy'}));
+ const result=await render({entries:assets.map(asset=>({asset,groupId:'shared',fingerprint:asset.destination_id})),groups:[{id:'shared',destination_ids:['one','two'],subject:'Shared',body:'Shared copy',content_hash:'group-sha',version:2}],history:[{asset:assets[1],historical:true,label:'Previous draft'}]});
+ const group=result.entries.children[0],nodes=flatten(group);assert.equal(group.id,'review-group-shared');
+ for(const label of ['Edit shared subject','Edit shared body','Approve Group','Reject Group'])assert(nodes.some(n=>n.tag==='button'&&n.textContent===label&&!n.disabled));
+ assert(!nodes.some(n=>n.textContent==='Approve'));assert.equal(result.entries.children[2].href,'#review-group-shared');
+ await nodes.find(n=>n.textContent==='Approve Group').listeners.click();const payload=result.payloads.find(p=>p.decision);assert.equal(payload.contentHash,'group-sha');assert.equal(payload.version,2);
 });
