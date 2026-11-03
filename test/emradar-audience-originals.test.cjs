@@ -102,6 +102,7 @@ test('independent composition authenticates review, writes audience-only state a
   let view=await engine.view(id,'session','owner-secret'),r=view.xThread;assert.equal(r.segments.length,3);
   await assert.rejects(()=>engine.run(id),/APPROVAL_NOT_VERIFIED/);assert.equal(calls,0);
   await engine.present(id,'session','owner-secret',{manifest_sha256:r.manifest_sha256,segment_hashes:r.segments.map(s=>s.asset_sha256)});
+  for(const segment of r.segments)await engine.postDecision(id,'session','owner-secret',segment.record_id,'APPROVE',r.manifest_sha256,segment.asset_sha256);
   await engine.decide(id,'session','owner-secret','APPROVE',r.manifest_sha256);
   assert.equal((await engine.run(id)).status,'HALTED_AMBIGUOUS');assert.equal(calls,2);
   assert.equal((await engine.run(id)).status,'HALTED_AMBIGUOUS');assert.equal(calls,2);
