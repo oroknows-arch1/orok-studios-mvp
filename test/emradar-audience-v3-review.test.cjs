@@ -3,12 +3,12 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
 const {createV3AudienceReview}=require('../src/emradar-audience-v3-review.cjs');
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-async function setup(pool=null,threadMode='FULL_EVIDENCE'){
+async function setup(pool=null,threadMode='FULL_EVIDENCE',count=2){
  const {CampaignStore}=await import('../vendor/emradar-v3/src/state.js');
  const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
  const record={id:'indonesia-equity-market-accessibility-crisis',theme:'Market governance',status:'CONFIRMED',why_surfaced:'A consultation is open.',causal_chain:{world_change:['Index review'],pressure:['Ownership concerns'],bottleneck_or_scarcity:['Verified free float'],formation:['Market governance as access condition'],industries:['Capital markets'],connected_companies_and_tickers:['BREN (IDX)'],consequences:['Potential outflows']},contradictions:['Consultation is not a final downgrade.'],chain_evolution:{unresolved_evidence:['Final decision'],break_conditions:['Reforms accepted']},evidence:[{fact:'Consultation launched',date:'2026-10-15',url:'https://example.org/evidence'}]};
  const source=pool&&process.env.EMRADAR_STAGING_PUBLISHED_FILE?require('node:fs').readFileSync(process.env.EMRADAR_STAGING_PUBLISHED_FILE):null;
- const document=source?JSON.parse(source):{publication_state:'PUBLISHED',snapshot_date:'2026-10-17',records:[record,{...record,id:'copper',status:'INVESTIGATE',causal_chain:{...record.causal_chain,consequences:['Copper financing costs may rise.']}}]};
+ const document=source?JSON.parse(source):{publication_state:'PUBLISHED',snapshot_date:'2026-10-17',records:[record,...Array.from({length:count-1},(_,i)=>({...record,id:i?'supplier-'+i:'copper',status:'INVESTIGATE',causal_chain:{...record.causal_chain,consequences:[`Supplier ${i} financing costs may rise.`]}}))]};
  const bytes=source??Buffer.from(JSON.stringify(document)),digest=hash(bytes),id=pool?'staging-'+require('node:crypto').randomUUID():'staging-campaign';
  const sharp=require('sharp'),png=await sharp({create:{width:40,height:40,channels:3,background:'#164258'}}).png().toBuffer();
  const asset={kind:'X',destination_id:'x',campaign_id:id,body:'Consultation is not a final downgrade.',visual_base64:png.toString('base64'),visual_sha256:hash(png),visual_mime:'image/png'};
@@ -98,8 +98,14 @@ test('PostgreSQL staging: V3 approval, JSONB hashes, exact upload, ambiguous rec
  const {Pool}=require('pg'),{ThreadStore}=require('../src/emradar-x-thread-store.cjs'),{createV3ThreadPublication}=require('../src/emradar-audience-v3-publication.cjs'),{createV3X}=require('../src/emradar-v3-x.cjs');
  const pool=await require('./audience-postgres-fixture.cjs').isolatedAudiencePool(process.env.V3_TEST_DATABASE_URL);let cleanupId;
  t.after(async()=>{if(cleanupId){await pool.query('DELETE FROM emradar_x_thread_posts WHERE campaign_id=$1',[cleanupId]).catch(()=>{});await pool.query('DELETE FROM v3_campaign_state WHERE campaign_id IN ($1,$2)',[cleanupId,'review:'+cleanupId]).catch(()=>{});}await pool.end();});
- const s=await setup(pool,'STANDALONE'),r=(await s.view()).xThread;
+ const s=await setup(pool,'STANDALONE',7);let r=(await s.view()).xThread;
  cleanupId=s.id;
+ assert.equal(r.segments.length,7);assert.equal(new Set(r.segments.map(item=>item.record_id)).size,7);
+ const original=r;await s.present(original);await s.decide(original);
+ await s.workflow.revise(s.id,s.session.sessionId,s.session.secret,'x',original.manifest_sha256,{sequence:1,text:original.segments[0].text+' Watch the cost.'});
+ assert.equal(await s.audience.verify({campaign_id:s.id}),false);
+ r=(await s.view()).xThread;assert.notEqual(r.manifest_sha256,original.manifest_sha256);
+ await assert.rejects(()=>s.decide(r),/PRESENTATION_REQUIRED/);
  console.info('STAGING_X_THREAD_INPUT',JSON.stringify({scan_sha256:hash(s.bytes),discoveries:r.discovery_ids.length,posts:r.segments.length,graphic_sha256:r.segments[0].media?.sha256,provider:'SIMULATED_X_NO_EXTERNAL_DISTRIBUTION'}));
  assert.equal(r.ready,true);await s.present(r);await s.decide(r);assert.equal(await s.audience.verify({campaign_id:s.id}),true);
  const posts=[],basePostId=BigInt(Date.now())*1000000n+BigInt(require('node:crypto').randomInt(1000000));let lost=false;
