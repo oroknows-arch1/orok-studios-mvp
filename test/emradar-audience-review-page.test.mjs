@@ -22,19 +22,19 @@ test('complete thread shows every ordered post and graphic and waits for image l
  const nodes=flatten(result.entries),button=nodes.find(n=>n.textContent==='Approve selected X posts');
  assert(nodes.some(n=>n.textContent==='Complete main text'));assert(nodes.some(n=>n.textContent==='Complete causal chain and uncertainty'));
  assert(nodes.some(n=>n.textContent==='Reply to post 1'));assert(nodes.some(n=>n.tag==='a'&&n.href==='https://example.org/source'));
- assert(!nodes.some(n=>n.textContent==='Old single post'));assert.equal(button.disabled,true);assert(!result.calls.includes('/api/review/thread-present'));
+ assert(!nodes.some(n=>n.textContent==='Old single post'));assert.equal(button.disabled,true);assert(!result.calls.includes('/api/review/audience/thread-present'));
  nodes.find(n=>n.tag==='img').listeners.load();await new Promise(resolve=>setImmediate(resolve));
  assert.equal(button.disabled,false);assert.deepEqual(result.payloads.find(p=>p.segment_hashes)?.segment_hashes,['h1','h2']);
 });
 test('failed thread graphic keeps approval disabled without affecting editorial cards',async()=>{
  const result=await render({xThread:{ready:true,segments:[{sequence:1,kind:'SUMMARY',text:'Main',media:{mime:'image/png',base64:'bad'},asset_sha256:'h'}]},entries:[{asset:{kind:'EMAIL',destination_id:'editor',subject:'Editorial',body:'Saved email'}}]});
  const nodes=flatten(result.entries);nodes.find(n=>n.tag==='img').listeners.error();await new Promise(resolve=>setImmediate(resolve));
- assert.equal(nodes.find(n=>n.textContent==='Approve selected X posts').disabled,true);assert(nodes.some(n=>n.textContent==='Saved email'));assert(!result.calls.includes('/api/review/thread-present'));
+ assert.equal(nodes.find(n=>n.textContent==='Approve selected X posts').disabled,true);assert(nodes.some(n=>n.textContent==='Saved email'));assert(!result.calls.includes('/api/review/audience/thread-present'));
 });
 async function render(view,onRevise){
  const elements=Object.fromEntries(['status','entries','discover','connect-x','check-x'].map(id=>[id,new Element(id)]));
  const calls=[],payloads=[];
- const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
+ const context={document:{cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/audience/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/audience/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
  const script=reviewPage.match(/<script>([\s\S]*)<\/script>/)[1];
  await new vm.Script(script).runInNewContext(context);
  return {...elements,calls,payloads};
@@ -49,7 +49,7 @@ test('actual review script renders full X text and saved image while publishing 
  assert(nodes.some(n=>n.textContent==='X publishing is disabled.'));
  assert.equal(nodes.find(n=>n.textContent==='Publish approved X post').disabled,true);
  for(const label of ['Edit draft','Approve','Reject'])assert(!nodes.find(n=>n.textContent===label).disabled);
- assert.deepEqual(result.calls,['/api/review/view']);
+ assert.deepEqual(result.calls,['/api/review/audience/view']);
 });
 test('owner review captures rejection feedback and displays the durable regeneration state',async()=>{
  const view={entries:[{asset:{kind:'EMAIL',destination_id:'journal',subject:'A story',body:'Draft text',review_status:'READY'},fingerprint:'asset-hash',review_action:{action:'REGENERATE',status:'NEEDS_FEEDBACK'},rejection_feedback:[]}],publishing:{email:{enabled:true}}};
@@ -58,7 +58,7 @@ test('owner review captures rejection feedback and displays the durable regenera
  await nodes.find(node=>node.textContent==='Reject').listeners.click();
  const decision=result.payloads.find(payload=>payload.decision);
  assert.equal(decision.decision,'REJECT');assert.equal(decision.feedback,'Make the analytical contribution clearer without changing the verified finding.');
- assert.equal(result.calls.filter(path=>path==='/api/review/decision').length,1);
+ assert.equal(result.calls.filter(path=>path==='/api/review/audience/decision').length,1);
 });
 test('all saved email content is visible, including unresolved drafts and historical alternatives',async()=>{
  const asset={kind:'EMAIL',destination_id:'journal',subject:'Specific article idea',body:'Complete body\nwith signature.',html:'<p>Complete HTML email</p>'};
@@ -82,7 +82,7 @@ test('recipient editor exposes Save and Cancel and submits only the edited addre
  assert(result.status.textContent.includes('Previous approval cleared'));
  const cancelled=await render(view);await flatten(cancelled.entries).find(node=>node.textContent==='Edit recipient').listeners.click();
  const cancelForm=flatten(cancelled.entries).find(node=>node.tag==='form');await flatten(cancelForm).find(node=>node.textContent==='Cancel').listeners.click();
- assert.deepEqual(cancelled.calls,['/api/review/view']);
+ assert.deepEqual(cancelled.calls,['/api/review/audience/view']);
 });
 test('owner override warning is visible but does not block approval of the exact recipient',async()=>{
  const asset={kind:'EMAIL',destination_id:'epoch',to:'press@epoch.ai',contact_status:'OWNER_OVERRIDE',recipient_owner_override:true,recipient_verification:{status:'OWNER_OVERRIDE',warning_code:'CONTACT_HTTP_403'},subject:'Saved subject',body:'Saved body'};

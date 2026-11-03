@@ -20,7 +20,7 @@ let campaign,invitationToken;
 const status=document.getElementById('status'),main=document.getElementById('entries');
 const csrf=()=>decodeURIComponent((document.cookie.split('; ').find(x=>x.startsWith('emradar_v3_csrf='))||'').split('=').slice(1).join('='));
 const api=async(path,payload)=>{
- const response=await fetch('/api/review/'+path,{method:'POST',headers:{'content-type':'application/json','x-emradar-csrf':csrf()},body:JSON.stringify(payload),cache:'no-store',credentials:'same-origin'});
+ const response=await fetch('/api/review/audience/'+path,{method:'POST',headers:{'content-type':'application/json','x-emradar-csrf':csrf()},body:JSON.stringify(payload),cache:'no-store',credentials:'same-origin'});
  const result=await response.json();
  if(!response.ok)throw Error(result.error||'REQUEST_FAILED');
  return result;
@@ -33,11 +33,11 @@ async function refresh(){
  main.replaceChildren();
  if(view.xThread){
   const thread=view.xThread,section=document.createElement('section');
-  section.append(text('h2','Selected X posts'),text('p','All posts appear below in publication order. Each reply attaches to the preceding post.'),text('small',thread.scan?.source_key||''));
+  section.append(text('h2','Selected X posts'),text('p','Review each standalone post before approving the selected set.'),text('small',thread.scan?.source_key||''));
   if(thread.excluded_discovery_ids?.length)section.append(text('p','Explicitly excluded discoveries: '+thread.excluded_discovery_ids.join(', ')));
   if(thread.publication?.thread_url){const link=text('a','View confirmed X thread');link.href=thread.publication.thread_url;link.target='_blank';link.rel='noopener noreferrer';section.append(link);}
   if(thread.observation){section.append(text('h3','Observed X engagement'),text('small','Measured at '+thread.observation.observed_at));for(const [key,label] of [['like_count','Likes'],['reply_count','Replies'],['retweet_count','Reposts'],['quote_count','Quotes'],['bookmark_count','Bookmarks'],['impression_count','Impressions']]){const observed=(thread.observation.posts??[]).filter(p=>Number.isInteger(p.metrics?.[key]));if(observed.length)section.append(text('p',label+': '+observed.reduce((total,p)=>total+p.metrics[key],0)+' across '+observed.length+' measured posts'));}section.append(text('p','Referral measurement is not connected.'));}
-  if(thread.research){section.append(text('h3','Audience research · '+thread.research.status));for(const [id,result] of Object.entries(thread.research.results??{})){section.append(text('p',id+' · '+result.status));for(const opportunity of result.report?.opportunities??[]){const card=document.createElement('article'),link=text('a',opportunity.type+' · '+opportunity.url);link.href=opportunity.url;link.target='_blank';link.rel='noopener noreferrer';card.append(link,text('p',opportunity.rationale));if(opportunity.draft_text)card.append(text('pre',opportunity.draft_text));card.append(text('small','Draft only. Public actions are disabled.'));section.append(card);}}}
+  if(thread.research){section.append(text('h3','Audience research · '+thread.research.status));for(const [id,result] of Object.entries(thread.research.results??{})){section.append(text('p',id+' · '+result.status));for(const opportunity of result.report?.opportunities??[]){const card=document.createElement('article'),link=text('a',opportunity.type+' · '+opportunity.url);link.href=opportunity.url;link.target='_blank';link.rel='noopener noreferrer';card.append(link,text('p',opportunity.rationale));if(opportunity.draft_text){card.append(text('pre',opportunity.draft_text),text('p','Reply decision: '+(opportunity.owner_decision?.decision||'Awaiting review')));for(const action of ['EDIT','APPROVE','REJECT','EXCLUDE']){const button=text('button',action==='EDIT'?'Edit reply':action==='APPROVE'?'Approve reply':action==='REJECT'?'Reject reply':'Exclude reply');button.addEventListener('click',async()=>{const revised=action==='EDIT'?prompt('Edit reply',opportunity.draft_text):undefined;if(action==='EDIT'&&(revised===null||revised===opportunity.draft_text))return;button.disabled=true;try{await api('reply-action',{campaignId:campaign,discovery_id:id,action_id:opportunity.action_id,action,asset_sha256:opportunity.review_sha256,text:revised});await refresh();}catch{status.textContent='Reply change was not saved.';button.disabled=false;}});card.append(button);}}card.append(text('small','Draft only. Public actions are disabled.'));section.append(card);}}}
   const images=[];
   for(const segment of thread.segments){
    const card=document.createElement('article');
@@ -51,6 +51,8 @@ async function refresh(){
    }
    if(segment.sequence===1&&!thread.publication_started&&thread.graphic_choices?.length&&(thread.graphic_choices.length>1||!segment.media)){const choices=document.createElement('details');choices.append(text('summary','Choose a verified saved graphic'));for(const media of thread.graphic_choices){const image=document.createElement('img');image.className='review-graphic';image.alt='Saved V3 graphic option';image.src='data:'+media.mime+';base64,'+media.base64;const choose=text('button','Use saved graphic '+media.sha256.slice(0,12));choose.addEventListener('click',async()=>{choose.disabled=true;try{await api('revise',{campaignId:campaign,destinationId:'x',fingerprint:thread.manifest_sha256,changes:{sequence:1,graphic_sha256:media.sha256}});await refresh();}catch{status.textContent='Graphic change was not saved.';}});choices.append(image,choose);}card.append(choices);}
    card.append(text('small',segment.asset_sha256));
+   const prior=thread.post_decisions?.[segment.record_id];card.append(text('p','Post decision: '+(prior&&prior.manifest_sha256===thread.manifest_sha256?prior.decision:'Awaiting review')));
+   for(const choice of ['APPROVE','REJECT']){const button=text('button',choice==='APPROVE'?'Approve this post':'Reject this post');button.disabled=!!thread.publication_started;button.addEventListener('click',async()=>{button.disabled=true;try{await api('post-decision',{campaignId:campaign,record_id:segment.record_id,decision:choice,fingerprint:thread.manifest_sha256,asset_sha256:segment.asset_sha256});await refresh();}catch{status.textContent='Post decision was not saved.';button.disabled=false;}});card.append(button);}
    const edit=text('button','Edit post '+segment.sequence);edit.disabled=!!thread.publication_started;edit.addEventListener('click',async()=>{
     const revised=prompt('Edit complete X post text',segment.text);if(revised===null||revised===segment.text)return;
     edit.disabled=true;try{await api('revise',{campaignId:campaign,destinationId:'x',fingerprint:thread.manifest_sha256,changes:{sequence:segment.sequence,text:revised}});await refresh();status.textContent='X edit saved. Previous approval cleared.';}catch{status.textContent='X edit was not saved. Reload and retry.';edit.disabled=false;}
@@ -234,14 +236,9 @@ async function refresh(){
   history.replaceState(null,'',location.pathname+'?campaign='+encodeURIComponent(campaign));
   // The invitation authenticates once; reopening uses the existing secure cookie.
   try{await refresh();}
-  catch(error){
-   if(!token)throw error;
-   const exchanged=await api('exchange',{campaignId:campaign,token});
-   if(!exchanged.expiresAt)throw Error('SESSION_MISSING');
-   await refresh();
-  }
+  catch(error){throw error;}
   const connectX=document.getElementById('connect-x'),checkX=document.getElementById('check-x');
-  connectX.disabled=false;checkX.disabled=false;
+  connectX.disabled=true;checkX.disabled=true;
   connectX.addEventListener('click',async()=>{
    connectX.disabled=true;
    try{const result=await api('x/connect',{campaignId:campaign});const url=new URL(result.authorization_url);if(url.origin!=='https://x.com'||url.pathname!=='/i/oauth2/authorize')throw Error();location.assign(url.href);}
