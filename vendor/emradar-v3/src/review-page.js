@@ -23,12 +23,17 @@ const csrf=()=>decodeURIComponent((document.cookie.split('; ').find(x=>x.startsW
 const api=async(path,payload)=>{
  const response=await fetch('/api/review/'+path,{method:'POST',headers:{'content-type':'application/json','x-emradar-csrf':csrf()},body:JSON.stringify(payload),cache:'no-store',credentials:'same-origin'});
  const result=await response.json();
- if(!response.ok)throw Error(result.error||'REQUEST_FAILED');
+ if(!response.ok){const error=Error(result.error||'REQUEST_FAILED');error.reference=result.diagnostic_id;throw error;}
  return result;
 };
 const text=(tag,value)=>{
  const el=document.createElement(tag);el.textContent=String(value??'');return el;
 };
+function saveFailure(error){
+ const messages={ACCESS_DENIED:'Your sign-in expired. Copy your text, then reopen your private review.',CSRF_DENIED:'The security check failed. Copy your text, then refresh the page.',ORIGIN_DENIED:'Open the review on its original secure site.',STALE_ASSET_REVISION:'This email changed since you opened it. Copy your text, then refresh and edit the latest version.',STALE_GROUP_VERSION:'This group changed since you opened it. Copy your text, then refresh and edit the latest version.',GROUP_REVISION_REQUIRED:'Edit this email using the shared-group controls.',GROUP_CONTENT_MISMATCH:'The shared content changed. Copy your text, then refresh the review.',REVISION_AFTER_DISTRIBUTION:'This email has a delivery record and can no longer be edited.',INVALID_REVISION_TEXT:'Enter non-empty text of at most 50,000 characters.',EMAIL_BRAND_TEXT_REQUIRED:'The signature or disclaimer is incomplete. Keep the complete footer and retry.',REQUEST_TOO_LARGE:'The edit exceeds the request size limit.',REVISION_SAVE_FAILED:'The server could not confirm persistence. Copy your text and refresh before retrying.'};
+ const reference=/^[a-f0-9-]{36}$/.test(error.reference||'')?' Reference: '+error.reference+'.':'';
+ return 'Save failed. Your changes are still in this editor. '+(messages[error.message]||'The request could not complete. Retry or copy your text before closing.')+reference;
+}
 let lastSaved=null;
 function openEditor({heading,initial,multiline=true,save}){
  const dialog=document.createElement('dialog');
@@ -45,7 +50,7 @@ function openEditor({heading,initial,multiline=true,save}){
   if(field.value===initial){dialog.close();return;}
   saving=true;field.readOnly=true;commit.disabled=true;cancel.disabled=true;feedback.textContent='Saving…';
   try{await save(field.value);}
-  catch(e){saving=false;field.readOnly=false;feedback.textContent='Save failed. Your changes are still in this editor. Retry or copy them before closing.';commit.disabled=false;cancel.disabled=false;return;}
+  catch(e){saving=false;field.readOnly=false;feedback.textContent=saveFailure(e);commit.disabled=false;cancel.disabled=false;return;}
   saving=false;dialog.close();
   try{await refresh();status.textContent='Edited · Saved. The revised version requires approval.';}
   catch(e){main.replaceChildren();status.textContent='Edited · Saved. Could not reload the review. Refresh the page before making further decisions.';}
