@@ -704,7 +704,7 @@
     "post_deploy_observation": "V3 activation preflight passes. Regeneration queue runs with 0 processed. Daily preparation returns NO_UNPROCESSED_SCAN; November 3 has PUBLICATION_ATTESTATION_INVALID. Replacement review reports REPLACEMENT_INVITATION_UNCONFIRMED; no retry triggered."
   },
   "november_3_branded_review_save": {
-    "status": "TESTED_READY_FOR_DEPLOYMENT",
+    "status": "DEPLOYED_LIVE_SAVE_VERIFICATION_BLOCKED",
     "root_cause": "Owner replacement text lacks the exact canonical disclaimer; emailBrand.render throws EMAIL_BRAND_TEXT_REQUIRED before persistence. Existing API and editor hide the reason.",
     "correction": "Canonicalize signature/disclaimer on branded body revisions before rendering and SHA-256 hashing, for individual and grouped emails. Return allowlisted errors and safe reference IDs; retain unsaved text.",
     "authoritative_commit": "6e4e6dec06c02a84b337315f751007d7f9f59060",
@@ -714,8 +714,12 @@
       "source_integration": "16 passed"
     },
     "live_save_verified": false,
-    "live_blocker": "Production HTTP host is blocked by environment network policy and no authorised private browser session is attached.",
+    "live_blocker": "Production HTTP check fails at proxy CONNECT with 403 (HTTP 000); no authorised private browser session is attached. No live save or refresh was attempted.",
     "external_distribution": 0,
-    "production_campaign_mutations": 0
+    "production_campaign_mutations": 0,
+    "production_commit": "51220acf809cab57b63e1eab7f375e5aa2943ac7",
+    "render_deploy_id": "dep-dbkmtm49v7es73cqfs1g",
+    "render_deploy_status": "live",
+    "activation_preflight": "PASS"
   }
 }
