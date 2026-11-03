@@ -9,8 +9,13 @@ function createAudienceReviewHandler({audience,origin}={}){
  return async function handler(req,res){
   const reply=(status,data)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(JSON.stringify(data));};
   try{
+   const path=new URL(req.url,origin).pathname;
+   if(req.method==='GET'&&path==='/api/review/audience/page'){
+    const {reviewPage}=await import('./emradar-audience-review-page.mjs');
+    res.writeHead(200,{'content-type':'text/html; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff','referrer-policy':'no-referrer','content-security-policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'"});return res.end(reviewPage);
+   }
    if(req.method!=='POST'||req.headers.origin!==origin)return reply(403,{error:'ACCESS_DENIED'});
-   const path=new URL(req.url,origin).pathname;if(!path.startsWith('/api/review/audience/'))return reply(404,{error:'NOT_FOUND'});
+   if(!path.startsWith('/api/review/audience/'))return reply(404,{error:'NOT_FOUND'});
    let raw='';for await(const chunk of req){raw+=chunk;if(raw.length>65536)return reply(413,{error:'REQUEST_TOO_LARGE'});}
    const input=JSON.parse(raw||'{}');if(typeof input.campaignId!=='string'||input.campaignId.length>200)return reply(400,{error:'INVALID_REQUEST'});
    const cookies=Object.fromEntries((req.headers.cookie??'').split(';').map(x=>x.trim()).filter(Boolean).map(x=>{const i=x.indexOf('=');return [x.slice(0,i),decodeURIComponent(x.slice(i+1))]}));
