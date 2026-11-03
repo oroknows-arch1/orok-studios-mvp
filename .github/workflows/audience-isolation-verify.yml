@@ -1,0 +1,72 @@
+name: Audience Intelligence isolated verification
+on:
+  push:
+    branches: [feature/audience-intelligence-foundation]
+    paths:
+      - '.github/workflows/audience-isolation-verify.yml'
+      - 'src/audience-intelligence/**'
+      - 'test/audience-intelligence-*.test.cjs'
+      - 'test/audience-isolation-privileges.sql'
+      - 'docs/audience-intelligence-*.sql'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audience-targeted:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: audience_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      AUDIENCE_TEST_DATABASE_URL: postgresql://postgres:test-only@localhost:5432/audience_test
+      PGPASSWORD: test-only
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify isolated SQL reader privileges and denied writes
+        run: psql -h localhost -U postgres -d audience_test -v ON_ERROR_STOP=1 -f test/audience-isolation-privileges.sql
+      - name: Audience targeted and durable integration tests
+        run: node --test test/audience-intelligence-*.test.cjs
+  v3-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Private V3 submodule authentication preflight
+        env:
+          V3_READ_TOKEN: ${{ secrets.EMRADAR_V3_READ_TOKEN }}
+        run: |
+          if [ -z "$V3_READ_TOKEN" ]; then
+            echo "::error::EMRADAR_V3_READ_TOKEN missing; cannot verify V3 regression"
+            exit 1
+          fi
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $(printf 'x-access-token:%s' "$V3_READ_TOKEN" | base64 -w0)" submodule update --init --recursive
+      - name: Repository harness
+        run: npm run harness:verify
+      - name: V3 source integration harness
+        run: npm run harness:v3
