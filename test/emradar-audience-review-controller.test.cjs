@@ -15,3 +15,20 @@ test('denies missing cookie, forged origin, csrf and release routes',async()=>{
  const handler=createAudienceReviewHandler({audience,origin:'https://review.example'});
  assert.equal((await call(handler,'view',{}, {cookie:''})).status,403);assert.equal((await call(handler,'view',{}, {origin:'https://evil.example'})).status,403);assert.equal((await call(handler,'view',{}, {'x-emradar-csrf':'wrong'})).status,403);assert.equal((await call(handler,'release')).status,404);assert.equal(count,0);
 });
+test('individual approvals and reply edits invalidate old versions',async()=>{
+ const {createIndependentAudience}=require('../src/emradar-audience-independent.cjs'),{createHash}=require('node:crypto');
+ const opportunity={action_id:'a',type:'REPLY',url:'https://x.com/a/status/1',evidence_ids:['d:0'],draft_text:'What changes for suppliers?'};
+ const entries=new Map([[campaign,{version:1,payload:{id:campaign,events:[],audience_x_review:{mode:'STANDALONE',manifest_sha256:'m',segments:[{record_id:'d',asset_sha256:'h'}]},audience_x_research:{results:{d:{report:{opportunities:[opportunity]}}}}}}]]);
+ const pool={query:async(sql,args)=>{if(sql.startsWith('SELECT version,payload')){const value=entries.get(args[0]);return {rows:value?[{version:value.version,value:structuredClone(value.payload)}]:[]};}if(sql.startsWith('UPDATE emradar_audience_state')){const value=entries.get(args[0]);if(!value||value.version!==args[1])return {rowCount:0};entries.set(args[0],{version:value.version+1,payload:structuredClone(args[2])});return {rowCount:1};}return {rows:[],rowCount:0};}};
+ const engine=await createIndependentAudience({audiencePool:pool,readSource:async()=>null,readOwnerAccess:async()=>null,authenticateOwner:async(id,session,secret)=>{if(secret!=='secret')throw Error('ACCESS_DENIED')},loadPublishedBytes:async()=>Buffer.alloc(0),x:{prepareThreadPost:async()=>{}}});
+ await assert.rejects(()=>engine.decide(campaign,'session','secret','APPROVE','m'),/INDIVIDUAL_APPROVALS_REQUIRED/);
+ await assert.rejects(()=>engine.postDecision(campaign,'session','wrong','d','APPROVE','m','h'),/ACCESS_DENIED/);
+ await engine.postDecision(campaign,'session','secret','d','APPROVE','m','h');
+ assert.equal(entries.get(campaign).payload.audience_post_decisions.d.asset_sha256,'h');
+ await assert.rejects(()=>engine.postDecision(campaign,'session','secret','d','APPROVE','m','old'),/DECISION_INVALID/);
+ const sha=o=>createHash('sha256').update(JSON.stringify({action_id:o.action_id,type:o.type,url:o.url,evidence_ids:o.evidence_ids,text:o.draft_text})).digest('hex');
+ const old=sha(opportunity);await engine.replyAction(campaign,'session','secret','d','a','APPROVE',old);
+ await engine.replyAction(campaign,'session','secret','d','a','EDIT',old,'How might higher costs affect suppliers?');
+ const revised=entries.get(campaign).payload.audience_x_research.results.d.report.opportunities[0];assert.equal(revised.owner_decision,undefined);assert.notEqual(revised.review_sha256,old);
+ await assert.rejects(()=>engine.replyAction(campaign,'session','secret','d','a','APPROVE',old),/REPLY_STALE/);
+});
