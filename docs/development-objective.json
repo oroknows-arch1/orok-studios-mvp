@@ -740,5 +740,19 @@
     "render_deploy_status": "live",
     "activation_preflight": "PASS",
     "live_blocker": "Proxy CONNECT to production URL returns 403 (HTTP 000); authenticated production browser session unavailable. Local real-Chromium button/layout checks passed."
+  },
+  "november_3_audience_main_integration": {
+    "status": "INTEGRATION_PR_READY_V3_BASELINE_FAILURE",
+    "source_prs": [
+      26,
+      27,
+      28,
+      31
+    ],
+    "base_main": "4b9418121a051845bb519f18e40e3067b27bbdbc",
+    "verification": "Combined local run 316/317 passed; unchanged main test emradar-v3-publication-first.test.mjs fails standalone on review_ready expectation. Seven-discovery simulated X and Grok cycle passed; simulated PostgreSQL isolation passed; harness:v3 16/16 passed.",
+    "production_evidence": "No audience-named database role or separate audience Render service found in read-only inspection. Owner auth wiring and grants not verified. Main auto-deploy is enabled.",
+    "deployed": false,
+    "live_provider_calls": 0
   }
 }

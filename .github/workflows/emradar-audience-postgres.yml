@@ -51,4 +51,4 @@ jobs:
       - run: npm ci
       - run: npm run harness:verify
       - run: npm run harness:v3
-      - run: node --test test/emradar-audience-*.test.cjs test/emradar-audience-review-page.test.mjs test/emradar-x-thread-*.test.cjs test/emradar-grok-full-scan.test.cjs test/audience-intelligence-faults.test.cjs test/audience-intelligence-poller.test.cjs test/audience-intelligence-v3-adapter.test.cjs test/owner-review-invariant.test.cjs test/emradar-v3-boundary.test.cjs test/emradar-v3-x.test.cjs test/emradar-v3-review-preview.test.mjs
+      - run: node --test test/emradar-audience-*.test.cjs test/emradar-audience-review-page.test.mjs test/emradar-x-thread-*.test.cjs test/emradar-grok-full-scan.test.cjs test/audience-database-isolation.test.cjs test/audience-intelligence-faults.test.cjs test/audience-intelligence-poller.test.cjs test/audience-intelligence-v3-adapter.test.cjs test/owner-review-invariant.test.cjs test/emradar-v3-boundary.test.cjs test/emradar-v3-x.test.cjs test/emradar-v3-review-preview.test.mjs
