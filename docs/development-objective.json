@@ -684,7 +684,7 @@
     "external_distribution": 0
   },
   "november_3_review_editor": {
-    "status": "TESTED_READY_FOR_DEPLOYMENT",
+    "status": "DEPLOYED_LIVE_EDITOR_VERIFICATION_BLOCKED",
     "authoritative_pr": 4,
     "authoritative_commit": "b491709c9ea670ae568fab84b40798a1b090e16c",
     "validation": {
@@ -696,6 +696,11 @@
     "campaign_content_recipients_decisions_changed": false,
     "external_distribution": 0,
     "daily_workflow_observation": "Existing hourly worker is active; 2026-11-03 scan appears in PUBLICATION_ATTESTATION_INVALID and NO_UNPROCESSED_SCAN. Existing safeguard preserved.",
-    "live_editor_verified": false
+    "live_editor_verified": false,
+    "production_commit": "b3d8d6ecdb2399740a8ac814379c97739fc99ebe",
+    "render_deploy_id": "dep-dbkm9715efls73en9ftg",
+    "render_deploy_status": "live",
+    "live_verification_blocker": "HTTP access to orok-studios-api.onrender.com returns 403 from this execution environment; web fetch also cannot access the review page. No authenticated browser is available.",
+    "post_deploy_observation": "V3 activation preflight passes. Regeneration queue runs with 0 processed. Daily preparation returns NO_UNPROCESSED_SCAN; November 3 has PUBLICATION_ATTESTATION_INVALID. Replacement review reports REPLACEMENT_INVITATION_UNCONFIRMED; no retry triggered."
   }
 }
