@@ -51,7 +51,7 @@ test('owner review captures rejection feedback and displays the durable regenera
 test('all saved email content is visible, including unresolved drafts and historical alternatives',async()=>{
  const asset={kind:'EMAIL',destination_id:'journal',subject:'Specific article idea',body:'Complete body\nwith signature.',html:'<p>Complete HTML email</p>'};
  const result=await render({entries:[{asset,recipient_ready:false,destination:{name:'Publication'},decision:{decision:'REJECT'}}],history:[{asset:{...asset,body:'Previous saved body'},historical:true,label:'Previous draft'}]});
- const nodes=flatten(result.entries);assert.equal(result.entries.children.length,2);
+ const nodes=flatten(result.entries);assert.equal(result.entries.children.length,3);
  for(const value of ['Publication',asset.subject,asset.body,'Previous saved body','Recipient unavailable','Editorial decision: REJECT','Delivery: Not released'])assert(nodes.some(n=>n.textContent===value));
  assert.equal(nodes.find(n=>n.tag==='iframe').srcdoc,asset.html);assert.equal(nodes.find(n=>n.tag==='iframe').attributes.sandbox,'');
  assert.equal(nodes.find(n=>n.textContent==='Send approved email').disabled,true);
@@ -137,4 +137,26 @@ test('Edit draft saves and replaces the active rendered draft before reload',asy
   assert(flatten(page.entries.children[0]).some(n=>n.textContent==='Edited · Saved · Revision edit-event · edited-hash'));
   assert(flatten(page.entries.children[1]).some(n=>n.textContent==='Original body'));
  }
+});
+
+test('final edited proposal retains actions and historical tail links back to its current version',async()=>{
+ const asset={kind:'EMAIL',destination_id:'final',to:'editor@example.org',subject:'Proposal',body:'Complete proposal with footer and disclaimer',html:'<p>Complete branded proposal</p>'};
+ const result=await render({entries:[{asset,fingerprint:'current-sha',revision:{id:'revision',fingerprint:'current-sha'}}],history:[{asset:{...asset,body:'Old proposal'},historical:true,label:'Previous draft'}]});
+ const active=result.entries.children[0],nodes=flatten(active);
+ assert.equal(active.id,'review-proposal-final');
+ for(const label of ['Edit draft','Edit subject','Edit recipient','Approve','Reject','Regenerate','Exclude'])assert(nodes.some(n=>n.tag==='button'&&n.textContent===label&&!n.disabled));
+ assert.equal(nodes.find(n=>n.textContent==='Send approved email').disabled,true);
+ const preview=nodes.find(n=>n.tag==='details');assert(!preview.open);assert(flatten(preview).some(n=>n.tag==='iframe'));
+ const history=result.entries.children[1];assert.equal(history.tag,'details');assert(!history.open);assert(!flatten(history).some(n=>n.tag==='button'));
+ assert(flatten(history).some(n=>n.textContent.includes('Read-only')));
+ const back=result.entries.children[2];assert.equal(back.tag,'a');assert.equal(back.href,'#review-proposal-final');
+ await nodes.find(n=>n.textContent==='Approve').listeners.click();assert.equal(result.payloads.find(p=>p.decision).fingerprint,'current-sha');
+});
+test('historical group member returns to shared controls without offering individual approval',async()=>{
+ const assets=['one','two'].map(destination_id=>({kind:'EMAIL',destination_id,to:destination_id+'@example.org',subject:'Shared',body:'Shared copy'}));
+ const result=await render({entries:assets.map(asset=>({asset,groupId:'shared',fingerprint:asset.destination_id})),groups:[{id:'shared',destination_ids:['one','two'],subject:'Shared',body:'Shared copy',content_hash:'group-sha',version:2}],history:[{asset:assets[1],historical:true,label:'Previous draft'}]});
+ const group=result.entries.children[0],nodes=flatten(group);assert.equal(group.id,'review-group-shared');
+ for(const label of ['Edit shared subject','Edit shared body','Approve Group','Reject Group'])assert(nodes.some(n=>n.tag==='button'&&n.textContent===label&&!n.disabled));
+ assert(!nodes.some(n=>n.textContent==='Approve'));assert.equal(result.entries.children[2].href,'#review-group-shared');
+ await nodes.find(n=>n.textContent==='Approve Group').listeners.click();const payload=result.payloads.find(p=>p.decision);assert.equal(payload.contentHash,'group-sha');assert.equal(payload.version,2);
 });

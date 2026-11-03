@@ -12,6 +12,7 @@ button:disabled{opacity:.4}
 dialog{width:min(92vw,850px);max-height:90vh;border:1px solid #bacbd3;border-radius:12px;padding:20px;box-sizing:border-box}dialog::backdrop{background:#102631aa}dialog textarea{width:100%;min-height:48vh;box-sizing:border-box;padding:14px;font:16px/1.55 system-ui,sans-serif;resize:vertical}dialog input{width:100%;box-sizing:border-box;padding:12px;font:16px system-ui,sans-serif}dialog .actions{display:flex;justify-content:flex-end;flex-wrap:wrap} .saved{color:#17633c;font-weight:700}
 button:focus-visible{outline:3px solid #e0a825}
 small{color:#52636d}
+summary{cursor:pointer;padding:12px 0;overflow-wrap:anywhere}article a{display:inline-block;padding:10px 0}iframe{display:block;max-width:100%;box-sizing:border-box}article{min-width:0;overflow-wrap:anywhere}a:focus-visible,summary:focus-visible{outline:3px solid #e0a825}
 .review-graphic{display:block;max-width:100%;height:auto;margin:16px 0}
 </style></head><body><header><h1>EMRADAR · Publication Review</h1><p>Approval saves your decision. Use the separate release control to distribute approved content.</p></header>
 <p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><button id="connect-x" type="button" disabled>Connect X</button><button id="check-x" type="button" disabled>Check X connection</button><main id="entries"></main>
@@ -70,7 +71,7 @@ async function refresh(){
  const sharedGroups=new Map((view.groups??[]).filter(group=>group.destination_ids.length>1).map(group=>[group.id,group]));
  for(const group of sharedGroups.values()){
   const members=group.destination_ids.map(id=>view.entries.find(entry=>entry.asset.destination_id===id));
-  const card=document.createElement('article');card.append(text('h2','Shared publication email · '+members.length+' recipients'),text('small','Version '+group.version+' · '+(group.approval?.decision||'Awaiting group decision')));
+  const card=document.createElement('article');card.id='review-group-'+group.id;card.append(text('h2','Shared publication email · '+members.length+' recipients'),text('small','Version '+group.version+' · '+(group.approval?.decision||'Awaiting group decision')));
   if(group.subject)card.append(text('h3',group.subject));card.append(text('pre',group.body),text('p','Included verified publications:'));
   const list=document.createElement('ul');
   for(const member of members){
@@ -99,6 +100,7 @@ async function refresh(){
   const {asset,fingerprint,groupId,decision,delivery,historical}=item;
   if(!historical&&sharedGroups.has(groupId))continue;
   const card=document.createElement('article');
+  if(!historical)card.id='review-proposal-'+asset.destination_id;
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
   if(!historical&&(item.revision||lastSaved==='entry:'+asset.destination_id)){const saved=text('p',item.revision?'Edited · Saved · Revision '+item.revision.id+' · '+fingerprint:'Edited · Saved'+(decision?'':' · New approval required'));saved.className='saved';card.append(saved);}
   card.append(text('p','Preparation: '+(asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
@@ -115,7 +117,8 @@ async function refresh(){
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
   if(asset.kind==='EMAIL' && asset.html){
-   const preview=document.createElement('iframe');preview.title='Reviewed email with EMRADAR letterhead';preview.setAttribute('sandbox','');preview.style='width:100%;height:900px;border:1px solid #d9e2e7';preview.srcdoc=asset.html;card.append(preview);
+   const preview=document.createElement('iframe');preview.title='Reviewed email with EMRADAR letterhead';preview.setAttribute('sandbox','');preview.style='width:100%;height:min(70vh,900px);border:1px solid #d9e2e7';preview.srcdoc=asset.html;
+   const previewDetails=document.createElement('details');previewDetails.append(text('summary','Branded email preview'),preview);card.append(previewDetails);
   }
   if(!delivery&&!historical){
    for(const [field,label] of [['body','Edit draft'],...(asset.kind==='EMAIL'?[['subject','Edit subject']]:[])]){
@@ -205,7 +208,15 @@ async function refresh(){
    });
    card.append(addFeedback);
   }
-  main.append(card);
+  if(historical){
+   const current=view.entries.find(entry=>entry.asset.destination_id===asset.destination_id);
+   const target=current?(sharedGroups.has(current.groupId)?'review-group-'+current.groupId:'review-proposal-'+asset.destination_id):null;
+   const archived=document.createElement('details');archived.className='review-history';
+   archived.append(text('summary',(item.label||'Previous draft')+' · '+(item.destination?.name||asset.destination_id)+' · Read-only'),card);
+   card.append(text('p','This saved version is read-only. Actions apply to the current proposal.'));
+   main.append(archived);
+   if(target){const link=document.createElement('a');link.href='#'+encodeURIComponent(target);link.textContent='Back to current proposal and review controls';main.append(link);}
+  }else main.append(card);
  }
  status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
 }
