@@ -11,7 +11,7 @@ test('repository development harness enforces the active objective and distribut
     campaign_id: 'v3-df5b240c718018880410c03a4c392d64',
     v3_source: {
       repository: 'oroknows-arch1/emradar-marketing-engine-v3',
-      commit: '8a722d6e231ad2098f8081adde790dfc5dc336cd'
+      commit: '288e6e999a0983ea979fa3a2fa94b467cd88091c'
     }
   });
 });

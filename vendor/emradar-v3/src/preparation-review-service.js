@@ -22,6 +22,7 @@ import {createPublicationReviewHandoff} from './publication-review-handoff.js';
 import {sha256,MAX_DESTINATIONS,isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
+import {ProposalVerificationService} from './proposal-verification.js';
 
 export async function excludeSourceInstitutionDestinations({store,directory,campaignId}){
  const state=(await store.adapter.read(campaignId))?.value,document=state?.preparation_input?.document;
@@ -79,7 +80,7 @@ export function assessPublicationReview({state,candidates}) {
 // owner-notification transports have been configured and independently tested.
 // Does not mount HTTP routes, deploy, distribute or trigger a campaign at import.
 export async function createPreparationReviewService({
- pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,autonomousDiscovery=false
+ pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,investigateProposal,autonomousDiscovery=false
 }) {
  if(typeof pool?.query!=='function'||typeof notify!=='function'||
     typeof researchEvidence!=='function'||typeof write!=='function'||
@@ -90,10 +91,19 @@ export async function createPreparationReviewService({
  await adapter.initialize();
  await directory.initialize();
  const store=new CampaignStore(adapter);
+ const verifier=typeof investigateProposal==='function'?new ProposalVerificationService({investigate:investigateProposal}):null;
  const discover=createDirectoryDiscovery({
   directory,linkEvidence:autonomousDiscovery?createCoverageDiscovery({directory,scanDigest:document=>sha256(JSON.stringify(document.evidence.filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url).map(e=>[e.id,e.fact,e.source_url]))),searchFormation:createAutonomousOutletDiscovery({openai,directory,fetcher})}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
  });
- const prepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
+ const basePrepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
+ const prepare=async input=>{
+  const result=await basePrepare(input),state=(await adapter.read(result.campaignId))?.value;
+  if(verifier&&state&&isReviewPhase(state.phase))for(const [destinationId,entry] of Object.entries(state.assets??{})){
+   const verification=await verifier.verify({asset:entry.asset,destination:state.destinations.find(item=>item.id===destinationId),evidence:state.preparation_input?.document?.evidence??[],previous:state.proposal_verifications?.[destinationId]?.at(-1)??null});
+   await store.recordProposalVerification(result.campaignId,destinationId,entry.fingerprint,verification);
+  }
+  return result;
+ };
  const renderVerifiedVisual=createVerifiedVisualRenderer(renderVisual);
  const ensureBrandedX=async campaignId=>{
   const state=(await adapter.read(campaignId))?.value,entry=state?.assets?.x;
@@ -129,7 +139,7 @@ export async function createPreparationReviewService({
   await directory.upsert(verified);
   return verified;
  };
- const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin,verifyRecipient});
+ const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin,verifyRecipient,verifier});
  const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS,verifiedPublicationsOnly=false,existingDrafts={}}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
