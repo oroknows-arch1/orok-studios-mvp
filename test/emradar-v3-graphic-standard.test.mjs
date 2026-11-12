@@ -8,6 +8,7 @@ import {composeGraphicSvg} from '../vendor/emradar-v3-authoritative/src/graphic-
 import {CampaignPreparation} from '../vendor/emradar-v3/src/preparation.js';
 
 const saved=JSON.parse(readFileSync(new URL('./fixtures/v3-free-state-graphic.json',import.meta.url)));
+saved.document.records[0].theme='Free State launches an industrial investment programme';
 test('Free State brief retains source qualifiers, dates and geography under the deployed brand',()=>{
  const before=structuredClone(saved),prompt=emradarGraphicPrompt(saved);
  assert(prompt.includes('#031728'));assert(prompt.includes('#0862f7'));assert(prompt.includes('Segoe UI'));assert(prompt.includes('EMERGING MARKET INTELLIGENCE'));
@@ -39,32 +40,43 @@ test('production provider deterministically renders the fixed formation card wit
  let chatCalls=0;const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{chatCalls++;}}},images:{generate:async()=>{imageCalls++;}}}});
  const visual=await providers.renderVisual(input),bytes=Buffer.from(visual.base64,'base64');
  assert.equal(visual.brand_version,GRAPHIC_STANDARD.version);assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(imageCalls,0);assert.equal(chatCalls,0);assert.deepEqual(input,before);
- assert.equal(GRAPHIC_STANDARD.version,'emradar-formation-card-v2');
+ assert.equal(GRAPHIC_STANDARD.version,'emradar-formation-card-v3');
+ assert.equal(visual.diagnostics.template,GRAPHIC_STANDARD.version);
 });
 test('authoritative composer uses scan states, formations, date and fixed footer',()=>{
  const input=structuredClone(saved);input.asset.subject='Free State EV investment';input.asset.kind='X';
  input.document.records[0].status='FORMING';const {svg}=composeGraphicSvg({...input,scan:{snapshot_date:'2026-10-09'}});
- for(const value of ['EMRADAR','EMERGING MARKET INTELLIGENCE','2026-10-09','FORMING','Evidence is bounded by the published sources','emradar.net','sean@emradar.net'])assert(svg.includes(value));
+ for(const value of ['EMRADAR','EMERGING MARKET INTELLIGENCE','2026-10-09','FORMING','Free State launches an industrial investment','programme','emradar.net','Source evidence at emradar.net'])assert(svg.includes(value));
  assert(!svg.includes('99%'));assert(!svg.includes('reclassification'));assert(!svg.includes('image generation'));
 });
 test('oversized scan content is bounded by evidence-linked selection with explicit diagnostics',()=>{
- const records=Array.from({length:9},(_,index)=>({id:'formation-'+index,status:index%2?'INVESTIGATE':'FORMING',theme:index===0?'A '.repeat(200):'Evidence-grounded formation '+index,causal_chain:{formation:['Bounded fallback formation '+index]}}));
+ const records=Array.from({length:9},(_,index)=>({id:'formation-'+index,status:index%2?'INVESTIGATE':'FORMING',theme:index===0?'Overlong theme '.repeat(200):'Evidence-grounded formation '+index,causal_chain:{formation:['Bounded fallback formation '+index]}}));
  const evidence=records.map(record=>({id:record.id+':0',record_id:record.id,verified:true,fact:'Verified '+record.id}));
  const asset={kind:'X',evidence_ids:evidence.map(item=>item.id)};
  const {svg,diagnostics}=composeGraphicSvg({asset,document:{records,evidence},scan:{snapshot_date:'2026-10-19'}});
- assert.equal(diagnostics.record_count,9);assert.equal(diagnostics.rendered_record_ids.length,7);assert.deepEqual(diagnostics.omitted_record_ids,['formation-7','formation-8']);
- assert.deepEqual(diagnostics.shortened,[{record_id:'formation-0',source:'formation'}]);assert.match(svg,/\+2 additional evidence-grounded formations/);assert.doesNotMatch(svg,/A A A A A/);
+ assert.equal(diagnostics.record_count,9);assert.equal(diagnostics.rendered_record_ids.length,5);assert.deepEqual(diagnostics.omitted_record_ids,['formation-5','formation-6','formation-7','formation-8']);
+ assert.deepEqual(diagnostics.shortened,[{record_id:'formation-0',source:'formation'}]);assert.match(svg,/\+4 additional evidence-grounded formations/);assert.doesNotMatch(svg,/Overlong theme Overlong theme/);
 });
-test('October 7 failed production scan renders all six evidence states in the fixed card',()=>{
+test('October 7 failed production scan preserves its evidence states and accounts for the sixth formation',()=>{
  const input=JSON.parse(readFileSync(new URL('./fixtures/v3-october-07-formation-card.json',import.meta.url)));
  const {svg,diagnostics}=composeGraphicSvg(input);
- assert.equal(diagnostics.record_count,6);assert.equal(diagnostics.omitted_record_ids.length,0);
- for(const state of ['FORMING','INVESTIGATE','WEAKENING'])assert(svg.includes(state));
- assert.match(svg,/EMERGING MARKET INTELLIGENCE · 2026-10-07/);
+ assert.equal(diagnostics.record_count,6);assert.deepEqual(diagnostics.omitted_record_ids,['east-africa-refining-localisation']);
+ for(const state of ['FORMING','INVESTIGATE'])assert(svg.includes(state));
+ assert.match(svg,/Published scan · 2026-10-07/);
+ assert.match(svg,/\+1 additional evidence-grounded formation at emradar.net/);
+ input.document.records.reverse();
+ assert.match(composeGraphicSvg(input).svg,/>WEAKENING<\/text>/);
 });
 test('missing source evidence retains the existing verification failure and never calls image generation',async()=>{
  let calls=0;const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{}}},images:{generate:async()=>{calls++;}}}});
  await assert.rejects(provider.renderVisual({asset:{kind:'X',subject:'Verified subject',body:'Verified body.',evidence_ids:['unverified']},document:{records:[{id:'unverified'}],evidence:[{id:'unverified',verified:false,fact:'Not verified'}]},scan:{snapshot_date:'2026-10-19'}}),/V3_X_EVIDENCE_REQUIRED/);assert.equal(calls,0);
+});
+test('invalid formation title fails before the production provider returns an image',async()=>{
+ const input=structuredClone(saved);
+ input.document.records[0].theme='K';
+ input.scan={snapshot_date:'2026-10-09'};
+ const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{throw Error('UNEXPECTED_MODEL_CALL');}}}}});
+ await assert.rejects(provider.renderVisual(input),/V3_X_VALID_FORMATION_TITLE_REQUIRED/);
 });
 test('existing PUBLICATION_REVIEW campaigns are not regenerated and their approved graphics and receipts survive',async()=>{
  const state={phase:'PUBLICATION_REVIEW',assets:{x:{asset:{...saved.asset,visual_sha256:'approved-graphic'},fingerprint:'approved'}},decisions:{x:{decision:'APPROVE',asset_sha256:'approved'}},deliveries:{email:{status:'ACCEPTED',receipt:{provider_id:'existing'}}}};

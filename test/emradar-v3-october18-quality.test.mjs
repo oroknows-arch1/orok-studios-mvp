@@ -70,12 +70,14 @@ test('October 18 Bangladesh X uses one formation and adds analysis instead of re
  assert.match(prompt,/at most three short reader-facing text blocks/);assert.doesNotMatch(prompt,/kenya-bundibugyo/);for(const item of evidence.filter(e=>bangladeshIds.includes(e.id)))assert(!prompt.includes(item.source_url));
 });
 
-test('fixed graphic renders at 1024px without probabilistic visual approval',async()=>{
+test('fixed graphic renders at 2048px without probabilistic visual approval',async()=>{
  const asset={kind:'X',body:'Evidence-backed analysis with uncertainty.',subject:'Bangladesh',evidence_ids:bangladeshIds};
  let calls=0;const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{calls++;}}}}});
  const rendered=await provider.renderVisual({asset:{...asset,subject:'Bangladesh',story_record_id:'bangladesh-measles-immunization-system-failure'},document,scan:{snapshot_date:'2026-10-18'}});
- assert.equal(Buffer.from(rendered.base64,'base64').subarray(0,8).toString('hex'),'89504e470d0a1a0a');
- assert.equal(calls,0);assert.equal(rendered.diagnostics.template,'emradar-formation-card-v2');
+ const png=Buffer.from(rendered.base64,'base64');
+ assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+ assert.equal(png.readUInt32BE(16),2048);assert.equal(png.readUInt32BE(20),2048);
+ assert.equal(calls,0);assert.equal(rendered.diagnostics.template,'emradar-formation-card-v3');
 });
 
 test('graphic callback receives deterministic layout diagnostics',async()=>{
