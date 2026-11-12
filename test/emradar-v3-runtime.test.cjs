@@ -21,7 +21,7 @@ test('activation initializes V3 tables and exposes preparation plus guarded rele
  const env={EMRADAR_V3_PREPARATION_ENABLED:'true',EMRADAR_V3_DATABASE_URL:'postgres://example.invalid/db',EMRADAR_V3_API_TOKEN:'t'.repeat(40),EMRADAR_V3_REVIEW_ORIGIN:'https://review.example.org'};
  const result=await mountV3PreparationReview({
   app:{post:(...args)=>routes.push(args)},env,createPool:()=>pool,
-  openai:{chat:{completions:{create:async()=>({})}},images:{generate:async()=>({})}},
+  openai:{chat:{completions:{create:async()=>({})}},responses:{create:async()=>({})},images:{generate:async()=>({})}},
   setReviewHandler:handler=>handlers.push(handler)
  });
  assert.equal(result.enabled,true);
