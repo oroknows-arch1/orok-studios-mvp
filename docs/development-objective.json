@@ -750,5 +750,49 @@
     "existing_review_campaign": "v3-d6821ba4f5f48128a960cc3c2021c5b8",
     "owner_decisions_changed": 0,
     "external_distribution": 0
+  },
+  "november_12_proposal_verification_production": {
+    "status": "DEPLOYED_PARTIALLY_VERIFIED_LIVE_UI_AND_REPLAY_BLOCKED",
+    "production_commit": "548d06776b5a86dc9ee1a092bc0cdd01737ddb84",
+    "authoritative_source_commit": "288e6e999a0983ea979fa3a2fa94b467cd88091c",
+    "render_service": "srv-d79k9os50q8c73fkeqig",
+    "render_deploy_id": "dep-dbqmp6nf3r2c73fc60mg",
+    "render_deploy_status": "live",
+    "render_deploy_finished_at": "2026-11-12T07:37:37.994783Z",
+    "activation_preflight": "PASS: database, OpenAI, SMTP, canonical URLs and V3 enabled",
+    "implementation": "Owner re-verification uses required web search and citation validation; approval and isolated distribution boundaries require a current exact-match verified record and fail closed.",
+    "validation": {
+      "authoritative_v3_suite": "120 passed, 5 skipped because V3_TEST_DATABASE_URL was unavailable",
+      "existing_v3_harness": "16/16 passed",
+      "focused_proposal_verification": "18/18 passed",
+      "existing_development_harness": "passed",
+      "parent_full_suite": "not acceptance evidence: pre-existing fixtures that approve without verification now fail the mandatory gate, alongside unrelated legacy relay/setup expectations"
+    },
+    "database": {
+      "migration_required": false,
+      "v3_tables_present": 7,
+      "production_write_tests_run": false,
+      "reason": "No disposable PostgreSQL test URL was available; production remained read-only for verification."
+    },
+    "historical_read_only_audit": {
+      "historical_email_proposals_examined": 485,
+      "destinations_with_persisted_verification": 0,
+      "held_for_investigation": 485,
+      "claim_level_replay_run": false,
+      "classification": "Unsupported, repairable and provider-failure counts remain unknown because executing the investigator would mutate production and consume the paid provider."
+    },
+    "preservation": {
+      "active_campaign": "v3-df5f7d8ad4a64d23bc12976766f05529",
+      "assets_before_and_after": 31,
+      "owner_decisions_before_and_after": 0,
+      "deliveries_before_and_after": 0,
+      "verifications_before_and_after": 0
+    },
+    "live_owner_ui_verified": false,
+    "live_dispatch_invocation_verified": false,
+    "production_bioenergy_regression_run": false,
+    "blocker": "The environment proxy returned 403 for the production URL and no authenticated browser-control surface was available. A real dispatch was intentionally not invoked, and no isolated production-write/provider sandbox was available for Bioenergy or claim-level historical replay.",
+    "production_campaign_mutations": 0,
+    "external_distribution": 0
   }
 }
