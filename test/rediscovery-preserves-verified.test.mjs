@@ -10,7 +10,7 @@ test('rediscovery preserves a verified contact when contact retrieval fails',asy
  const verified={
   id,name:'Journal',category:'mining',website:'https://journal.example',
   destination_class:'EDITORIAL_PUBLICATION',active:true,contact_verified:true,editorial_fit_verified:true,
-  contact:{...recipientFixture(id).contact,email:'editor@journal.example',published_excerpt:'Editorial: editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-10-13T00:00:00Z'},
+  contact:{...recipientFixture(id).contact,email:'editor@journal.example',published_excerpt:'Editorial: editor@journal.example',source_url:'https://journal.example/editorial',checked_at:'2026-11-13T00:00:00Z'},
   verification:{...recipientFixture(id).verification,method:'live_editorial_contact_page',evidence_ids:['old']}
  };
  const records=new Map([[id,structuredClone(verified)]]);

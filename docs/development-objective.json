@@ -796,14 +796,16 @@
     "external_distribution": 0
   },
   "november_14_controlled_release_preflight": {
-    "status": "TESTED_LOCALLY_GITHUB_AUTH_PENDING_NOT_DEPLOYED",
+    "status": "TESTED_LOCALLY_ARTICLE_REPOSITORY_PENDING_NOT_DEPLOYED",
     "authoritative_source_commit": "bac1e0817e3bf4d8f30fd49341229545118c5281",
     "correction": "Restore proposal verification as automatic and owner-optional. Verification results remain persisted and visible, while provider failures never block owner review, approval, or the existing exact-version distribution safeguards.",
     "validation": {
       "authoritative_suite_with_disposable_postgres_18": "128/128 passed, 0 skipped",
-      "article_engine_suite": "8/8 passed",
+      "article_engine_suite": "10/10 passed",
       "source_integration": "17/17 passed",
-      "production_overlay_focused_regression": "48/48 passed"
+      "production_overlay_focused_regression": "48/48 passed",
+      "parent_application_regression": "367 passed, 21 skipped, 0 failed",
+      "parent_harness_verification": "PASS"
     },
     "render_readiness": {
       "workspace_id": "tea-d79k6muuk2gs73eesr2g",
@@ -814,7 +816,7 @@
       "production_changes_made": false
     },
     "blockers": [
-      "GitHub device authentication is awaiting owner authorization.",
+      "The private oroknows-arch1/emradar-article-production-engine repository must exist before its implementation branch can be pushed.",
       "Production HTTP access from this execution environment is blocked by proxy CONNECT 403.",
       "Production release approval has not yet been requested because GitHub integration is incomplete."
     ],
