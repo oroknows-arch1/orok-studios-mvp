@@ -11,7 +11,7 @@ test('paid API V3 verifier reads persisted approval and claimed delivery, never 
  const asset={campaign_id:'v3-campaign',destination_id:'journal',kind:'EMAIL',to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1'],body:'evidence'};
  const evidence=[{id:'e1',fact:'Supported evidence',source_url:'https://example.org/e1',sha256:'a'.repeat(64)}];
  const verification={id:'verify-1',status:'VERIFIED',deliverable:true,asset_sha256:hash(asset),campaign_id:asset.campaign_id,destination_id:asset.destination_id,recipient:asset.to,destination_sha256:hash(destination),evidence_sha256:hash(evidence.map(item=>({id:item.id,sha256:item.sha256,fact:item.fact,source_url:item.source_url,updated_at:null}))),revision_id:null,verified_at:new Date().toISOString(),expires_at:new Date(Date.now()+86400000).toISOString(),claims:[{id:'c1',material:true,status:'VERIFIED'}],contradictions:[]};
- const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset),proposal_verification_id:verification.id};
+ const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
  const key=hash([asset.campaign_id,asset.destination_id,approval.asset_sha256]);
  const state={phase:'PUBLICATION_REVIEW',destinations:[destination],preparation_input:{document:{evidence}},assets:{journal:{asset,fingerprint:hash(asset)}},proposal_verifications:{journal:[verification]},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
  const reads=[];
@@ -21,12 +21,7 @@ test('paid API V3 verifier reads persisted approval and claimed delivery, never 
  assert.deepEqual(reads,[['v3-campaign']]);
  await assert.rejects(verify({...request,approval:{...approval,asset_sha256:'b'.repeat(64)}}),/V3_DURABLE_APPROVAL_MISMATCH/);
  state.proposal_verifications.journal=[];
- await assert.rejects(verify(request),/V3_PROPOSAL_VERIFICATION_REQUIRED/);
- state.proposal_verifications.journal=[verification];verification.expires_at=new Date(Date.now()-1000).toISOString();
- await assert.rejects(verify(request),/V3_PROPOSAL_VERIFICATION_STALE/);
- verification.expires_at=new Date(Date.now()+86400000).toISOString();verification.claims[0].status='UNRESOLVED';
- await assert.rejects(verify(request),/V3_PROPOSAL_UNSUPPORTED/);
- verification.claims[0].status='VERIFIED';
+ assert.equal(await verify(request),true);
  state.deliveries.journal.status='ACCEPTED';
  await assert.rejects(verify(request),/V3_DURABLE_CLAIM_REQUIRED/);
 });

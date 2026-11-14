@@ -4,7 +4,7 @@
   "description": "",
   "main": "app.js",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test test/*.test.* tests/*.test.*",
     "harness:verify": "node scripts/verify-development-harness.cjs",
     "harness:v3": "node scripts/verify-v3-source-integration.cjs && node --test test/v3-source-integration.test.cjs vendor/emradar-v3-authoritative/tests/contracts.test.js vendor/emradar-v3-authoritative/tests/discovery.test.js vendor/emradar-v3-authoritative/tests/preparation.test.js vendor/emradar-v3-authoritative/tests/review.test.js vendor/emradar-v3-authoritative/tests/paid-api-v3-service-bridge.test.js vendor/emradar-v3-authoritative/tests/x-route-regression.test.js",
     "start": "node server.js",

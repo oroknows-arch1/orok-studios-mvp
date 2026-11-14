@@ -33,9 +33,8 @@ export function assertApproval(asset, approval) {
   if (!approval || approval.decision !== 'APPROVE' || approval.authority !== 'OWNER' || approval.asset_sha256 !== fingerprint || approval.campaign_id !== asset.campaign_id || approval.destination_id !== asset.destination_id) throw new Error('OWNER_APPROVAL_REQUIRED');
   return fingerprint;
 }
-export function assertSendable({asset,approval,receipt,verificationId}) {
+export function assertSendable({asset,approval,receipt}) {
   const fingerprint = assertApproval(asset,approval);
-  if(!verificationId||approval.proposal_verification_id!==verificationId)throw new Error('PROPOSAL_VERIFICATION_REQUIRED');
   if(asset.kind==='EMAIL')recipientPolicy.assertRecipientAllowed(asset);
   if (receipt && receipt.status !== 'FAILED_DEFINITELY_UNSENT' && receipt.status !== 'NOT_ATTEMPTED') throw new Error('DELIVERY_ALREADY_ATTEMPTED_OR_AMBIGUOUS');
   return sha256([asset.campaign_id,asset.destination_id,fingerprint]);

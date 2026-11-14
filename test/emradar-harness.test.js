@@ -1,6 +1,6 @@
 const test=require('node:test');const assert=require('node:assert/strict');
 const {createHarnessRelay,exchange}=require('../src/emradar-harness');
-const rates=async()=>({ok:true,url:'https://www.rba.gov.au/statistics/frequency/exchange-rates.html',text:async()=>'<th>02 Oct 2026</th><tr><td>United States dollar</td><td>0.6933</td></tr>'});
+const rates=async()=>({ok:true,url:'https://www.rba.gov.au/statistics/frequency/exchange-rates.html',text:async()=>'<th>13 Nov 2026</th><tr><td>United States dollar</td><td>0.6933</td></tr>'});
 const env={OPENAI_API_KEY:'TEST_ONLY',EMRADAR_EMAIL_RELAY_TOKEN:'TEST_ONLY'};
 async function call(handler,operation,body={},token='TEST_ONLY') {let output,status=200;const res={status(n){status=n;return this;},json(v){output=v;return this;}};await handler({params:{operation},headers:{authorization:'Bearer '+token},body},res);return {status,output};}
 test('authenticated quote bounds two provider calls; execute and independent verification are idempotent',async()=>{
