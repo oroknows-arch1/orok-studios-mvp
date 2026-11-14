@@ -23,11 +23,17 @@ function matchOutcome(parsed,receipt,reference,mailbox=expected){
  if(refs.includes(original)&&addresses(parsed.from).includes(receipt.recipient.toLowerCase())&&addresses(parsed.to).includes(mailbox))return {state:'RESPONSE_RECEIVED',at:date,evidence:{type:'MATCHED_GMAIL_REPLY_HEADERS',reference,reply_message_id:parsed.messageId,matched_original_message_id:original,recipient:receipt.recipient,classification:'RESPONSE_ONLY_NO_SENTIMENT_INFERENCE'}};
  return null;
 }
-function createOutcomeCollector({createClient=options=>new ImapFlow(options),parse=simpleParser}={}){
+async function forwardArticleRequest(payload,fetcher=fetch){
+ const url=process.env.EMRADAR_ARTICLE_SERVICE_URL,token=process.env.EMRADAR_ARTICLE_SERVICE_TOKEN;
+ if(!url||!token)throw Error('ARTICLE_HANDOFF_CONFIGURATION_REQUIRED');
+ const response=await fetcher(new URL('/api/accepted-requests',url),{method:'POST',redirect:'error',signal:AbortSignal.timeout(125000),headers:{authorization:'Bearer '+token,'content-type':'application/json'},body:JSON.stringify(payload)});
+ const value=await response.json().catch(()=>({}));if(!response.ok||!value.id)throw Error(value.error||'ARTICLE_HANDOFF_REJECTED');return {article_id:value.id,status:value.status};
+}
+function createOutcomeCollector({createClient=options=>new ImapFlow(options),parse=simpleParser,forwardAccepted=forwardArticleRequest}={}){
  return async({user,password,receipt,host})=>{
   if(![expected,'sean@emradar.net'].includes(user)||!password||(user!==expected&&!host)||!receipt?.id||!/^<[^<>\s]+@[^<>\s]+>$/.test(receipt.message_id||'')||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receipt.recipient||'')||!Number.isFinite(Date.parse(receipt.submitted_at)))throw new Error('MATCHED_DISTRIBUTION_RECEIPT_REQUIRED');
   const client=createClient({host:host||'imap.gmail.com',port:993,secure:true,auth:{user,pass:password},logger:false,logRaw:false,disableAutoIdle:true,connectionTimeout:10000,greetingTimeout:10000,socketTimeout:20000});
-  const publication_candidates=[],events=[],checks=[],checked_at=new Date().toISOString();let complete=true;
+  const publication_candidates=[],events=[],checks=[],article_handoffs=[],checked_at=new Date().toISOString();let complete=true;
   const timer=setTimeout(()=>client.close(),35000);timer.unref?.();
   try{
    await client.connect();const boxes=await client.list();
@@ -45,13 +51,13 @@ function createOutcomeCollector({createClient=options=>new ImapFlow(options),par
       if(!message?.source||message.size>65536){complete=false;continue;}
       const parsed=await parse(message.source,{skipHtmlToText:true,skipTextToHtml:true});
       const reference='mail-imap:'+user+':'+encodeURIComponent(path)+':'+check.uid_validity+':'+uid;
-      const event=matchOutcome(parsed,receipt,reference,user);if(event){if(event.state==='RESPONSE_RECEIVED'&&receipt.publication_domain){for(const link of (parsed.text||'').slice(0,20000).match(/https:\/\/[^\s<>"']+/g)||[]){try{const url=new URL(link);if(url.hostname.replace(/^www\./,'')===receipt.publication_domain&&!url.port&&!url.username&&!url.password&&publication_candidates.length<3&&!publication_candidates.includes(url.href))publication_candidates.push(url.href);}catch{}}}event.evidence.thread_id=message.threadId||null;event.evidence.message_sha256=crypto.createHash('sha256').update(message.source).digest('hex');if(!events.some(e=>e.evidence.reply_message_id===event.evidence.reply_message_id))events.push(event);}
+      const event=matchOutcome(parsed,receipt,reference,user);if(event){if(event.state==='RESPONSE_RECEIVED'&&receipt.publication_domain){for(const link of (parsed.text||'').slice(0,20000).match(/https:\/\/[^\s<>"']+/g)||[]){try{const url=new URL(link);if(url.hostname.replace(/^www\./,'')===receipt.publication_domain&&!url.port&&!url.username&&!url.password&&publication_candidates.length<3&&!publication_candidates.includes(url.href))publication_candidates.push(url.href);}catch{}}}event.evidence.thread_id=message.threadId||null;event.evidence.message_sha256=crypto.createHash('sha256').update(message.source).digest('hex');if(!events.some(e=>e.evidence.reply_message_id===event.evidence.reply_message_id)){events.push(event);if(event.state==='RESPONSE_RECEIVED'&&receipt.article_handoff){try{article_handoffs.push(await forwardAccepted({...receipt.article_handoff,publisher_reply:{message_id:parsed.messageId,from:addresses(parsed.from)[0],received_at:parsed.date.toISOString(),text:(parsed.text||'').slice(0,20000)}}));}catch(error){if(error.message!=='PUBLISHER_ACCEPTANCE_NOT_VERIFIED'&&error.message!=='ARTICLE_HANDOFF_REJECTED')throw error;}}}}
      }
     }finally{lock.release();}
    }
-   return {source:user===expected?'GMAIL_IMAP_MATCHED_RECEIPT':'CANONICAL_IMAP_MATCHED_RECEIPT',metrics:{},events,publication_candidates,collection:{status:'CHECKED',complete,authenticated_user:user,reference:'gmail-imap-check:'+receipt.id+':'+checked_at,checks,last_checked_at:checked_at}};
+   return {source:user===expected?'GMAIL_IMAP_MATCHED_RECEIPT':'CANONICAL_IMAP_MATCHED_RECEIPT',metrics:{},events,publication_candidates,article_handoffs,collection:{status:'CHECKED',complete,authenticated_user:user,reference:'gmail-imap-check:'+receipt.id+':'+checked_at,checks,last_checked_at:checked_at}};
   }finally{clearTimeout(timer);await client.logout().catch(()=>client.close());}
  };
 }
-module.exports={createOutcomeCollector,matchOutcome};
+module.exports={createOutcomeCollector,matchOutcome,forwardArticleRequest};
 

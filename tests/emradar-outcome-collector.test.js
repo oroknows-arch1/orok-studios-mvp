@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createOutcomeCollector,matchOutcome}=require('../src/emradar-outcome-collector');
+const {createOutcomeCollector,matchOutcome,forwardArticleRequest}=require('../src/emradar-outcome-collector');
 const r={id:'a'.repeat(64),message_id:'<original@gmail.com>',recipient:'editor@example.com',submitted_at:'2026-10-05T22:00:00Z'};
 const reply=()=>({date:new Date('2026-10-06T00:00:00Z'),messageId:'<reply@example.com>',inReplyTo:r.message_id,from:{value:[{address:r.recipient}]},to:{value:[{address:'oroknows@gmail.com'}]},headers:new Map()});
 test('Gmail matching rejects arbitrary inbox mail, wrong recipient, old timestamps and sentiment inference',()=>{
@@ -11,4 +11,10 @@ test('DSN requires exact original message, recipient block, failed action and pe
 test('collector is bounded/read-only, has no send capability and preserves no-response semantics',async()=>{
  let locks=[],closed=0;const collect=createOutcomeCollector({createClient:()=>({connect:async()=>{},list:async()=>[{path:'All Mail',specialUse:'\\All'}],getMailboxLock:async(path,options)=>{locks.push([path,options]);return {release(){}};},mailbox:{uidValidity:1},search:async()=>[],logout:async()=>closed++,close:()=>closed++})});
  const result=await collect({user:'oroknows@gmail.com',password:'fixture',receipt:r});assert.equal(result.collection.complete,true);assert.deepEqual(result.events,[]);assert.equal(locks[0][1].readOnly,true);assert.equal(closed,1);await assert.rejects(collect({user:'wrong@gmail.com',password:'fixture',receipt:r}),/RECEIPT/);
+});
+
+test('article handoff uses authenticated isolated service request and requires an article id',async()=>{
+ const previous={url:process.env.EMRADAR_ARTICLE_SERVICE_URL,token:process.env.EMRADAR_ARTICLE_SERVICE_TOKEN};process.env.EMRADAR_ARTICLE_SERVICE_URL='https://article.example';process.env.EMRADAR_ARTICLE_SERVICE_TOKEN='s'.repeat(40);
+ try{let call;const result=await forwardArticleRequest({campaign_id:'v3'},async(url,options)=>{call={url:String(url),options};return {ok:true,json:async()=>({id:'article-1',status:'READY_FOR_OWNER_REVIEW'})};});assert.equal(call.url,'https://article.example/api/accepted-requests');assert.equal(call.options.headers.authorization,'Bearer '+'s'.repeat(40));assert.equal(result.article_id,'article-1');}
+ finally{if(previous.url===undefined)delete process.env.EMRADAR_ARTICLE_SERVICE_URL;else process.env.EMRADAR_ARTICLE_SERVICE_URL=previous.url;if(previous.token===undefined)delete process.env.EMRADAR_ARTICLE_SERVICE_TOKEN;else process.env.EMRADAR_ARTICLE_SERVICE_TOKEN=previous.token;}
 });
