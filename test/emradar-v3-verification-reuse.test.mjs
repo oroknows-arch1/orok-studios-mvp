@@ -38,7 +38,7 @@ test('materially different copy must run independent verification',async()=>{
  assert.equal(f.calls(),2);assert.equal(result.reused,false);
 });
 test('failed or expired verifications cannot be recycled',async()=>{
- const f=make();await verify(f,'a');f.campaign.proposal_verifications.a[0].status='INVESTIGATION_REQUIRED';
+ const f=make();f.campaign.assets.b.asset.body='Other research';f.campaign.assets.b.fingerprint=assetFingerprint(f.campaign.assets.b.asset);await verify(f,'a');f.campaign.proposal_verifications.a[0].status='INVESTIGATION_REQUIRED';
  await verify(f,'b');assert.equal(f.calls(),2);
  const g=make();g.workflow.clock=()=>Date.parse('2026-11-17T01:00:00Z');await verify(g,'a');await verify(g,'b');assert.equal(g.calls(),2);
 });
