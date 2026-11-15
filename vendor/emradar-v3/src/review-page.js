@@ -86,6 +86,8 @@ function openEditor({heading,initial,multiline=true,save}){
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
  main.replaceChildren();
+ const automatic=view.automaticVerification;
+ if(automatic){const summary=document.createElement('article');summary.append(text('h2','Automatic proposal verification'),text('p',automatic.status+' · '+automatic.verified+' verified · '+automatic.investigation_required+' requiring investigation · '+automatic.investigations_used+' of '+automatic.max_investigations+' investigation calls used · '+automatic.reused_successes+' successful results reused'));main.append(summary);}
  const counts={approved:0,rejected:0,undecided:0};
  for(const entry of view.entries){
   if(entry.decision?.decision==='APPROVE')counts.approved++;

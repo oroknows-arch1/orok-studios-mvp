@@ -249,7 +249,9 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   const service=await createOpenAiPreparationReviewService({
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
-   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
+   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true',
+   proposalVerificationMaxInvestigations:Number(env.EMRADAR_V3_PROPOSAL_MAX_INVESTIGATIONS||8),
+   proposalVerificationMaxToolCalls:Number(env.EMRADAR_V3_PROPOSAL_MAX_TOOL_CALLS||3)
   });
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;

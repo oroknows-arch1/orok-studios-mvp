@@ -125,6 +125,9 @@ export class CampaignStore {
   async recordProposalVerification(id,destinationId,fingerprint,verification){
    return this.mutate(id,state=>{if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const entry=state.assets[destinationId],destination=state.destinations.find(item=>item.id===destinationId);if(!entry||entry.fingerprint!==fingerprint||!destination)throw Error('STALE_ASSET_VERIFICATION');const binding=proposalBinding({asset:entry.asset,destination,evidence:state.preparation_input?.document?.evidence??[]});for(const key of Object.keys(binding))if(verification?.[key]!==binding[key])throw Error('INVALID_PROPOSAL_VERIFICATION_BINDING');state.proposal_verifications??={};state.proposal_verifications[destinationId]??=[];if(!state.proposal_verifications[destinationId].some(item=>item.id===verification.id))state.proposal_verifications[destinationId].push(structuredClone(verification));state.events.push({type:'PROPOSAL_VERIFIED',destination_id:destinationId,id:randomUUID(),verification_id:verification.id,status:verification.status,asset_sha256:fingerprint});return state;});
   }
+  async recordAutomaticVerificationRun(id,summary){
+   return this.mutate(id,state=>{if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');state.automatic_proposal_verification=structuredClone(summary);state.events??=[];state.events.push({type:'AUTOMATIC_PROPOSAL_VERIFICATION_COMPLETED',id:randomUUID(),status:summary.status,investigations_used:summary.investigations_used,distinct_proposals:summary.distinct_proposals});return state;});
+  }
   async revise(id,destinationId,fingerprint,changes,verifiedDestination=null,recipientCheck=null) {
     if (!changes || typeof changes!=='object' || Array.isArray(changes)) throw Error('INVALID_REVISION');
     const allowed=['subject','body','to'];

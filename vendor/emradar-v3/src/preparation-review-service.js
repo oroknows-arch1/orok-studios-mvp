@@ -23,6 +23,7 @@ import {sha256,MAX_DESTINATIONS,isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
 import {ProposalVerificationService} from './proposal-verification.js';
+import {automaticallyVerifyProposals} from './automatic-proposal-verification.js';
 
 export async function excludeSourceInstitutionDestinations({store,directory,campaignId}){
  const state=(await store.adapter.read(campaignId))?.value,document=state?.preparation_input?.document;
@@ -80,7 +81,7 @@ export function assessPublicationReview({state,candidates}) {
 // owner-notification transports have been configured and independently tested.
 // Does not mount HTTP routes, deploy, distribute or trigger a campaign at import.
 export async function createPreparationReviewService({
- pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,investigateProposal,autonomousDiscovery=false
+ pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,investigateProposal,autonomousDiscovery=false,proposalVerificationMaxInvestigations=8
 }) {
  if(typeof pool?.query!=='function'||typeof notify!=='function'||
     typeof researchEvidence!=='function'||typeof write!=='function'||
@@ -98,10 +99,7 @@ export async function createPreparationReviewService({
  const basePrepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const prepare=async input=>{
   const result=await basePrepare(input),state=(await adapter.read(result.campaignId))?.value;
-  if(verifier&&state&&isReviewPhase(state.phase))for(const [destinationId,entry] of Object.entries(state.assets??{})){
-   const verification=await verifier.verify({asset:entry.asset,destination:state.destinations.find(item=>item.id===destinationId),evidence:state.preparation_input?.document?.evidence??[],previous:state.proposal_verifications?.[destinationId]?.at(-1)??null});
-   await store.recordProposalVerification(result.campaignId,destinationId,entry.fingerprint,verification);
-  }
+  if(verifier&&state&&isReviewPhase(state.phase))await automaticallyVerifyProposals({store,campaignId:result.campaignId,verifier,maxInvestigations:proposalVerificationMaxInvestigations});
   return result;
  };
  const renderVerifiedVisual=createVerifiedVisualRenderer(renderVisual);
@@ -302,7 +300,7 @@ export async function createPreparationReviewService({
 
 // Convenience composition for the paid API's existing OpenAI connection.
 // Caller still controls activation, review notification and all external effects.
-export async function createOpenAiPreparationReviewService({openai,...options}) {
- const providers=createOpenAiPreparationProviders({openai});
+export async function createOpenAiPreparationReviewService({openai,proposalVerificationMaxToolCalls=3,...options}) {
+ const providers=createOpenAiPreparationProviders({openai,proposalVerificationMaxToolCalls});
  return createPreparationReviewService({...options,...providers,openai});
 }
