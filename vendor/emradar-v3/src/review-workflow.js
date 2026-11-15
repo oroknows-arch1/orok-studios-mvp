@@ -1,4 +1,5 @@
 import {isReviewPhase} from './contracts.js';
+import {proposalBinding} from './proposal-verification.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {randomUUID,createHash,timingSafeEqual} from 'node:crypto';
 import {issueReviewAccess,consumeReviewAccess} from './review-access.js';
@@ -128,8 +129,29 @@ export class ReviewWorkflow {
  async verifyAgain(campaignId,sessionId,secret,destinationId,fingerprint){
   await this.authenticate(campaignId,sessionId,secret);if(!this.verifier)throw Error('PROPOSAL_VERIFICATION_UNAVAILABLE');
   const campaign=(await this.store.adapter.read(campaignId))?.value,entry=campaign?.assets?.[destinationId];if(!entry||entry.fingerprint!==fingerprint)throw Error('STALE_ASSET_VERIFICATION');
-  const verification=await this.verifier.verify({asset:entry.asset,destination:campaign.destinations.find(item=>item.id===destinationId),evidence:campaign.preparation_input?.document?.evidence??[],previous:campaign.proposal_verifications?.[destinationId]?.at(-1)??null});
-  await this.store.recordProposalVerification(campaignId,destinationId,fingerprint,verification);return verification;
+  const destination=campaign.destinations.find(item=>item.id===destinationId);
+  const evidence=campaign.preparation_input?.document?.evidence??[];
+  const binding=proposalBinding({asset:entry.asset,destination,evidence});
+  const current=campaign.proposal_verifications?.[destinationId]?.at(-1)??null;
+  const valid=record=>record?.status==='VERIFIED'&&record.deliverable===true&&Array.isArray(record.claims)&&record.claims.length>0&&record.claims.every(claim=>claim.material===false||claim.status==='VERIFIED')&&typeof record.expires_at==='string'&&Date.parse(record.expires_at)>this.clock()&&record.evidence_sha256===binding.evidence_sha256;
+  // A repeat click for unchanged content must not trigger another paid investigation.
+  if(valid(current)&&Object.keys(binding).every(key=>current[key]===binding[key]))return {...current,reused:true,reuse_reason:'UNCHANGED_PROPOSAL'};
+  // Share only verified findings for the exact same complete subject and body, evidence,
+  // kind and evidence IDs. Recipient-specific changes never share a verification.
+  const sameContent=other=>other.asset.kind===entry.asset.kind&&other.asset.subject===entry.asset.subject&&other.asset.body===entry.asset.body&&JSON.stringify([...(other.asset.evidence_ids??[])].sort())===JSON.stringify([...(entry.asset.evidence_ids??[])].sort());
+  for(const [otherId,other] of Object.entries(campaign.assets??{})){
+   if(otherId===destinationId||!sameContent(other))continue;
+   const source=(campaign.proposal_verifications?.[otherId]??[]).findLast(valid);
+   if(!source||source.asset_sha256!==other.fingerprint)continue;
+   const sourceDestination=campaign.destinations.find(item=>item.id===otherId);
+   const sourceBinding=proposalBinding({asset:other.asset,destination:sourceDestination,evidence});
+   if(Object.keys(sourceBinding).some(key=>source[key]!==sourceBinding[key]))continue;
+   const verification={...structuredClone(source),...binding,id:randomUUID(),reused_from_verification_id:source.id,review_scope:'SHARED_EXACT_CONTENT',verified_at:source.verified_at,expires_at:source.expires_at};
+   await this.store.recordProposalVerification(campaignId,destinationId,fingerprint,verification);
+   return {...verification,reused:true,reuse_reason:'IDENTICAL_CONTENT_AND_EVIDENCE'};
+  }
+  const verification=await this.verifier.verify({asset:entry.asset,destination,evidence,previous:current});
+  await this.store.recordProposalVerification(campaignId,destinationId,fingerprint,verification);return {...verification,reused:false};
  }
  async revise(campaignId,sessionId,secret,destinationId,fingerprint,changes) {
   await this.authenticate(campaignId,sessionId,secret);
