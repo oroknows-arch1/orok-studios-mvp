@@ -33,7 +33,7 @@ const text=(tag,value)=>{
 function verificationFeedback(result){
  const state=result?.status||'UNKNOWN';
  const detail=result?.explanation||'The verification service did not return an explanation.';
- return 'Verify Again completed · '+state+' · '+detail;
+ return (result?.reused?'Existing verified research reused · No new AI search · ':'New verification completed · ')+state+' · '+detail;
 }
 async function verifyCurrent(button,item){
  button.disabled=true;
