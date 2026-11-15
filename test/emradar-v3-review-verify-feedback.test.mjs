@@ -6,7 +6,7 @@ test('Verify Again updates the owner status with the actual saved verification o
  assert.match(reviewPage,/const result=await api\('verify'/);
  assert.match(reviewPage,/await refresh\(\);\s*status\.textContent=verificationFeedback\(result\)/);
  assert.match(reviewPage,/result\?\.explanation/);
- assert.match(reviewPage,/Verify Again completed/);
+ assert.match(reviewPage,/New verification completed/);assert.match(reviewPage,/Existing verified research reused/);
 });
 
 test('individual and group Verify Again use the same action and expose errors',()=>{
