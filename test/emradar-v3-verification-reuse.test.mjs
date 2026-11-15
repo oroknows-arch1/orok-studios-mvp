@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {ReviewWorkflow} from '../vendor/emradar-v3/src/review-workflow.js';
 import {proposalBinding} from '../vendor/emradar-v3/src/proposal-verification.js';
+import {assetFingerprint} from '../vendor/emradar-v3/src/contracts.js';
 
 const make=()=>{
  const id='campaign-1',evidence=[{id:'E1',fact:'verified evidence',source_url:'https://example.org'}];
  const asset=(destination_id,body='Identical fact supported by E1')=>({campaign_id:id,destination_id,kind:'EMAIL',subject:'One story',body,evidence_ids:['E1']});
- const campaign={assets:{a:{asset:asset('a'),fingerprint:'a-hash'},b:{asset:asset('b'),fingerprint:'b-hash'}},destinations:[{id:'a',name:'Outlet A'},{id:'b',name:'Outlet B'}],preparation_input:{document:{evidence}},proposal_verifications:{}};
+ const campaign={assets:{a:{asset:asset('a'),fingerprint:assetFingerprint(asset('a'))},b:{asset:asset('b'),fingerprint:assetFingerprint(asset('b'))}},destinations:[{id:'a',name:'Outlet A'},{id:'b',name:'Outlet B'}],preparation_input:{document:{evidence}},proposal_verifications:{}};
  let calls=0;
  const workflow={
   authenticate:async()=>{},
@@ -32,7 +33,7 @@ test('identical email research is reused across recipients but rebound to the ex
  assert.notEqual(first.id,second.id);
 });
 test('materially different copy must run independent verification',async()=>{
- const f=make();f.campaign.assets.b.asset.body='A different factual assertion';
+ const f=make();f.campaign.assets.b.asset.body='A different factual assertion';f.campaign.assets.b.fingerprint=assetFingerprint(f.campaign.assets.b.asset);
  await verify(f,'a');const result=await verify(f,'b');
  assert.equal(f.calls(),2);assert.equal(result.reused,false);
 });
