@@ -9,7 +9,7 @@ const input={asset:{kind:'EMAIL',destination_id:'journal',body:'Proposal',eviden
 test('proposal investigator requires genuine web search citations for every verified material claim',async()=>{
  const requests=[];const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({})}},responses:{create:async request=>{requests.push(request);return response(result);}}}});
  assert.deepEqual(await providers.investigateProposal(input),result);
- assert.equal(requests[0].tool_choice,'required');assert.equal(requests[0].tools[0].type,'web_search');
+ assert.equal(requests[0].tool_choice,'required');assert.equal(requests[0].tools[0].type,'web_search');assert.deepEqual(requests[0].include,['web_search_call.action.sources']);
  const unsupported=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>({})}},responses:{create:async()=>response({...result,claims:[{...result.claims[0],source_urls:['https://invented.example']} ]})}}});
  await assert.rejects(unsupported.investigateProposal(input),/PROPOSAL_RESEARCH_SOURCES_UNVERIFIED/);
 });
