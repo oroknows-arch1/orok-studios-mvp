@@ -25,7 +25,7 @@ test('repeated owner verification reuses a bound valid result without a second A
  assert.equal(second.reuse_reason,'UNCHANGED_PROPOSAL');
 });
 test('identical email research is reused across recipients but rebound to the exact recipient',async()=>{
- const f=make();const first=await verify(f,'a');const second=await verify(f,'b');
+ const f=make();const first=await verify(f,'a');assert.equal(f.campaign.proposal_verifications.b.length,1,'second recipient receives verified research automatically');const second=await verify(f,'b');
  assert.equal(f.calls(),1);assert.equal(second.reused,true);
  assert.equal(second.reuse_reason,'IDENTICAL_CONTENT_AND_EVIDENCE');
  assert.equal(second.reused_from_verification_id,first.id);
