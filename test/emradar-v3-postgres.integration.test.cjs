@@ -1,5 +1,5 @@
 'use strict';
-const {checkedAsset}=require('./fixtures/v3-claim-fixtures.cjs');
+const {checkedAsset,checkedState}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
@@ -15,6 +15,7 @@ test('V3 PostgreSQL: competing email and owner notification reservations permit 
  const store=new V3Reservations(pool);
  const id='v3-ci-'+crypto.randomUUID(),destination=id+'-journal';
  const {destination:outlet,asset}=await require('./fixtures/v3-persisted-email.cjs')(pool,id,destination);
+ const fixture=checkedState({});
  checkedAsset(asset,fixture.preparation_input.document);
  const approval={campaign_id:id,destination_id:destination,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
  const key=hash([id,destination,approval.asset_sha256]);

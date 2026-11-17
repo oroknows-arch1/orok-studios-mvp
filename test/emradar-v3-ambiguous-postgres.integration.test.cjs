@@ -1,5 +1,5 @@
 'use strict';
-const {checkedAsset}=require('./fixtures/v3-claim-fixtures.cjs');
+const {checkedAsset,checkedState}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
@@ -13,6 +13,7 @@ test('V3 PostgreSQL: uncertain SMTP outcome remains AMBIGUOUS and cannot be retr
  t.after(async()=>pool.end());
  const id='v3-'+crypto.randomUUID(),destination=id+'-outlet';
  const {destination:outlet,asset}=await require('./fixtures/v3-persisted-email.cjs')(pool,id,destination);
+ const fixture=checkedState({});
  checkedAsset(asset,fixture.preparation_input.document);
  const fingerprint=hash(asset),approval={authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:id,destination_id:destination};
  const key=hash([id,destination,fingerprint]);

@@ -213,3 +213,35 @@ test('an unsupported recheck holds an unchanged unsent draft and archives its pr
  assert.equal(state.decisions.x,undefined);
  await assert.rejects(store.claimDelivery(campaign,'x'),/INCOMPLETE_ASSET_NOT_SENDABLE/);
 });
+
+test('PostgreSQL dry-run archives one old approval and leaves sent history byte-identical',async t=>{
+ if(!process.env.V3_TEST_DATABASE_URL){t.skip('Disposable V3_TEST_DATABASE_URL required');return;}
+ const {Client}=await import('pg');
+ const {PostgresAdapter}=await import('../vendor/emradar-v3/src/adapters/postgres.js');
+ const client=new Client({connectionString:process.env.V3_TEST_DATABASE_URL});
+ await client.connect();
+ t.after(()=>client.end());
+ // Scope the real SQL sweep to this session, isolated from parallel CI cases.
+ await client.query(`CREATE TEMP TABLE v3_campaign_state (
+  campaign_id text PRIMARY KEY, version bigint NOT NULL, payload jsonb NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+ )`);
+ const adapter=new PostgresAdapter(client),store=new CampaignStore(adapter);
+ const campaign='dry-run-postgres';
+ const unsent=originalAsset(campaign,'pending'),sent=originalAsset(campaign,'sent');
+ const sentEntry={asset:sent,fingerprint:assetFingerprint(sent)};
+ const receipt={status:'ACCEPTED',receipt:{provider_id:'historical-id'}};
+ const approval={decision:'APPROVE',authority:'OWNER',asset_sha256:assetFingerprint(unsent)};
+ const state={phase:'PUBLICATION_REVIEW',assets:{pending:{asset:unsent,fingerprint:assetFingerprint(unsent)},sent:sentEntry},
+  deliveries:{sent:receipt},decisions:{pending:approval},events:[]};
+ await adapter.compareAndSwap(campaign,null,state);
+ const report=await quarantineSavedProposals({pool:client,store});
+ assert.equal(report[0].proposals[0].destination_id,'pending');
+ const saved=await adapter.read(campaign);
+ assert.deepEqual(saved.value.assets.sent,sentEntry);
+ assert.deepEqual(saved.value.deliveries.sent,receipt);
+ assert.deepEqual(saved.value.editorial_versions.pending[0].previous_decision,approval);
+ assert.equal(saved.value.decisions.pending,undefined);
+ assert.deepEqual(await quarantineSavedProposals({pool:client,store}),[]);
+ assert.equal((await adapter.read(campaign)).version,saved.version);
+});

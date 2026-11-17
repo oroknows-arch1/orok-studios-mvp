@@ -1,5 +1,5 @@
 'use strict';
-const {checkedAsset}=require('./fixtures/v3-claim-fixtures.cjs');
+const {checkedAsset,checkedState}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
@@ -14,6 +14,7 @@ test('V3 PostgreSQL prepared API: concurrent approved deliveries permit one simu
  t.after(async()=>pool.end());
  const id='v3-'+crypto.randomUUID(),destination=id+'-journal';
  const {destination:outlet,asset}=await require('./fixtures/v3-persisted-email.cjs')(pool,id,destination);
+ const fixture=checkedState({});
  checkedAsset(asset,fixture.preparation_input.document);
  const fingerprint=hash(asset);
  const approval={authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:id,destination_id:destination};
