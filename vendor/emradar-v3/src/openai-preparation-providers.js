@@ -130,7 +130,8 @@ function createVisualRenderer(onVisualInspection){
 export function createClaimGatedVisualRenderer(){
  const render=createVisualRenderer();
  return input=>{
-  assertGatedDocument(input.document,input.scan);
-  return render(input);
+  const document=assertGatedDocument(input.document,input.scan);
+  const records=document.records.map(({id,status,theme})=>({id,status,theme}));
+  return render({...input,document:{evidence:document.evidence,records}});
  };
 }

@@ -254,7 +254,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    proposalVerificationMaxInvestigations:Number(env.EMRADAR_V3_PROPOSAL_MAX_INVESTIGATIONS||8),
    proposalVerificationMaxToolCalls:Number(env.EMRADAR_V3_PROPOSAL_MAX_TOOL_CALLS||3)
   });
-  await quarantineLegacyProposals({pool,store:service.store});
+  const quarantineCampaigns=await quarantineLegacyProposals({pool,store:service.store});
+  if(quarantineCampaigns)console.info('V3_EVIDENCE_QUARANTINE_CAMPAIGNS',quarantineCampaigns);
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
    try{
