@@ -1,4 +1,5 @@
 'use strict';
+const {checkedAsset,checkedState}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
@@ -9,10 +10,12 @@ const hash=x=>crypto.createHash('sha256').update(JSON.stringify(canonical(x))).d
 function response(){return {statusCode:200,status(n){this.statusCode=n;return this;},json(x){this.body=x;return this;}};}
 test('V3 paid API prepared integration wires authenticated route, trusted persisted approval, reservation and simulated receipt',async()=>{
  const destination=verified('journal');
+ const fixture=checkedState({});
  const asset={campaign_id:'v3-integration',destination_id:'journal',kind:'EMAIL',body:'Evidence',to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1']};
+ checkedAsset(asset,fixture.preparation_input.document);
  const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
  const key=hash([asset.campaign_id,asset.destination_id,approval.asset_sha256]),events=[];
- const state={phase:'PUBLICATION_REVIEW',destinations:[destination],assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
+ const state={...fixture,phase:'PUBLICATION_REVIEW',destinations:[destination],assets:{journal:{asset,fingerprint:hash(asset)}},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
  const reserved=new Set();
  const pool={query:async(sql,args)=>{
   if(sql.startsWith('SELECT payload'))return {rows:[{payload:state}]};

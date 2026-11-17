@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedProviders}=claimFixtures;
 import test from 'node:test';
 import verified from './fixtures/v3-verified-recipient.cjs';
 import assert from 'node:assert/strict';
@@ -17,7 +19,7 @@ test('rejects old editorial approval before writing; saves two pending alternati
  const f=fixture(),before=f.read();let calls=0;
  const run=()=>prepareEditorialAlternatives({store:f.store,campaignId:'campaign',requestId:'request',angles:['Energy and factories','Plans becoming projects'],write:async input=>{
   calls++;assert.equal(f.read().decisions.journal.decision,'REJECT');
-  assert.deepEqual(input.document.uncertainty,['Plans do not establish completed projects.']);
+  assert.deepEqual(input.document,before.preparation_input.document);
   return {...email(input),subject:input.editorialAngle};
  }});
  assert.equal((await run()).variants,2);await run();assert.equal(calls,2);
@@ -42,7 +44,7 @@ test('already distributed editorial assets cannot be rewritten',async()=>{
 
 test('active writer receives plain-language direction, actual publication relevance and only linked evidence',async()=>{
  let request;
- const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async input=>{request=input;return {choices:[{message:{content:JSON.stringify({story_evidence_ids:['e1'],subject:'Article idea',body:'I’m Sean Walker, working on EMRADAR. Our scan identified the proposed energy project. The proposal shows a move toward investment, although it does not establish completed capacity. We are developing an article on what would turn the plan into a project. Projects are proposed. Would an article or research contribution interest you? If useful, I can send a concise draft with sources for review.',analytical_finding:'The proposal shows a move toward investment, although it does not establish completed capacity.',limitations:'Projects are proposed.'})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGES');}}}});
+ const providers=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async input=>{request=input;return {choices:[{message:{content:JSON.stringify({story_evidence_ids:['e1'],subject:'Article idea',body:'I’m Sean Walker, working on EMRADAR. Our scan identified the proposed energy project. The proposal shows a move toward investment, although it does not establish completed capacity. We are developing an article on what would turn the plan into a project. Projects are proposed. Would an article or research contribution interest you? If useful, I can send a concise draft with sources for review.',analytical_finding:'The proposal shows a move toward investment, although it does not establish completed capacity.',limitations:'Projects are proposed.'})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGES');}}}});
  const asset=await providers.write({campaignId:'campaign',destination:{...verified('journal'),id:'journal',name:'African Energy',destination_class:'EDITORIAL_PUBLICATION',relationship:{reason:'Reports on African energy industries.'},evidence:{ids:['e1']},contact_verified:true},document:{evidence:[{id:'e1',verified:true,fact:'Proposed energy project.'},{id:'e2',verified:true,fact:'Unrelated story.'},{id:'e3',verified:false,fact:'Unverified story.'}]},editorialAngle:'Follow the announced energy plans'});
  const payload=JSON.parse(request.messages[1].content);
  assert.match(request.messages[0].content,/everyday language/);assert.match(request.messages[0].content,/Financial figures are optional/);

@@ -1,4 +1,5 @@
 'use strict';
+const {checkedAsset}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
@@ -13,10 +14,11 @@ test('V3 PostgreSQL prepared API: concurrent approved deliveries permit one simu
  t.after(async()=>pool.end());
  const id='v3-'+crypto.randomUUID(),destination=id+'-journal';
  const {destination:outlet,asset}=await require('./fixtures/v3-persisted-email.cjs')(pool,id,destination);
+ checkedAsset(asset,fixture.preparation_input.document);
  const fingerprint=hash(asset);
  const approval={authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:id,destination_id:destination};
  const key=hash([id,destination,fingerprint]);
- const state={phase:'PUBLICATION_REVIEW',destinations:[outlet],assets:{[destination]:{asset,fingerprint}},decisions:{[destination]:approval},deliveries:{[destination]:{status:'ATTEMPTING',idempotency_key:key}}};
+ const state={...fixture,phase:'PUBLICATION_REVIEW',destinations:[outlet],assets:{[destination]:{asset,fingerprint}},decisions:{[destination]:approval},deliveries:{[destination]:{status:'ATTEMPTING',idempotency_key:key}}};
  await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb)',[id,JSON.stringify(state)]);
  let sends=0;
  const auth='test-only-token'.padEnd(48,'x');

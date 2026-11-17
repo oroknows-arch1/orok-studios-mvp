@@ -822,5 +822,24 @@
     ],
     "production_campaign_mutations": 0,
     "external_distribution": 0
+  },
+  "november_18_pre_proposal_claim_gate": {
+    "status": "IMPLEMENTED_OFFLINE_PRODUCTION_RELEASE_PENDING",
+    "render_live_commit": "53a934a99845ce22865e7aa88b570a2e1993dfba",
+    "authoritative_policy_commit": "a2dfd80b72703bc94667b8eccf900991010e875a",
+    "root_cause": "Published-scan URLs promoted claims directly to verified. Drafting ran before the web-citation check and received the unverified scanner causal chain.",
+    "control": "Claim checks require a downloaded attributable article body, a matching passage and a supported angle before routing or writing. Exact draft wording is rechecked before approval eligibility. Stale unsent copy is held with its provenance and approval history preserved.",
+    "live_read_only_quarantine_preview": {
+      "review_campaigns_examined": 43,
+      "affected_campaigns": 30,
+      "unsent_email_drafts_without_claim_proof": 97,
+      "unsent_x_drafts_without_claim_proof": 19,
+      "stale_approvals": 16,
+      "accepted_or_confirmed_deliveries_preserved": 341
+    },
+    "budget": "Existing maximum eight investigations and three web-search calls each by default. Case and search exhaustion produce holds.",
+    "production_writes": 0,
+    "external_distribution": 0,
+    "remaining_verification": "Verify the live provider and quarantine counts after separately authorised release."
   }
 }

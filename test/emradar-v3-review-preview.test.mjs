@@ -1,3 +1,4 @@
+import claimFixtures from './fixtures/v3-claim-fixtures.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -97,6 +98,8 @@ test('HTTPS and saved data graphics render; unsafe graphic schemes do not',async
 });
 test('review preserves decisions/history and permits editorial override while delivery still rejects unsupported recipients',async()=>{
  let state={phase:'PUBLICATION_REVIEW',scan:{},destinations:[{id:'journal'}],assets:{journal:{asset:{kind:'EMAIL',destination_id:'journal',subject:'Idea',body:'Saved body'},fingerprint:'saved'}},decisions:{journal:{decision:'REJECT'}},deliveries:{},events:[],editorial_versions:{journal:[{asset:{kind:'EMAIL',destination_id:'journal',body:'Previous body'},fingerprint:'previous'}]}};
+ claimFixtures.checkedState(state);
+ claimFixtures.checkedAsset(state.assets.journal.asset,state.preparation_input.document);
  let version=1;
  const adapter={read:async()=>({version,value:structuredClone(state)}),compareAndSwap:async(_key,prior,next)=>{assert.equal(prior,version);version++;state=structuredClone(next);return true;}};
  const store=new CampaignStore(adapter),workflow=new ReviewWorkflow({store,adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:'https://review.example'});

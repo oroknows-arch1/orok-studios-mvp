@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedProviders}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import verified from './fixtures/v3-verified-recipient.cjs';
@@ -22,7 +24,7 @@ test('directory rejects unsupported writes and duplicate recipients without INSE
  await assert.rejects(directory.upsert(verified()),/DUPLICATE_RECIPIENT/);assert.equal(inserts,0);
 });
 test('missing recipient cannot call the paid writer',async()=>{
- let calls=0;const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{calls++;}}},images:{generate:async()=>{}}}});
+ let calls=0;const providers=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async()=>{calls++;}}},images:{generate:async()=>{}}}});
  await assert.rejects(providers.write({campaignId:'campaign',destination:{id:'bad',evidence:{ids:['e1']}},document:{}}),/VERIFIED_RECIPIENT_REQUIRED/);assert.equal(calls,0);
 });
 test('campaign selection hides unsupported contacts, retains incomplete candidates and deduplicates exact addresses',()=>{

@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedAsset,checkedState}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createPreparationReviewService} from '../vendor/emradar-v3/src/preparation-review-service.js';
@@ -16,7 +18,8 @@ test('rejected asset regenerates once from persisted feedback and preserves unre
   if(sql.includes('FROM v3_outlet_directory'))return {rows:[]};
   return {rows:[],rowCount:0};
  }};
- const service=await createPreparationReviewService({pool,reviewOrigin:'https://review.example',notify:async()=>({accepted:true,provider_id:'owner-mail',recipient:'sean@emradar.net',campaign_id:'campaign'}),reviewedLinks:[],researchEvidence:async()=>({evidence:[]}),write:async input=>{writerInput=input;generationCalls++;return {...prior,subject:'Revised subject',body:'A revised evidence-grounded proposal.',html:undefined};},renderVisual:async()=>{throw Error('X_WORKER_MUST_NOT_RUN');},fetcher:async()=>({ok:false})});
+ checkedState(state);
+ const service=await createPreparationReviewService({pool,reviewOrigin:'https://review.example',notify:async()=>({accepted:true,provider_id:'owner-mail',recipient:'sean@emradar.net',campaign_id:'campaign'}),reviewedLinks:[],verifyClaims:async()=>({evidence:[]}),write:async input=>{writerInput=input;generationCalls++;return checkedAsset({...prior,subject:'Revised subject',body:'A revised evidence-grounded proposal.',html:undefined},input.document);},renderVisual:async()=>{throw Error('X_WORKER_MUST_NOT_RUN');},fetcher:async()=>({ok:false})});
  const result=await service.regenerateRejectedAsset('campaign','journal','request-1');
  assert.equal(result.status,'OWNER_REVIEW_PENDING');assert.equal(writerInput.ownerFeedback,state.review_feedback[0].feedback);assert.equal(generationCalls,1);
  assert.equal(state.assets.journal.asset.subject,'Revised subject');assert.notEqual(state.assets.journal.fingerprint,assetFingerprint(prior));

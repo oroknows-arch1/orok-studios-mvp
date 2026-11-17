@@ -22,7 +22,7 @@ export async function prepareEditorialAlternatives({store,write,campaignId,reque
  if(job.status==='COMPLETE'||job.status==='FAILED')return {status:job.status,rejected:job.rejected.length,variants:job.variants.length};
  const destination=state.destinations.find(d=>d.id===job.rejected[0].destination_id);
  if(!destination||!state.preparation_input?.document)throw Error('EDITORIAL_INPUT_MISSING');
- const document={...state.preparation_input.document,uncertainty:[job.rejected[0].asset.evidence_limitations].filter(Boolean)};
+ const document=state.preparation_input.document;
  const evidenceIds=new Set(document.evidence.filter(e=>e.verified===true).map(e=>e.id));
  for(let index=0;index<2;index++){
   if(job.variants.some(v=>v.index===index))continue;
@@ -31,7 +31,7 @@ export async function prepareEditorialAlternatives({store,write,campaignId,reque
    current.editorial_rewrite.attempted.push(index);return current;
   });
   try{
-   const asset=await write({campaignId,destination,document,editorialAngle:angles[index]});
+   const asset=await write({campaignId,destination,document,scan:state.scan,editorialAngle:angles[index]});
    if(asset.kind!=='EMAIL'||asset.campaign_id!==campaignId||asset.destination_id!==destination.id)throw Error('CROSS_CAMPAIGN_ASSET');
    verifyEditorialAsset(asset,{evidenceIds});
    await store.mutate(campaignId,current=>{

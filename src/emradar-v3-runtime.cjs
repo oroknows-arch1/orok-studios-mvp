@@ -127,6 +127,7 @@ const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snaps
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
+  if(existing?.claim_gate_attempt?.status==='NO_VERIFIED_ANGLE'||existing?.claim_gate_attempt?.status==='RUNNING')continue;
   if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
  }
  return null;
@@ -137,7 +138,7 @@ async function resumePendingDiscovery({pool,service}){
  const {rows}=await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
   LEFT JOIN v3_campaign_state r ON r.campaign_id='review:'||c.campaign_id
   WHERE c.payload->>'phase' IN ('PUBLICATION_REVIEW','ASSETS_PREPARED')
-  AND c.payload->'preparation_input'->'document' IS NOT NULL
+  AND c.payload->'preparation_input'->'document'->'claim_gate' IS NOT NULL
   AND COALESCE(c.payload->'review_completion'->>'complete','false')<>'true'
   AND r.campaign_id IS NULL
   ORDER BY c.updated_at ASC,c.campaign_id ASC LIMIT 1`);
@@ -253,6 +254,9 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    proposalVerificationMaxInvestigations:Number(env.EMRADAR_V3_PROPOSAL_MAX_INVESTIGATIONS||8),
    proposalVerificationMaxToolCalls:Number(env.EMRADAR_V3_PROPOSAL_MAX_TOOL_CALLS||3)
   });
+  const {quarantineSavedProposals}=await import('../vendor/emradar-v3/src/claim-quarantine.js');
+  const quarantine=await quarantineSavedProposals({pool,store:service.store});
+  if(quarantine.length)console.info('V3_CLAIM_EVIDENCE_QUARANTINE',JSON.stringify(quarantine));
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
    try{

@@ -12,7 +12,7 @@ export async function refreshUnreviewedEditorialDrafts({store,write,campaignId})
   const current=(await store.adapter.read(campaignId))?.value;
   const previous=current.assets[destination.id];
   if(!isEditorialDestination(destination)||previous?.asset?.kind!=='EMAIL'||current.decisions[destination.id]||current.deliveries[destination.id]||(previous.asset.editorial_reference?.sha256===EDITORIAL_REFERENCE.sha256&&previous.asset.editorial_enforcement===EDITORIAL_ENFORCEMENT_VERSION))continue;
-  let asset;try{asset=await write({campaignId,destination,document:{...document,uncertainty:[previous.asset.evidence_limitations,...(document.uncertainty??[])].filter(Boolean)},scan:current.scan});
+  let asset;try{asset=await write({campaignId,destination,document,scan:current.scan});
   }catch(error){
    failures.push({destination_id:destination.id,error:error.message});
    await store.mutate(campaignId,state=>{
