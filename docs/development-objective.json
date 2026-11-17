@@ -830,12 +830,11 @@
     "root_cause": "Published-scan URLs promoted claims directly to verified. Drafting ran before the web-citation check and received the unverified scanner causal chain.",
     "control": "Claim checks require a downloaded attributable article body, a matching passage and a supported angle before routing or writing. Exact draft wording is rechecked before approval eligibility. Stale unsent copy is held with its provenance and approval history preserved.",
     "live_read_only_quarantine_preview": {
-      "review_campaigns_examined": 43,
       "affected_campaigns": 30,
-      "unsent_email_drafts_without_claim_proof": 97,
-      "unsent_x_drafts_without_claim_proof": 19,
+      "unsent_email_drafts_without_claim_proof": 112,
+      "unsent_x_drafts_without_claim_proof": 20,
       "stale_approvals": 16,
-      "accepted_or_confirmed_deliveries_preserved": 341
+      "latest_scan_date": "2026-11-18"
     },
     "budget": "Existing maximum eight investigations and three web-search calls each by default. Case and search exhaustion produce holds.",
     "production_writes": 0,

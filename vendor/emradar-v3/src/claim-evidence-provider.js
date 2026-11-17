@@ -10,7 +10,9 @@ const text=node=>textContent(node).replace(/\s+/gu,' ').trim();
 
 export function readArticleBody(html){
  const dom=parseDocument(html);
- const title=text(findAll(node=>node.name==='title',dom.children)[0]??dom);
+ const titleNode=findAll(node=>node.name==='title',dom.children)[0];
+ if(!titleNode)return null;
+ const title=text(titleNode);
  if(!title||title.length>350||/^(access denied|just a moment|attention required|sign in|page not found|forbidden)\b/i.test(title))return null;
  if(/"isAccessibleForFree"\s*:\s*(?:false|"false")/i.test(html))return null;
  const scopes=findAll(node=>node.name==='article',dom.children);
