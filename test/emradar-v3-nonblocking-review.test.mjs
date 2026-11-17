@@ -1,3 +1,4 @@
+import {verifiedReleaseFixture} from './fixtures/claim-proof.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CampaignPreparation} from '../vendor/emradar-v3/src/preparation.js';
@@ -12,7 +13,10 @@ const destinations=[
 ];
 
 test('writer, missing-contact and oversized-X failures all reach owner-visible review',async()=>{
- let state={phase:'DESTINATIONS_SELECTED',destinations,assets:{},decisions:{},deliveries:{},events:[]};
+ const proof=await verifiedReleaseFixture(campaignId);
+ const ids=proof.x.destination.evidence.ids;
+ const selected=destinations.map(destination=>({...destination,evidence:{ids}}));
+ let state={phase:'DESTINATIONS_SELECTED',destinations:selected,assets:{},decisions:{},deliveries:{},events:[]};
  const store={
   start:async()=>campaignId,select:async()=>{},adapter:{read:async()=>({value:state})},
   prepare:async(_id,assets,warnings)=>{state={...state,phase:'PUBLICATION_REVIEW',assets:Object.fromEntries(assets.map(asset=>[asset.destination_id,{asset}])),preparation_warnings:warnings};}
@@ -20,9 +24,9 @@ test('writer, missing-contact and oversized-X failures all reach owner-visible r
  const preparation=new CampaignPreparation({store,discover:async()=>destinations,write:async({destination})=>{
   if(destination.id==='writer-failure')throw Error('WRITER_FAILED');
   if(destination.id==='missing-contact')throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
-  return {campaign_id:campaignId,destination_id:'x',kind:'X',subject:'Verified',body:'Verified fact',evidence_ids:['e1']};
+  return proof.x.asset;
  },renderVisual:async()=>{throw Error('V3_X_GRAPHIC_LAYOUT_OVERFLOW');}});
- const result=await preparation.prepare({scan:{},document:{evidence}});
+ const result=await preparation.prepare({scan:proof.state.scan,document:proof.state.preparation_input.document});
  assert.equal(result.status,'PUBLICATION_REVIEW');assert.equal(result.assets,3);assert.equal(result.warnings,3);
  assert.deepEqual(Object.keys(state.assets).sort(),['missing-contact','writer-failure','x']);
  for(const {asset} of Object.values(state.assets))assert.equal(asset.review_status,'NEEDS_REVISION');

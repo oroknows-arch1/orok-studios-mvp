@@ -1,3 +1,5 @@
+import {verifiedReleaseFixture} from './fixtures/claim-proof.mjs';
+import {writeVerifiedProposal} from '../vendor/emradar-v3/src/verified-proposal-policy.js';
 import verified from './fixtures/v3-verified-recipient.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,13 +40,13 @@ test('unrelated formation IDs cannot be combined into a pitch; source-enquiry ro
 });
 
 test('initial production preparation saves reference-backed drafts without external distribution',async()=>{
- const store=memory(null),writer=providers();let discovered=0;
- const prepare=new CampaignPreparation({store,discover:async()=>{discovered++;return [destination('journal'),destination('podcast','INFORMATION_CHANNEL')];},write:writer.write,renderVisual:async()=>{throw Error('NO_IMAGES');}});
- // Seed selected destinations to isolate the affected writing route; scan
- // identity and publication verification still pass through CampaignStore.
- const scan={snapshot_date:'2026-10-10',artifact_sha256:'a'.repeat(64),live_artifact_sha256:'a'.repeat(64),archive_artifact_sha256:'a'.repeat(64),publication_verified:true};
- const id=await store.start(scan);await store.select(id,[destination('journal'),destination('podcast','INFORMATION_CHANNEL')]);
- await prepare.prepare({scan,document:{evidence}});
+ const store=memory(null),proof=await verifiedReleaseFixture();
+ const {scan,preparation_input}=proof.state;
+ let discovered=0;
+ const prepare=new CampaignPreparation({store,discover:async()=>{discovered++;throw Error('MUST_NOT_RUN');},write:writeVerifiedProposal,renderVisual:async()=>{throw Error('NO_IMAGES');}});
+ const id=await store.start(scan);
+ await store.select(id,[proof.email('journal').destination,{...proof.email('podcast').destination,destination_class:'INFORMATION_CHANNEL'}]);
+ await prepare.prepare({scan,document:preparation_input.document});
  const state=(await store.adapter.read(id)).value;
  assert.equal(state.phase,'PUBLICATION_REVIEW');assert.equal(discovered,0);assert.deepEqual(state.decisions,{});assert.deepEqual(state.deliveries,{});
  assert(Object.values(state.assets).every(entry=>entry.asset.editorial_reference.sha256===EDITORIAL_REFERENCE.sha256));
@@ -76,11 +78,11 @@ test('the existing alternatives route uses the same reference-backed provider',a
  assert.equal(requests.length,2);assert(state.editorial_rewrite.variants.every(v=>v.asset.editorial_reference.sha256===EDITORIAL_REFERENCE.sha256));
 });
 
-test('persisted-directory draft extension uses the production OpenAI writer and retains saved X',async()=>{
+test('persisted-directory draft extension writes exact verified premises and retains saved X',async()=>{
  const {createOpenAiPreparationReviewService}=await import('../vendor/emradar-v3/src/preparation-review-service.js');
- const {sha256}=await import('../vendor/emradar-v3/src/contracts.js');
- let version=1,state={id:'campaign',phase:'PUBLICATION_REVIEW',assets:{x:{asset:{kind:'X',body:'Keep X'},fingerprint:'saved-x'}},destinations:[{id:'x'}],decisions:{x:{decision:'APPROVE'}},deliveries:{},events:[],preparation_input:{document:{evidence}}};
- const candidate={...destination('journal'),active:true,verification:{...destination('journal').verification,status:'VERIFIED',evidence_ids:['a:0'],scan_evidence_digest:sha256(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))}};
+ const proof=await verifiedReleaseFixture();
+ let version=1,state={id:'campaign',...proof.state,phase:'PUBLICATION_REVIEW',assets:{x:{asset:proof.x.asset,fingerprint:'saved-x'}},destinations:[proof.x.destination],decisions:{x:{decision:'APPROVE'}},deliveries:{},events:[]};
+ const candidate=proof.email('journal').destination;
  const pool={query:async(sql,args=[])=>{
   if(sql.startsWith('CREATE '))return {rows:[]};
   if(sql.startsWith('SELECT record'))return {rows:[{record:candidate}]};
@@ -88,9 +90,10 @@ test('persisted-directory draft extension uses the production OpenAI writer and 
   if(sql.startsWith('UPDATE v3_campaign_state')){if(args[1]!==version)return {rowCount:0};state=JSON.parse(args[2]);version++;return {rowCount:1};}
   throw Error('UNEXPECTED_SQL');
  }};
- const requests=[];
- const openai={chat:{completions:{create:async request=>{requests.push(request);const analytical_finding='The programme shows a shift from isolated proposals to a combined energy-and-vehicle agenda.';return {choices:[{message:{content:JSON.stringify({subject:'Article idea',body:`I’m Sean Walker, working on EMRADAR.\n\nOur scan identified the combined programme. ${analytical_finding}\n\nWe are developing an article on the energy and vehicle plans. These are proposals.\n\nWould a research contribution interest you? If useful, I can send a concise draft with sources for review.`,analytical_finding,limitations:'These are proposals.',story_evidence_ids:['a:0','a:1']})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGES');}}};
+ const openai={chat:{completions:{create:async()=>assert.fail('Exact evidence requires no paid writing pass')}}};
  const service=await createOpenAiPreparationReviewService({pool,reviewOrigin:'https://review.example.org',notify:async()=>{throw Error('NO_EMAILS');},reviewedLinks:[],openai});
  assert.equal((await service.resumeEditorialDrafts('campaign')).editorial_drafts,1);
- assert.equal(state.assets.journal.asset.editorial_reference.sha256,EDITORIAL_REFERENCE.sha256);assert.equal(state.assets.x.fingerprint,'saved-x');assert.equal(state.decisions.x.decision,'APPROVE');assert(requests[0].messages[0].content.includes(originalOutreach));
+ assert.equal(state.assets.journal.asset.editorial_reference.sha256,EDITORIAL_REFERENCE.sha256);
+ assert.equal(state.assets.journal.asset.body,proof.email('journal').asset.body);
+ assert.equal(state.assets.x.fingerprint,'saved-x');assert.equal(state.decisions.x.decision,'APPROVE');
 });

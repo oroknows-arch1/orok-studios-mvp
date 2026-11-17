@@ -1,3 +1,4 @@
+import {verifiedReleaseFixture} from './fixtures/claim-proof.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createOpenAiPreparationProviders} from '../vendor/emradar-v3/src/openai-preparation-providers.js';
@@ -93,14 +94,15 @@ test('graphic callback receives deterministic layout diagnostics',async()=>{
 
 test('the preparation handoff preserves a failed X graphic as owner-visible incomplete work',async()=>{
  let persisted;
- const state={phase:'DESTINATIONS_SELECTED',destinations:[{id:'x',evidence:{ids:bangladeshIds}}]};
+ const proof=await verifiedReleaseFixture('oct18');
+ const state={phase:'DESTINATIONS_SELECTED',destinations:[proof.x.destination]};
  const preparation=new CampaignPreparation({
   store:{start:async()=> 'oct18',select:async()=>{},prepare:async(_id,assets,warnings)=>{persisted={assets,warnings};},adapter:{read:async()=>({value:state})}},
   discover:async()=>state.destinations,
-  write:async()=>({campaign_id:'oct18',destination_id:'x',kind:'X',body:'Analysis with a material limitation.',subject:'Bangladesh',evidence_ids:bangladeshIds}),
+  write:async()=>proof.x.asset,
   renderVisual:async()=>{throw Error('V3_X_VISUAL_QUALITY_FAILED');}
  });
- const result=await preparation.prepare({scan:{},document});
+ const result=await preparation.prepare({scan:proof.state.scan,document:proof.state.preparation_input.document});
  assert.equal(result.status,'PUBLICATION_REVIEW');
  assert.equal(persisted.assets[0].review_status,'NEEDS_REVISION');
  assert.equal(persisted.assets[0].preparation_error,'V3_X_VISUAL_QUALITY_FAILED');

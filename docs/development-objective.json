@@ -376,6 +376,28 @@
     "Recorded HTTP 403, CONTACT_RESPONSE_INVALID and DIRECTORY_READ_FAILED on credible candidate sites; improve independently attributable evidence retrieval.",
     "Fresh private invitation and complete approval-distribution-receipts-feedback path not yet verified."
   ],
+  "claim_evidence_critical_repair": {
+    "status": "OFFLINE_VERIFIED_PENDING_OWNER_DEPLOYMENT_APPROVAL",
+    "observed_live_integration_commit": "53a934a99845ce22865e7aa88b570a2e1993dfba",
+    "authoritative_repair_commit": "5487f4c8d6888dbd5207d47eaf1c36b96f71f536",
+    "root_cause": "The scan adapter promoted HTTPS pointers to verified claims. Paid verification ran only after the proposal existed and did not control approval or delivery.",
+    "repair": "Independently retrieve public article bodies and retain attributable passages before routing or composing proposals. Quarantine legacy unsent copy that lacks the claim proof and archive its prior fingerprints and approvals.",
+    "dry_run": {
+      "live_transports_called": 0,
+      "production_campaign_writes": 0,
+      "base_sha256_check_preserved": true,
+      "tested": "Public article recovery, paywall and teaser rejection, unsupported and contradictory claims, budget limits, concurrent retry, shared proposals, X PNG, stale approvals, direct release and quarantine history."
+    },
+    "observed_quarantine_candidates": {
+      "email": 245,
+      "x": 19,
+      "existing_revision_holds": 152,
+      "approvals_to_invalidate": 16,
+      "november_17_email": 4,
+      "november_17_approvals": 3
+    },
+    "activation": "No production deployment or distribution was authorized. The startup sweep applies after an authorized deployment."
+  },
   "next_action": "Reuse production research history; reproduce retrieval failure with cheapest decisive check; smallest bounded fix for verified destination coverage; resume existing campaign, send fresh private review invitation to sean@emradar.net, and verify owner-approved end-to-end distribution with receipts and feedback.",
   "stop_conditions": [
     "Genuine security or permission requirement",

@@ -7,13 +7,15 @@ function createV3Release({service,integration,pool}){
   const state=(await service.store.adapter.read(campaignId))?.value;
   const entry=state?.assets?.[destinationId],approval=state?.decisions?.[destinationId];
   if(state?.phase!=='PUBLICATION_REVIEW'||entry?.asset?.review_status==='NEEDS_REVISION'||!['EMAIL','X'].includes(entry?.asset?.kind)||approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.asset_sha256!==entry.fingerprint||state.deliveries?.[destinationId])throw Error('V3_RELEASE_NOT_APPROVED');
+  const {assertProductionProposal}=await import('../vendor/emradar-v3/src/verified-proposal-policy.js');
+  assertProductionProposal(state,entry.asset);
   const payload={version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:campaignId,destination_id:destinationId,asset:entry.asset,approval};
   // Disabled configuration, unknown publication history and invalid graphics
   // fail BEFORE a delivery claim. Preflight never uploads or posts anything.
   let preparedX;
   if(entry.asset.kind==='X')preparedX=await integration.prepareApprovedX(payload);
   else await require('./emradar-v3-recipient.cjs').checkPersistedRecipient(pool,entry.asset,state);
-  const claimed=await service.store.claimDelivery(campaignId,destinationId);
+  const claimed=await service.store.claimDelivery(campaignId,destinationId,entry.fingerprint);
   payload.idempotency_key=claimed.deliveries[destinationId].idempotency_key;
   let receipt;
   try{

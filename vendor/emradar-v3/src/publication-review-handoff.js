@@ -4,6 +4,7 @@ export function createPublicationReviewHandoff({prepare,workflow}) {
  if(typeof prepare!=='function' || typeof workflow?.issue!=='function') throw Error('REVIEW_HANDOFF_DEPENDENCIES_REQUIRED');
  return async input=>{
   const prepared=await prepare(input);
+  if(['NO_VERIFIED_ANGLE','CLAIM_EVIDENCE_RUN_HELD'].includes(prepared?.status))return prepared;
   if(!prepared?.campaignId || !['PUBLICATION_REVIEW','ALREADY_PREPARED'].includes(prepared.status)) throw Error('PREPARATION_NOT_READY_FOR_REVIEW');
   const notified=await workflow.issue(prepared.campaignId);
   if(notified?.campaignId!==prepared.campaignId || notified?.status!=='NOTIFIED') throw Error('REVIEW_NOTIFICATION_NOT_CONFIRMED');

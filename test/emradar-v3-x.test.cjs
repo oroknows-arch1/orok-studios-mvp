@@ -87,8 +87,10 @@ test('failed or persistently pending media never becomes a text-only post',async
 async function integrationFixture(options={}){
  const {CampaignStore}=await import('../vendor/emradar-v3/src/state.js');
  const {sha256}=await import('../vendor/emradar-v3/src/contracts.js');
- const approved=asset(),fingerprint=sha256(approved);
- let state={id:'campaign',scan:{snapshot_date:'2026-10-10'},phase:'PUBLICATION_REVIEW',assets:{x:{asset:approved,fingerprint}},decisions:{x:{authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:'campaign',destination_id:'x'}},deliveries:{},destinations:[{id:'x'}],events:[]},version=1;
+ const {verifiedReleaseFixture}=await import('./fixtures/claim-proof.mjs');
+ const prepared=await verifiedReleaseFixture();
+ const approved={...asset(),...prepared.x.asset},fingerprint=sha256(approved);
+ let state={id:'campaign',...prepared.state,phase:'PUBLICATION_REVIEW',assets:{x:{asset:approved,fingerprint}},decisions:{x:{authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:'campaign',destination_id:'x'}},deliveries:{},destinations:[prepared.x.destination],events:[]},version=1;
  const reservations=new Map();let authenticated=0;
  const adapter={read:async()=>({value:structuredClone(state),version}),compareAndSwap:async(_id,prior,next)=>{if(prior!==version)return false;state=structuredClone(next);version++;return true;}};
  const store=new CampaignStore(adapter),f=transport(options);
@@ -123,7 +125,7 @@ test('missing session, rejected approval and changed approved content cannot pos
  f.mutate(s=>s.decisions.x.decision='REJECT');
  await assert.rejects(f.release()(f.input),/RELEASE_NOT_APPROVED/);
  f.mutate(s=>{s.decisions.x.decision='APPROVE';s.assets.x.asset.body='tampered';});
- await assert.rejects(f.release()(f.input),/OWNER_APPROVAL_REQUIRED|PREPARED_ASSET_MISMATCH|DURABLE_APPROVAL_MISMATCH/);
+ await assert.rejects(f.release()(f.input),/OWNER_APPROVAL_REQUIRED|PREPARED_ASSET_MISMATCH|DURABLE_APPROVAL_MISMATCH|VERIFIED_PROPOSAL_CONTENT_REQUIRED/);
  assert.equal(f.f.calls.some(c=>c.method==='POST'),false);
 });
 

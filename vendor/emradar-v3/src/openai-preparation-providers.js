@@ -1,3 +1,4 @@
+import {assertGatedDocument} from './claim-evidence-gate.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION,validateEditorialCorrespondence,isEditorialDestination,selectEditorialEvidence,validateEditorialStory,editorialPrompt} from './editorial-reference.js';
 import {GRAPHIC_STANDARD,emradarGraphicPrompt} from './graphic-standard.js';
@@ -109,13 +110,28 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    if(typeof draft.body!=='string'||!draft.body.trim()||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
    return {campaign_id:campaignId,destination_id:destination.id,kind:'X',body:draft.body,subject:draft.subject,from:brand.identity.address,evidence_ids:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)).map(e=>e.id),story_record_id:story.record_id,analytical_finding:draft.analytical_finding,evidence_limitations:draft.limitations};
   },
-  renderVisual:async({asset,document,scan})=>{
-   const composed=composeGraphicSvg({asset,document,scan});
-   const {default:sharp}=await import('sharp');
-   const bytes=await sharp(Buffer.from(composed.svg)).png({compressionLevel:9}).toBuffer();
-   const base64=bytes.toString('base64');
-   if(onVisualInspection)await onVisualInspection({base64,quality:{readable:true,unsupported_claims:false,reason:'Deterministic fixed template passed bounded layout checks.'},diagnostics:composed.diagnostics});
-   return {base64,brand_version:GRAPHIC_STANDARD.version,diagnostics:composed.diagnostics};
-  }
+  renderVisual:createVisualRenderer(onVisualInspection)
+ };
+}
+
+function createVisualRenderer(onVisualInspection){
+ return async ({asset,document,scan})=>{
+  const composed=composeGraphicSvg({asset,document,scan});
+  const {default:sharp}=await import('sharp');
+  const bytes=await sharp(Buffer.from(composed.svg)).png({compressionLevel:9}).toBuffer();
+  const base64=bytes.toString('base64');
+  if(onVisualInspection)await onVisualInspection({base64,quality:{readable:true,unsupported_claims:false,reason:'Deterministic fixed template passed bounded layout checks.'},diagnostics:composed.diagnostics});
+  return {base64,brand_version:GRAPHIC_STANDARD.version,diagnostics:composed.diagnostics};
+ };
+}
+
+// The historical draft-provider factory is retained for isolated diagnostics.
+// The production graph constructs only this evidence-gated renderer.
+export function createClaimGatedVisualRenderer(){
+ const render=createVisualRenderer();
+ return input=>{
+  const document=assertGatedDocument(input.document,input.scan);
+  const records=document.records.map(({id,status,theme})=>({id,status,theme}));
+  return render({...input,document:{evidence:document.evidence,records}});
  };
 }

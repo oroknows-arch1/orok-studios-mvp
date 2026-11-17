@@ -1,5 +1,6 @@
 import {isReviewPhase} from './contracts.js';
-import {createHash} from 'node:crypto';
+import {EVIDENCE_GATE_VERSION,assertGatedDocument} from './claim-evidence-gate.js';
+import {createHash,randomUUID} from 'node:crypto';
 import {verifyPublishedScan} from './scan-intake.js';
 import {CampaignPreparation} from './preparation.js';
 import {normalizePublishedEvidence} from './scan-evidence-adapter.js';
@@ -25,31 +26,37 @@ export function createVerifiedVisualRenderer(renderVisual){
 
 // Compose existing preparation workers. Providers are injected; this entry point
 // never issues a review notification, approves content or distributes anything.
-export function createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher}) {
- if(typeof researchEvidence!=='function' || typeof renderVisual!=='function' || typeof store?.mutate!=='function') throw Error('PREPARATION_RUN_DEPENDENCIES_REQUIRED');
+export function createPreparationRun({store,gateEvidence,discover,write,renderVisual,fetcher}) {
+ if(typeof gateEvidence!=='function'||typeof renderVisual!=='function'||typeof store?.mutate!=='function')throw Error('PREPARATION_RUN_DEPENDENCIES_REQUIRED');
  const preparation=new CampaignPreparation({store,discover,write,renderVisual:createVerifiedVisualRenderer(renderVisual)});
  return async ({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,history=[]})=>{
   const verified=await verifyPublishedScan({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,fetcher});
   const {scan}=verified;
-  const document=normalizePublishedEvidence(verified.document);
   const campaignId=await store.start(scan);
   let state=(await store.adapter.read(campaignId)).value;
-  if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
-  if(!state.preparation_input) {
-   let research,warning=null;
-   try{research=await researchEvidence({scan,document});if(!Array.isArray(research?.evidence))throw Error('EVIDENCE_RESEARCH_RESULT_REQUIRED');}
-   catch(error){warning=/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'EVIDENCE_RESEARCH_FAILED';research={status:'NEEDS_REVISION',evidence:[],warning};}
-   // Retain the original source and uncertainty verbatim. Research remains a
-   // separate sourced record; it cannot overwrite an existing evidence identity.
-   const evidence=new Map((document.evidence??[]).map(item=>[item.id,item]));
-   for(const item of research.evidence) if(item?.id && !evidence.has(item.id)) evidence.set(item.id,item);
-   const input={...document,evidence:[...evidence.values()],research};
+  if(isReviewPhase(state.phase))return {campaignId,status:'ALREADY_PREPARED'};
+  if(state.preparation_input?.document?.evidence_gate?.version!==EVIDENCE_GATE_VERSION){
+   // Reserve the existing paid investigation budget before calling a provider.
+   // An interrupted or concurrent attempt never silently obtains a fresh budget.
+   const attempt=randomUUID();
    state=await store.mutate(campaignId,current=>{
-    if(!current.preparation_input) current.preparation_input={document:input};
-    if(warning)current.preparation_warnings=[...(current.preparation_warnings??[]),{stage:'EVIDENCE_RESEARCH',code:warning}];
+    if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING',version:EVIDENCE_GATE_VERSION};
+    return current;
+   });
+   if(state.claim_gate_attempt.id!==attempt)return {campaignId,status:'CLAIM_EVIDENCE_RUN_HELD'};
+   const document=assertGatedDocument(await gateEvidence({scan,document:normalizePublishedEvidence(verified.document)}),scan);
+   state=await store.mutate(campaignId,current=>{
+    if(current.claim_gate_attempt.id!==attempt)throw Error('CLAIM_EVIDENCE_RUN_CHANGED');
+    if(current.preparation_input)current.legacy_preparation_input??=current.preparation_input;
+    if(current.phase==='DESTINATIONS_SELECTED'){current.legacy_destinations??=current.destinations;current.destinations=[];current.phase='SCAN_VERIFIED';}
+    current.preparation_input={document};
+    current.claim_gate_attempt={...current.claim_gate_attempt,status:document.evidence.length?'COMPLETE':'NO_VERIFIED_ANGLE'};
+    current.events.push({type:'CLAIM_EVIDENCE_GATE_COMPLETED',status:current.claim_gate_attempt.status});
     return current;
    });
   }
-  return preparation.prepare({scan,document:state.preparation_input.document,history});
+  const document=assertGatedDocument(state.preparation_input.document,scan);
+  if(!document.evidence.length)return {campaignId,status:'NO_VERIFIED_ANGLE',evidenceGate:document.evidence_gate};
+  return preparation.prepare({scan,document,history});
  };
 }

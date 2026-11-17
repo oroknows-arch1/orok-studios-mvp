@@ -1,3 +1,5 @@
+import {verifiedReleaseFixture} from './fixtures/claim-proof.mjs';
+import {assertProductionProposal,writeVerifiedProposal} from '../vendor/emradar-v3/src/verified-proposal-policy.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CampaignPreparation} from '../vendor/emradar-v3/src/preparation.js';
@@ -22,14 +24,16 @@ test('shared progression fallback remains evidence-bound and passes the existing
 });
 
 test('parent runtime prepares one shared proposal and exposes one persisted group',async()=>{
- const store=new CampaignStore(new MemoryAdapter()),calls=[];
- const destinations=[{id:'x',contact_verified:true,evidence:{ids:['shared']}},...Array.from({length:5},(_,index)=>destination('publication-'+index)),destination('individual',['other'])];
+ const store=new CampaignStore(new MemoryAdapter(),{assertProposal:assertProductionProposal}),calls=[];
+ const proof=await verifiedReleaseFixture(),{scan,preparation_input}=proof.state;
+ const id=await store.start(scan);
+ await store.mutate(id,state=>({...state,preparation_input}));
+ const destinations=[proof.x.destination,...Array.from({length:5},(_,index)=>proof.email('publication-'+index).destination)];
  const preparation=new CampaignPreparation({store,discover:async()=>destinations,renderVisual:async()=>({sha256:digest,url:'https://example.org/x.png'}),write:async input=>{
   calls.push(input.sharedDestinations?.map(item=>item.id)??[input.destination.id]);
-  if(input.destination.id==='x')return {campaign_id:input.campaignId,destination_id:'x',kind:'X',subject:'X',body:'Evidence',evidence_ids:['shared']};
-  return email(input.campaignId,input.destination,input.sharedDestinations?'Exact shared body':'Individual body');
+  return writeVerifiedProposal(input);
  }});
- const result=await preparation.prepare({scan,document});
+ const result=await preparation.prepare({scan,document:preparation_input.document});
  assert.equal(result.status,'PUBLICATION_REVIEW');
  assert.equal(calls.filter(call=>call.length===5).length,1);
  const review=new ReviewWorkflow({store,adapter:store.adapter,baseUrl:'https://review.example',notify:async()=>({accepted:true})});
@@ -38,7 +42,7 @@ test('parent runtime prepares one shared proposal and exposes one persisted grou
  const shared=view.groups.find(group=>group.destination_ids.length===5);
  assert.ok(shared);
  assert.equal(new Set(shared.destination_ids.map(id=>view.entries.find(entry=>entry.asset.destination_id===id).asset.body)).size,1);
- assert.ok(view.entries.some(entry=>entry.asset.destination_id==='individual'));
+ assert.ok(view.entries.some(entry=>entry.asset.destination_id==='x'));
 });
 
 test('parent group edit, exclusion and atomic approval survive reload',async()=>{
