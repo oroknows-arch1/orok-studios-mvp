@@ -8,13 +8,15 @@ const {validRecipient}=require('../src/emradar-v3-recipient.cjs');
 
 async function fixture(){
  const {sha256}=await import('../vendor/emradar-v3/src/contracts.js');
+ const {verifiedReleaseFixture}=await import('./fixtures/claim-proof.mjs');
+ const prepared=await verifiedReleaseFixture();
  const states=new Map(),receipts=new Map(),suppressed=[];
  const add=(id,decision='APPROVE')=>{
-  const asset={campaign_id:'campaign',destination_id:id,kind:'EMAIL',to:id+'@journal.example',subject:'Article idea',body:'Evidence and possibility',evidence_ids:['e1'],from:'sean@emradar.net',contact_status:'VERIFIED',delivery_eligible:true};
+  const {asset,destination}=prepared.email(id);
   const fingerprint=sha256(asset),approval={authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:'campaign',destination_id:id};
   const key=sha256(['campaign',id,fingerprint]);
-  const state=states.get('campaign')??{phase:'PUBLICATION_REVIEW',destinations:[],assets:{},decisions:{},deliveries:{}};
-  state.destinations.push(verified(id));
+  const state=states.get('campaign')??{phase:'PUBLICATION_REVIEW',...prepared.state,destinations:[],assets:{},decisions:{},deliveries:{}};
+  state.destinations.push(destination);
   state.assets[id]={asset,fingerprint};if(decision)state.decisions[id]=approval;
   state.deliveries[id]={status:'ATTEMPTING',idempotency_key:key};states.set('campaign',state);
   return {version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:'campaign',destination_id:id,asset,approval,idempotency_key:key};
@@ -52,7 +54,7 @@ test('owner-approved recipient override delivers the exact reviewed recipient an
  Object.assign(payload,{asset,approval,idempotency_key:key});
  const result=await f.integration().handle({operation:'approved-delivery',payload});
  assert.equal(result.accepted,true);assert.equal(f.sentPayloads[0].asset.to,'press@epoch.ai');
- assert.equal(f.sentPayloads[0].asset.subject,'Article idea');assert.equal(f.sentPayloads[0].asset.body,'Evidence and possibility');
+ assert.equal(f.sentPayloads[0].asset.subject,payload.asset.subject);assert.equal(f.sentPayloads[0].asset.body,payload.asset.body);
  await assert.rejects(f.integration().handle({operation:'approved-delivery',payload}),/V3_SEND_ALREADY_RESERVED/);
  assert.equal(f.sends(),1);
 });
@@ -123,29 +125,25 @@ test('review release reuses private cookie session with CSRF and ignores caller-
  assert.equal(good.status,200);assert.equal(releases,1);
 });
 
-test('edit save reload binds approval and distribution payload to the persisted revision',async()=>{
+test('edits save and reload but an unsupported revision cannot inherit approval or be sent',async()=>{
  const {CampaignStore}=await import('../vendor/emradar-v3/src/state.js');
  const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
+ const {assertProductionProposal}=await import('../vendor/emradar-v3/src/verified-proposal-policy.js');
  const f=await fixture(),stale=f.add('editor'),state=f.states.get('campaign');
  delete state.deliveries.editor;state.events=[];
  state.assets.x={asset:{kind:'X',destination_id:'x',body:'Preserved X'},fingerprint:'keep-x'};
  const untouched=structuredClone(state.assets.x),destinations=structuredClone(state.destinations);
  let version=1;
  const adapter={read:async id=>({version,value:structuredClone(f.states.get(id))}),compareAndSwap:async(id,prior,next)=>{if(prior!==version)return false;version++;f.states.set(id,structuredClone(next));return true;}};
- const workflow=()=>{const store=new CampaignStore(adapter),w=new ReviewWorkflow({store,adapter,baseUrl:'https://review.example',notify:async()=>{throw Error('NO_REAL_SEND');}});w.authenticate=async()=>true;return w;};
+ const workflow=()=>{const store=new CampaignStore(adapter,{assertProposal:assertProductionProposal}),w=new ReviewWorkflow({store,adapter,baseUrl:'https://review.example',notify:async()=>{throw Error('NO_REAL_SEND');}});w.authenticate=async()=>true;return w;};
  await workflow().revise('campaign',null,null,'editor',stale.approval.asset_sha256,{body:'Edited persisted body',subject:'Edited subject'});
  const reloaded=workflow(),view=await reloaded.view('campaign'),entry=view.entries.find(e=>e.asset.destination_id==='editor');
- assert.equal(entry.asset.body,'Edited persisted body');assert.equal(entry.asset.subject,'Edited subject');
+ assert.match(entry.asset.body,/^Edited persisted body/);assert.equal(entry.asset.subject,'Edited subject');
  assert.equal(entry.revision.fingerprint,entry.fingerprint);assert(entry.revision.id);
  assert.equal(view.history[0].asset.body,stale.asset.body);assert.equal(entry.decision,null);
  assert.deepEqual(f.states.get('campaign').assets.x,untouched);assert.deepEqual(f.states.get('campaign').destinations,destinations);
  await assert.rejects(reloaded.decide('campaign',null,null,'editor','APPROVE',stale.approval.asset_sha256),/INVALID_DECISION/);
- await assert.rejects(reloaded.store.claimDelivery('campaign','editor'),/OWNER_APPROVAL_REQUIRED/);
- await reloaded.decide('campaign',null,null,'editor','APPROVE',entry.fingerprint);
- await reloaded.store.claimDelivery('campaign','editor');
- const saved=f.states.get('campaign'),payload={...stale,asset:saved.assets.editor.asset,approval:saved.decisions.editor,idempotency_key:saved.deliveries.editor.idempotency_key};
- await assert.rejects(f.integration().handle({operation:'approved-delivery',payload:stale}),/V3_DURABLE_APPROVAL_MISMATCH/);
- assert.equal((await f.integration().handle({operation:'approved-delivery',payload})).accepted,true);
- assert.equal(f.sentPayloads[0].asset.body,'Edited persisted body');assert.equal(f.sentPayloads[0].approval.asset_sha256,entry.fingerprint);
- assert.equal(f.sends(),1);
+ await assert.rejects(reloaded.store.claimDelivery('campaign','editor'),/INCOMPLETE_ASSET_NOT_SENDABLE/);
+ await assert.rejects(reloaded.decide('campaign',null,null,'editor','APPROVE',entry.fingerprint),/INCOMPLETE_ASSET_CANNOT_BE_APPROVED/);
+ assert.equal(f.sends(),0);
 });

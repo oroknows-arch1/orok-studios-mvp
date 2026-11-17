@@ -7,11 +7,11 @@ import {createOwnerSession,validateOwnerSession,OWNER_SESSION_TTL_MS} from './ow
 import {validateNotificationReceipt} from './owner-notification.js';
 
 export class ReviewWorkflow {
- constructor({store,adapter,notify,baseUrl,verifyRecipient,verifier=null,clock=()=>Date.now()}) {
+ constructor({store,adapter,notify,baseUrl,verifyRecipient,verifier=null,assertProposal=()=>{},clock=()=>Date.now()}) {
   if(!store?.adapter || !adapter?.read || !adapter?.compareAndSwap || typeof notify!=='function') throw Error('REVIEW_DEPENDENCIES_REQUIRED');
   const url=new URL(baseUrl);
   if(url.protocol!=='https:' || url.username || url.password || url.search || url.hash) throw Error('SECURE_REVIEW_URL_REQUIRED');
-  this.store=store;this.adapter=adapter;this.notify=notify;this.baseUrl=url.origin;this.verifyRecipient=verifyRecipient;this.verifier=verifier;this.clock=clock;
+  this.store=store;this.adapter=adapter;this.notify=notify;this.baseUrl=url.origin;this.verifyRecipient=verifyRecipient;this.assertProposal=assertProposal;this.verifier=verifier;this.clock=clock;
  }
  async update(key,fn) {
   for(let attempt=0;attempt<8;attempt++){
@@ -117,7 +117,7 @@ export class ReviewWorkflow {
     verification:historical?null:campaign.proposal_verifications?.[asset.destination_id]?.at(-1)??null};
   };
   const history=[];
-  for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft'}));
+  for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:entry.label??'Previous draft'}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
   return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};
@@ -129,6 +129,7 @@ export class ReviewWorkflow {
  async verifyAgain(campaignId,sessionId,secret,destinationId,fingerprint){
   await this.authenticate(campaignId,sessionId,secret);if(!this.verifier)throw Error('PROPOSAL_VERIFICATION_UNAVAILABLE');
   const campaign=(await this.store.adapter.read(campaignId))?.value,entry=campaign?.assets?.[destinationId];if(!entry||entry.fingerprint!==fingerprint)throw Error('STALE_ASSET_VERIFICATION');
+  this.assertProposal?.(campaign,entry.asset);
   const destination=campaign.destinations.find(item=>item.id===destinationId);
   const evidence=campaign.preparation_input?.document?.evidence??[];
   const binding=proposalBinding({asset:entry.asset,destination,evidence});

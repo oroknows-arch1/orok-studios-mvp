@@ -1,3 +1,4 @@
+import {verifiedReleaseFixture} from './fixtures/claim-proof.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import verified from './fixtures/v3-verified-recipient.cjs';
@@ -20,11 +21,12 @@ test('review extension validates recipients before writes and preserves X and de
  await store.extendReview('campaign',[d],[email(d)]);assert.equal(value.assets.x.fingerprint,'keep');assert.equal(value.decisions.x.decision,'APPROVE');
  assert.deepEqual(value.deliveries,{});await assert.rejects(store.decide('campaign','journal','APPROVE','wrong'),/INVALID_DECISION/);
 });
-test('PUBLICATION_REVIEW completion requires valid addressed emails and saved X graphic',()=>{
- const d=verified(),asset=email(d),state={phase:'PUBLICATION_REVIEW',preparation_input:{document:{evidence}},destinations:[d,{id:'x'}],assets:{journal:{asset},x:{asset:{kind:'X',destination_id:'x',body:'X',visual_url:'saved-image'}}}};
+test('PUBLICATION_REVIEW completion requires claim proof and independently valid addresses or an X graphic',async()=>{
+ const proof=await verifiedReleaseFixture(),{destination:d,asset}=proof.email('journal');
+ const state={...proof.state,phase:'PUBLICATION_REVIEW',destinations:[d,proof.x.destination],assets:{journal:{asset:{...asset}},x:{asset:{...proof.x.asset,visual_url:'saved-image'}}}};
  assert.equal(assessPublicationReview({state,candidates:[d]}).complete,true);
  state.assets.journal.asset.to='invented@journal.example';assert.equal(assessPublicationReview({state,candidates:[d]}).complete,true);assert.equal(assessPublicationReview({state,candidates:[d]}).delivery_ready,false);
- state.assets.journal.asset=asset;delete state.assets.x;assert.equal(assessPublicationReview({state,candidates:[d]}).complete,false);
+ delete state.assets.x;assert.equal(assessPublicationReview({state,candidates:[d]}).complete,false);
 });
 test('unresolved contact research cannot block a new verified proposal at fifteen publication records',()=>{
  const existingDestinations=Array.from({length:15},(_,i)=>({id:'existing-'+i,contact_verified:i<7}));

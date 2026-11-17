@@ -19,6 +19,8 @@ function createV3ApprovalVerifier({pool}={}){
   if(state?.phase!=='PUBLICATION_REVIEW'||!saved||!decision||!delivery)throw Error('V3_DURABLE_APPROVAL_REQUIRED');
   if(!equivalent(saved.asset,asset)||saved.fingerprint!==approval.asset_sha256||digest(asset)!==approval.asset_sha256||!equivalent(decision,approval))throw Error('V3_DURABLE_APPROVAL_MISMATCH');
   if(digest([campaign_id,destination_id,approval.asset_sha256])!==idempotency_key||delivery.status!=='ATTEMPTING'||delivery.idempotency_key!==idempotency_key)throw Error('V3_DURABLE_CLAIM_REQUIRED');
+  const {assertProductionProposal}=await import('../vendor/emradar-v3/src/verified-proposal-policy.js');
+  assertProductionProposal(state,asset);
   if(asset.kind==='EMAIL')await checkPersistedRecipient(pool,asset,state);
   else require('./emradar-v3-x.cjs').graphic(asset);
   return true;

@@ -1,3 +1,5 @@
+import {assertGatedDocument,selectVerifiedPremises} from './claim-evidence-gate.js';
+import {assertProductionProposal} from './verified-proposal-policy.js';
 import {isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 import {assertDestinations} from './contracts.js';
@@ -22,6 +24,7 @@ export class CampaignPreparation {
   const existing=(await this.store.adapter.read(campaignId))?.value;
   if(isReviewPhase(existing?.phase)) return {campaignId,status:'ALREADY_PREPARED'};
   if(existing?.phase!=='SCAN_VERIFIED' && existing?.phase!=='DESTINATIONS_SELECTED') throw Error('CAMPAIGN_PHASE_UNSUPPORTED');
+  assertGatedDocument(document,scan);
   const warnings=[];
   let destinations;
   if(existing.phase==='DESTINATIONS_SELECTED') destinations=existing.destinations;
@@ -31,6 +34,7 @@ export class CampaignPreparation {
     warnings.push({stage:'DISCOVERY',code:failureCode(error)});
     destinations=[{id:'x',category:'social',contact_verified:true,evidence:{ids:(document?.evidence??[]).filter(e=>e?.verified===true).map(e=>e.id)}}];
    }
+   destinations=destinations.filter(destination=>{try{selectVerifiedPremises(document,scan,[destination]);return true;}catch{return false;}});
    assertDestinations(destinations);
    if(!destinations.some(d=>d.id==='x')) throw Error('MANDATORY_X_MISSING');
    await this.store.select(campaignId,destinations);
@@ -41,6 +45,7 @@ export class CampaignPreparation {
    let asset;
    try{
     asset=await this.write({campaignId,destination,document,scan,...(sharedDestinations?{sharedDestinations}: {})});
+   assertProductionProposal({scan,preparation_input:{document},destinations:[destination]},asset);
    // The mandatory X destination must produce an X asset with a graphic.
    if(destination.id==='x' && asset?.kind!=='X') throw Error('X_ASSET_KIND_MISMATCH');
    if(destination.id!=='x' && asset?.kind==='X') throw Error('X_ASSET_DESTINATION_MISMATCH');

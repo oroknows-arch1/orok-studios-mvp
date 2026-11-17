@@ -1,3 +1,4 @@
+import {verifiedReleaseFixture} from './fixtures/claim-proof.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -24,8 +25,11 @@ test('publication proof persists without any email and contact remains independe
  assert.equal(research[0].status,'PUBLICATION_VERIFIED_CONTACT_UNRESOLVED');assert.equal(research[0].reason,'NO_RELEVANT_PUBLISHED_CONTACT');assert(research[0].retry_eligible_at);
 });
 
-test('review reports publication and contact states independently and never requires an unaddressed draft',()=>{
- const unresolved={id:'unresolved',name:'Copper Journal',category:'mining',publication_type:'trade_publication',destination_class:'EDITORIAL_PUBLICATION',website:'https://journal.example',active:true,publication_verified:true,editorial_fit_verified:true,contact_verified:false,contact:null,relationship:{formation_ids:['r1'],industries:['Copper mining'],ecosystem_formation_ids:['r1'],reason:'Covers the verified copper investment formation.'},verification:{publication_method:'live_publication_page',publication_status:'VERIFIED',publication_proof_url:'https://journal.example/news',publication_page_sha256:'a'.repeat(64),evidence_ids:['e1'],scan_evidence_digest:scanDigest}};
- const state={phase:'PUBLICATION_REVIEW',preparation_input:{document},destinations:[{id:'x'}],assets:{x:{asset:{kind:'X',destination_id:'x',body:'Preserved X',visual_url:'saved-image'}}},decisions:{},deliveries:{}};
+test('review reports publication and contact states independently and never requires an unaddressed draft',async()=>{
+ const proof=await verifiedReleaseFixture();
+ const verified=proof.state.preparation_input.document.evidence;
+ const digest=createHash('sha256').update(JSON.stringify(verified.map(e=>[e.id,e.fact,e.source_url]))).digest('hex');
+ const unresolved={id:'unresolved',name:'Copper Journal',category:'mining',publication_type:'trade_publication',destination_class:'EDITORIAL_PUBLICATION',website:'https://journal.example',active:true,publication_verified:true,editorial_fit_verified:true,contact_verified:false,contact:null,relationship:{formation_ids:['r1'],industries:['Copper mining'],ecosystem_formation_ids:['r1'],reason:'Covers the verified copper investment formation.'},verification:{publication_method:'live_publication_page',publication_status:'VERIFIED',publication_proof_url:'https://journal.example/news',publication_page_sha256:'a'.repeat(64),evidence_ids:verified.map(e=>e.id),scan_evidence_digest:digest}};
+ const state={...proof.state,phase:'PUBLICATION_REVIEW',destinations:[proof.x.destination],assets:{x:{asset:{...proof.x.asset,visual_url:'saved-image'}}},decisions:{},deliveries:{}};
  assert.deepEqual(assessPublicationReview({state,candidates:[unresolved]}),{complete:true,review_ready:true,delivery_ready:true,verified_publications:1,verified_contacts:0,unresolved_contacts:1,editorial_emails:0,x_ready:true,needs_revision:[],missing_destination_ids:[]});
 });

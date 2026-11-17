@@ -1,3 +1,4 @@
+import {publicEvidenceUrl} from './claim-evidence-gate.js';
 // Require a reviewed, source-backed match between a published scan fact and
 // an outlet before any imported contact becomes eligible for preparation.
 export function createReviewedEvidenceLinker({reviewedLinks}) {
@@ -8,8 +9,9 @@ export function createReviewedEvidenceLinker({reviewedLinks}) {
   const links=new Map();
   for(const item of reviewedLinks){
    if(item?.approved!==true || typeof item.outlet_id!=='string' || !outletsById.has(item.outlet_id)) continue;
-   const source=evidence.get(item.evidence_id);
-   if(!source || item.record_id!==source.record_id || item.source_url!==source.source_url) continue;
+   const url=publicEvidenceUrl(item.source_url)?.href;
+   const source=evidence.get(item.evidence_id)??[...evidence.values()].find(entry=>url&&entry.record_id===item.record_id&&entry.source_url===url);
+   if(!source || item.record_id!==source.record_id || (item.source_url!==source.source_url&&url!==source.source_url)) continue;
    if(!links.has(item.outlet_id)) links.set(item.outlet_id,new Set());
    links.get(item.outlet_id).add(source.id);
   }

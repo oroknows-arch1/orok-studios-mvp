@@ -127,7 +127,7 @@ const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snaps
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
-  if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
+  if(existing?.phase!=='PUBLICATION_REVIEW'&&!['NO_VERIFIED_ANGLE','RUNNING'].includes(existing?.claim_gate_attempt?.status))return {...candidate,resume:Boolean(existing)};
  }
  return null;
 }
@@ -137,7 +137,7 @@ async function resumePendingDiscovery({pool,service}){
  const {rows}=await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
   LEFT JOIN v3_campaign_state r ON r.campaign_id='review:'||c.campaign_id
   WHERE c.payload->>'phase' IN ('PUBLICATION_REVIEW','ASSETS_PREPARED')
-  AND c.payload->'preparation_input'->'document' IS NOT NULL
+  AND c.payload->'preparation_input'->'document'->'evidence_gate'->>'version'='claim-evidence-v1'
   AND COALESCE(c.payload->'review_completion'->>'complete','false')<>'true'
   AND r.campaign_id IS NULL
   ORDER BY c.updated_at ASC,c.campaign_id ASC LIMIT 1`);
@@ -247,12 +247,14 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    }});
    return {accepted:result.accepted,provider_id:result.provider_id,recipient,campaign_id:campaignId};
   };
+  const {quarantineLegacyProposals}=await import('../vendor/emradar-v3/src/evidence-quarantine.js');
   const service=await createOpenAiPreparationReviewService({
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
    autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true',
    proposalVerificationMaxInvestigations:Number(env.EMRADAR_V3_PROPOSAL_MAX_INVESTIGATIONS||8),
    proposalVerificationMaxToolCalls:Number(env.EMRADAR_V3_PROPOSAL_MAX_TOOL_CALLS||3)
   });
+  await quarantineLegacyProposals({pool,store:service.store});
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
    try{
@@ -285,7 +287,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const failedTemplateState=(await service.store.adapter.read(failedTemplateCampaign))?.value;
    const failedTemplateAction=failedTemplateState?.review_actions?.x;
    const failedTemplateAsset=failedTemplateState?.assets?.x?.asset;
-   if(failedTemplateState?.phase==='PUBLICATION_REVIEW'&&failedTemplateAction?.status==='FAILED'&&failedTemplateAction?.error_code==='V3_X_VISUAL_QUALITY_FAILED'&&failedTemplateAction?.feedback?.trim()&&!failedTemplateState.deliveries?.x&&!failedTemplateAction.template_recovery_attempted_at&&failedTemplateAsset?.visual_brand_version!==FIXED_X_TEMPLATE_VERSION){
+   if(failedTemplateState?.preparation_input?.document?.evidence_gate&&failedTemplateState?.phase==='PUBLICATION_REVIEW'&&failedTemplateAction?.status==='FAILED'&&failedTemplateAction?.error_code==='V3_X_VISUAL_QUALITY_FAILED'&&failedTemplateAction?.feedback?.trim()&&!failedTemplateState.deliveries?.x&&!failedTemplateAction.template_recovery_attempted_at&&failedTemplateAsset?.visual_brand_version!==FIXED_X_TEMPLATE_VERSION){
     await service.store.mutate(failedTemplateCampaign,current=>{
      const action=current?.review_actions?.x,asset=current?.assets?.x?.asset;
      if(current?.phase!=='PUBLICATION_REVIEW'||action?.status!=='FAILED'||action?.error_code!=='V3_X_VISUAL_QUALITY_FAILED'||!action?.feedback?.trim()||current.deliveries?.x||action.template_recovery_attempted_at||asset?.visual_brand_version===FIXED_X_TEMPLATE_VERSION)return current;
@@ -295,11 +297,11 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
      return current;
     });
    }
-   const refreshed=await service.refreshUnreviewedXVisual?.(failedTemplateCampaign);
+   const refreshed=failedTemplateState?.preparation_input?.document?.evidence_gate&&await service.refreshUnreviewedXVisual?.(failedTemplateCampaign);
    if(refreshed)await service.workflow.issue(failedTemplateCampaign,{revisionId:'fixed-template-v2'});
    const {rows}=await pool.query(`SELECT s.campaign_id, a.key AS destination_id
     FROM v3_campaign_state s CROSS JOIN LATERAL jsonb_each(COALESCE(s.payload->'review_actions','{}'::jsonb)) a
-    WHERE s.payload->>'phase'='PUBLICATION_REVIEW' AND a.value->>'status' IN ('PENDING','RUNNING','OWNER_REVIEW_PENDING')
+    WHERE s.payload->>'phase'='PUBLICATION_REVIEW' AND s.payload->'preparation_input'->'document'->'evidence_gate' IS NOT NULL AND a.value->>'status' IN ('PENDING','RUNNING','OWNER_REVIEW_PENDING')
     ORDER BY s.updated_at ASC, s.campaign_id ASC, a.key ASC LIMIT $1`,[limit]);
    const results=[];
    for(const row of rows){
@@ -355,6 +357,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const pending=await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
     LEFT JOIN v3_campaign_state r ON r.campaign_id='review:'||c.campaign_id
     WHERE c.payload->>'phase'='PUBLICATION_REVIEW'
+      AND c.payload->'preparation_input'->'document'->'evidence_gate'->>'version'='claim-evidence-v1'
       AND c.payload->'review_completion'->>'complete'='true'
       AND r.campaign_id IS NULL
     ORDER BY c.updated_at DESC LIMIT 1`);
@@ -417,8 +420,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const activeCampaignState=(await service.store.adapter.read(activeCampaignId))?.value;
   const researchCampaignId=activeCampaignState?activeCampaignId:(latestResearchScan?campaignIdFor(latestResearchScan):null);
   const researchState=researchCampaignId?(await service.store.adapter.read(researchCampaignId))?.value:null;
-  if(['ASSETS_PREPARED','PUBLICATION_REVIEW'].includes(researchState?.phase)&&typeof service.excludeSourceInstitutions==='function')await service.excludeSourceInstitutions(researchCampaignId);
-  const discoveryResearchPending=Boolean(['ASSETS_PREPARED','PUBLICATION_REVIEW'].includes(researchState?.phase)&&!(await service.store.adapter.read(discoveryTestKey)));
+  if(researchState?.preparation_input?.document?.evidence_gate&&['ASSETS_PREPARED','PUBLICATION_REVIEW'].includes(researchState?.phase)&&typeof service.excludeSourceInstitutions==='function')await service.excludeSourceInstitutions(researchCampaignId);
+  const discoveryResearchPending=Boolean(researchState?.preparation_input?.document?.evidence_gate&&['ASSETS_PREPARED','PUBLICATION_REVIEW'].includes(researchState?.phase)&&!(await service.store.adapter.read(discoveryTestKey)));
   const runDiscoveryResearchTest=()=>runReleaseOnce({adapter:service.store.adapter,key:discoveryTestKey,run:async()=>{
    const client=await pool.connect();
    try{
@@ -470,7 +473,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const editorialCampaign='v3-2602ddf68a3ced8aeafb769fc928423f';
   const editorialRequest='owner-human-editorial-2026-10-16-v1';
   const editorialState=(await service.store.adapter.read(editorialCampaign))?.value;
-  const editorialWritingReviewPending=Boolean(editorialState && editorialState.editorial_rewrite?.request_id!==editorialRequest && !await service.store.adapter.read('v3-verified-recipients:2026-10-16-v1'));
+  const editorialWritingReviewPending=Boolean(editorialState?.preparation_input?.document?.evidence_gate && editorialState.editorial_rewrite?.request_id!==editorialRequest && !await service.store.adapter.read('v3-verified-recipients:2026-10-16-v1'));
   const runEditorialWritingReview=async()=>{
    const client=await pool.connect();
    try{
@@ -483,13 +486,14 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[editorialCampaign]);client.release();}
   };
   const ownerInvitationKey='v3-owner-purelymail-invitation:2026-10-16-v1';
-  const ownerInvitationPending=!(await service.store.adapter.read(ownerInvitationKey));
+  const ownerInvitationPending=Boolean(editorialState?.preparation_input?.document?.evidence_gate&&!(await service.store.adapter.read(ownerInvitationKey)));
   const runOwnerInvitation=()=>runOwnerInvitationOnce({adapter:service.store.adapter,workflow:service.workflow,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerInvitationKey});
   const replacementSourceCampaign='v3-cd8f16c860b64b5f39e2db0009f384ed';
   const replacementRequestId='group-first-review-2026-10-25-v1';
   const replacementKey='v3-replacement:'+replacementRequestId;
   const replacementRecord=await service.store.adapter.read(replacementKey);
-  const replacementPending=replacementRecord?.value?.status!=='COMPLETE';
+  const replacementSource=(await service.store.adapter.read(replacementSourceCampaign))?.value;
+  const replacementPending=Boolean(replacementSource?.preparation_input?.document?.evidence_gate&&replacementRecord?.value?.status!=='COMPLETE');
   const runReplacementReview=async()=>{
    const prior=await service.store.adapter.read(replacementKey);
    await service.store.adapter.compareAndSwap(replacementKey,prior?.version??null,{status:'STARTED',request_id:replacementRequestId,started_at:prior?.value?.started_at??new Date().toISOString()});
@@ -505,13 +509,13 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const latest=await service.store.adapter.read(replacementKey);await service.store.adapter.compareAndSwap(replacementKey,latest.version,{status:'COMPLETE',request_id:replacementRequestId,completed_at:new Date().toISOString(),result});return result;
   };
   const editorialStandardKey='v3-sfy-editorial-standard:2026-10-16-v1';
-  const editorialStandardPending=!(await service.store.adapter.read(editorialStandardKey));
+  const editorialStandardPending=Boolean(editorialState?.preparation_input?.document?.evidence_gate&&!(await service.store.adapter.read(editorialStandardKey)));
   const runEditorialStandard=()=>runReleaseOnce({adapter:service.store.adapter,key:editorialStandardKey,run:()=>service.refreshUnreviewedEditorialDrafts(editorialCampaign)});
   const recipientRecoveryKey='v3-verified-recipients:2026-10-16-v1';
-  const recipientRecoveryPending=!(await service.store.adapter.read(recipientRecoveryKey));
+  const recipientRecoveryPending=Boolean(editorialState?.preparation_input?.document?.evidence_gate&&!(await service.store.adapter.read(recipientRecoveryKey)));
   const runRecipientRecovery=()=>runReleaseOnce({adapter:service.store.adapter,key:recipientRecoveryKey,run:()=>service.recoverVerifiedRecipients(editorialCampaign)});
   const engineRepairKey='v3-engine-repair:2026-10-16-v1';
-  const engineRepairPending=!(await service.store.adapter.read(engineRepairKey));
+  const engineRepairPending=Boolean(editorialState?.preparation_input?.document?.evidence_gate&&!(await service.store.adapter.read(engineRepairKey)));
   const runEngineRepair=()=>runReleaseOnce({adapter:service.store.adapter,key:engineRepairKey,run:async()=>{
    const access=await service.testProductionContactAccess();
    const production_access={status:access.status,primary:access.primary,pages:access.pages,failures:access.failures,contacts_examined:access.contacts?.length??0,non_editorial_rejected:access.contacts?.filter(c=>!c.eligible).length??0};
@@ -519,7 +523,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    return {...await service.resumeIntelligentDiscovery(editorialCampaign),production_access};
   }});
   const ownerAccessKey='v3-owner-access-restore:2026-10-16-v1';
-  const ownerAccessPending=!(await service.store.adapter.read(ownerAccessKey));
+  const ownerAccessPending=Boolean(editorialState?.preparation_input?.document?.evidence_gate&&!(await service.store.adapter.read(ownerAccessKey)));
   const runOwnerAccess=async()=>{
    const old=await service.store.adapter.read(ownerInvitationKey);
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
