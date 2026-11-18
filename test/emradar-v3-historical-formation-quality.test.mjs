@@ -9,7 +9,7 @@ const scans=['2026-10-18','2026-11-18'];
 const fixture=date=>normalizePublishedEvidence(JSON.parse(readFileSync(new URL(`../../emerging-markets-radar/data/checkpoints/discovery-${date}.json`,import.meta.url))));
 const compact=value=>String(value??'').replace(/\s+/g,' ').trim();
 
-test('historical scans retain supported causal formation structure with deterministic zero-search evidence',async()=>{
+test('historical scan records retain causal structure using simulated downloaded passages and zero search',async()=>{
  for(const date of scans){
   const input=fixture(date),byUrl=new Map();
   for(const item of input.evidence){

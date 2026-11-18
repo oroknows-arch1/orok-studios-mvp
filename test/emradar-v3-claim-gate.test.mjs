@@ -68,6 +68,24 @@ test('drops fabricated excerpts and dependent conclusions, tries the next format
  assert.equal(claimPolicy.hasCheckedDocument(document,{...fakeScan,artifact_sha256:'2'.repeat(64)}),false);
 });
 
+test('admits a significant causal formation without inventing an alternative scenario',async()=>{
+ const noScenario=await gateFor({assess:async input=>{const result=await assess(input);return {...result,story:{...result.story,
+  context:{world_change:[{text:'The port opened its first electric cargo berth',evidence_ids:[input.claims[0].id]}],pressures:[],bottlenecks:[],connected_companies:[],consequences:[]},scenarios:[]}};}})({scan:fakeScan,document:normalizePublishedEvidence(raw)});
+ assert.equal(noScenario.records.length,1);
+ assert.deepEqual(noScenario.records[0].scenarios,[]);
+ assert.equal(noScenario.records[0].causal_chain.world_change[0].evidence_ids[0],'port:0');
+});
+
+test('discards unsupported competing explanations and consequences instead of making them admission requirements',async()=>{
+ const checked=await gateFor({assess:async input=>{const result=await assess(input);return {...result,story:{...result.story,
+  context:{consequences:[{text:'Every terminal will close',evidence_ids:['missing']}],world_change:[],pressures:[],bottlenecks:[],connected_companies:[]},
+  scenarios:[{status:'COMPETING_EXPLANATION',proposition:'A monopoly caused the berth opening',evidence_ids:['missing'],missing_evidence:[]}]}};}})({scan:fakeScan,document:normalizePublishedEvidence(raw)});
+ assert.equal(checked.records.length,1);
+ assert.deepEqual(checked.records[0].causal_chain.consequences,[]);
+ assert.deepEqual(checked.records[0].scenarios,[]);
+ assert.doesNotMatch(JSON.stringify(checked),/Every terminal|monopoly caused/);
+});
+
 test('requires a fetched independent replacement and exact support; a search hit alone never passes',async()=>{
  const document=normalizePublishedEvidence({records:[record('port',[source(lost,fact)])]});
  const verified=await gateFor()({scan:fakeScan,document});
@@ -118,6 +136,8 @@ test('actual intake and preparation validate scan SHA, gate before router/writer
  assert.deepEqual(stages,['gate','route','write']);
  const state=(await adapter.read(result.campaignId)).value;
  assert.equal(state.phase,'PUBLICATION_REVIEW');
+ assert.equal(state.preparation_input.document.records[0].causal_chain.relationships[0].evidence_ids[0],'port:0');
+ assert.equal(state.preparation_input.document.records[0].scenarios[0].status,'UNRESOLVED_QUESTION');
  assert.ok(claimPolicy.hasAssetClaimEvidence(state,state.assets.x.asset));
  assert.deepEqual(state.decisions,{});
  assert.deepEqual(state.deliveries,{});
