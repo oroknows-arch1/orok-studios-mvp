@@ -38,7 +38,7 @@ async function body(req) {
 export function createReviewServer({workflow,runDiscovery,runRegeneration,releaseEmail,xAuth,publishing={email:{enabled:true},x:{enabled:false,reason:'X publishing is disabled.'}},logOAuthDiagnostic=message=>console.info(message),logRevisionDiagnostic=message=>console.info(message),health=()=>({ok:true})}) {
  if(!(workflow instanceof ReviewWorkflow)) throw Error('WORKFLOW_REQUIRED');
  return createServer(async(req,res)=>{
-  let isCallback=false,isRevision=false,stage='REQUEST',failure;
+  let isCallback=false,isRevision=false,stage='REQUEST',failure,requestPath=null;
   const reply=(status,payload)=>{
    if(isCallback&&status>=400){
     const diagnostic=oauthDiagnostic(stage,failure||new Error(payload.error),status,logOAuthDiagnostic);
@@ -48,6 +48,7 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
   };
   try {
    const url=new URL(req.url,'http://localhost');
+   requestPath=url.pathname;
    isRevision=req.method==='POST'&&['/api/review/revise','/api/review/group-revise'].includes(url.pathname);
    if(req.method==='GET' && url.pathname==='/health') return json(res,200,health());
    if(req.method==='GET' && url.pathname==='/review/access') {
@@ -160,7 +161,7 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
     logRevisionDiagnostic('V3_REVIEW_REVISION_FAILED '+JSON.stringify({reason:code,status,diagnostic_id}));
     return reply(status,{error:code,diagnostic_id});
    }
-   if(url.pathname==='/api/review/discover'&&['CAMPAIGN_NOT_READY','CAMPAIGN_RETIRED','V3_CHECKED_CLAIM_EVIDENCE_REQUIRED'].includes(error.message))
+   if(requestPath==='/api/review/discover'&&['CAMPAIGN_NOT_READY','CAMPAIGN_RETIRED','V3_CHECKED_CLAIM_EVIDENCE_REQUIRED'].includes(error.message))
     return reply(409,{error:error.message});
    const status=/ACCESS_DENIED|SESSION_REQUIRED|REVIEW_NOT_OPEN/.test(error.message)?403:400;
    return reply(status,{error:status===403?'ACCESS_DENIED':'INVALID_REQUEST'});
