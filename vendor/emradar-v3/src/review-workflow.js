@@ -120,10 +120,19 @@ export class ReviewWorkflow {
   for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:entry.hold_reason?'Held for claim evidence review':'Previous draft'}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
-  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};
+  const described=Object.values(campaign.assets).map(entry=>describe(entry));
+  const actionable=described.filter(entry=>entry.asset.review_status!=='NEEDS_REVISION'&&entry.recipient_ready!==false);
+  const actionableIds=new Set(actionable.map(entry=>entry.asset.destination_id));
+  const groups=Object.values(campaign.email_groups??{}).map(group=>({...group,destination_ids:group.destination_ids.filter(id=>actionableIds.has(id)),approval:campaign.group_approvals?.[group.id]??null})).filter(group=>group.destination_ids.length);
+  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:actionable,internal_incomplete_count:described.length-actionable.length,history,groups};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
+  if(decision==='APPROVE'){
+   const campaign=(await this.store.adapter.read(campaignId))?.value,entry=campaign?.assets?.[destinationId];
+   const destination=campaign?.destinations?.find(item=>item.id===destinationId);
+   if(entry?.asset?.review_status==='NEEDS_REVISION'||!entry||!recipientPolicy.recipientReadyForReview(entry.asset,destination))throw Error('V3_ACTIONABLE_REVIEW_REQUIRED');
+  }
   return this.store.decide(campaignId,destinationId,decision,fingerprint,feedback);
  }
  async verifyAgain(campaignId,sessionId,secret,destinationId,fingerprint){

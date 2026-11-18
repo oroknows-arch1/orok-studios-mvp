@@ -846,5 +846,25 @@
     "snapshot_date": "2026-11-18",
     "source_sha256": "30ca5047700fdb60ddbbf0720c5e59980490ef04fd05b18d59ae5d6366c8afa5",
     "scope": "Verify scanner release sidecar against live and archive bytes, retire disposable campaigns, and issue one claim-gated owner review. Preserve delivery history and existing evidence budgets."
+  },
+  "november_18_streamlined_review_batch": {
+    "status": "LOCALLY_VERIFIED_NOT_DEPLOYED",
+    "root_causes": [
+      "Interrupted evidence recovery selected only the strongest supported record, concentrating discovery on one formation.",
+      "Recipient-incomplete NEEDS_REVISION drafts were durable but appeared beside complete proposals in the actionable owner review."
+    ],
+    "correction": "Recover every previously supported interrupted formation within the existing investigation bound and without another source-search layer. Return only complete recipient-ready assets in the actionable review while retaining incomplete work in campaign state, and reject direct approval attempts for internal-only assets.",
+    "validation": {
+      "focused_review_recovery_distribution_tests": "49 passed, 1 disposable PostgreSQL test skipped",
+      "source_integration": "17/17 passed",
+      "development_harness": "PASS"
+    },
+    "preservation": {
+      "scanner_modified": false,
+      "publisher_emails_sent": 0,
+      "x_posts_published": 0,
+      "production_campaign_mutations": 0
+    },
+    "next_action": "Commit and deploy through main, verify Render health, issue one revision-bound private owner invitation, and prove the live review contains only actionable assets."
   }
 }

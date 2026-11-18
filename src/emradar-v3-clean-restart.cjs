@@ -53,11 +53,12 @@ async function retireUnsentApprovals(pool,keepId){
  return rows.reduce((sum,row)=>sum+row.count,0);
 }
 
-function recoverableRecord(state,key){
+function recoverableRecords(state,key){
  if(key!==restartKey||state?.phase!=='SCAN_VERIFIED'||state.claim_gate_attempt?.status!=='NO_VERIFIED_ANGLE'||state.claim_gate_previous)return null;
  const document=state.preparation_input?.document;
  if(document?.evidence?.length!==0)return null;
  const eligible=(document.claim_audit??[]).filter(item=>item.status==='EVIDENCE_CHECK_FAILED'&&item.claims.some(claim=>claim.status==='SUPPORTED'));
- return eligible.sort((a,b)=>b.claims.filter(c=>c.status==='SUPPORTED').length-a.claims.filter(c=>c.status==='SUPPORTED').length)[0]?.record_id??null;
+ return eligible.sort((a,b)=>b.claims.filter(c=>c.status==='SUPPORTED').length-a.claims.filter(c=>c.status==='SUPPORTED').length).map(item=>item.record_id);
 }
-module.exports={restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals,recoverableRecord};
+const recoverableRecord=(state,key)=>recoverableRecords(state,key)?.[0]??null;
+module.exports={restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals,recoverableRecords,recoverableRecord};

@@ -61,8 +61,8 @@ export function createClaimEvidenceProvider({openai,complete,maxInvestigations,m
   angle
  ))?.supported===true;
  const gate=createClaimEvidenceGate({readPage:fetchPage,findSources,assess,checkAngle,maxInvestigations});
- const recoverAngle=createClaimEvidenceGate({readPage:fetchPage,findSources:async()=>[],assess,checkAngle,maxInvestigations:1});
- return ({scan,document,recoverRecordId})=>recoverRecordId
-  ?recoverAngle({scan,document:{records:document.records.filter(r=>r.id===recoverRecordId),evidence:document.evidence.filter(e=>e.record_id===recoverRecordId)}})
+ const recoverAngle=createClaimEvidenceGate({readPage:fetchPage,findSources:async()=>[],assess,checkAngle,maxInvestigations});
+ return ({scan,document,recoverRecordIds})=>recoverRecordIds?.length
+  ?recoverAngle({scan,document:{records:document.records.filter(r=>recoverRecordIds.includes(r.id)),evidence:document.evidence.filter(e=>recoverRecordIds.includes(e.record_id))}})
   :gate({scan,document});
 }

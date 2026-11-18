@@ -3,7 +3,7 @@ const {Pool}=require('pg');
 const {createHash}=require('node:crypto');
 const {readFileSync,readdirSync}=require('node:fs');
 const path=require('node:path');
-const {restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals,recoverableRecord}=require('./emradar-v3-clean-restart.cjs');
+const {restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals,recoverableRecords}=require('./emradar-v3-clean-restart.cjs');
 const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
@@ -363,7 +363,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const available=await published();
    const restart=available.find(item=>item.restartKey===restartKey);
    const restartState=restart&&(await service.store.adapter.read(campaignIdFor(restart)))?.value;
-   if(!snapshotDate&&restart&&restartState?.phase!=='PUBLICATION_REVIEW'&&(!['NO_VERIFIED_ANGLE','RUNNING'].includes(restartState?.claim_gate_attempt?.status)||recoverableRecord(restartState,restartKey)))snapshotDate=restartDate;
+   if(!snapshotDate&&restart&&restartState?.phase!=='PUBLICATION_REVIEW'&&(!['NO_VERIFIED_ANGLE','RUNNING'].includes(restartState?.claim_gate_attempt?.status)||recoverableRecords(restartState,restartKey)?.length))snapshotDate=restartDate;
    if(!snapshotDate&&!restart&&available.blocked?.some(item=>item.snapshotDate===restartDate)&&!available.some(item=>item.snapshotDate>restartDate))return {status:'CLEAN_RESTART_ATTESTATION_HELD',snapshotDate:restartDate};
    // Retry one persisted incomplete review per hourly poll. A failure is logged
    // and isolated so it cannot block intake of another independently valid scan.

@@ -38,18 +38,18 @@ export function createPreparationRun({store,verifyClaims,discover,write,renderVi
   const campaignId=await store.start(scan,{restartKey});
   let state=(await store.adapter.read(campaignId)).value;
   if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
-  const recoverRecordId=hasCheckedDocument(state.preparation_input?.document,scan)?restartPolicy.recoverableRecord(state,restartKey):null;
-  if(recoverRecordId||!hasCheckedDocument(state.preparation_input?.document,scan)){
+  const recoverRecordIds=hasCheckedDocument(state.preparation_input?.document,scan)?restartPolicy.recoverableRecords(state,restartKey):null;
+  if(recoverRecordIds?.length||!hasCheckedDocument(state.preparation_input?.document,scan)){
    const attempt=randomUUID();
    state=await store.mutate(campaignId,current=>{
-    if(recoverRecordId&&restartPolicy.recoverableRecord(current,restartKey)===recoverRecordId){
+    if(recoverRecordIds?.length&&JSON.stringify(restartPolicy.recoverableRecords(current,restartKey))===JSON.stringify(recoverRecordIds)){
      current.claim_gate_previous={attempt:current.claim_gate_attempt,document:current.preparation_input.document};
-     current.claim_gate_attempt={id:attempt,status:'RUNNING',recovery_record_id:recoverRecordId};
+     current.claim_gate_attempt={id:attempt,status:'RUNNING',recovery_record_ids:recoverRecordIds};
     }else if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING'};
     return current;
    });
    if(state.claim_gate_attempt?.id!==attempt)return {campaignId,status:'CLAIM_EVIDENCE_HELD'};
-   const checked=await verifyClaims({scan,document,recoverRecordId});
+   const checked=await verifyClaims({scan,document,recoverRecordIds});
    assertCheckedDocument(checked,scan);
    state=await store.mutate(campaignId,current=>{
     current.preparation_input={document:checked};

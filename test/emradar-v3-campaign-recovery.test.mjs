@@ -61,7 +61,7 @@ test('no verified contact still creates review while delivery remains approval-g
 test('provider interruption preserves ready work and exposes failed items without suppressing review',async()=>{
  const f=await harness({count:3,failAfter:1});const result=await f.service.prepareAndNotify(f.input);assert.equal(result.status,'PUBLICATION_REVIEW');
  const state=f.records.get(f.id).payload;assert.equal(state.phase,'PUBLICATION_REVIEW');assert.equal(Object.keys(state.assets).length,4);assert.equal(f.metrics().notifications,1);
- f.service.workflow.authenticate=async()=>true;const review=await f.service.workflow.view(f.id);assert.equal(review.entries.length,4);assert.equal(review.entries.filter(entry=>entry.asset.review_status==='NEEDS_REVISION').length,2);
+ f.service.workflow.authenticate=async()=>true;const review=await f.service.workflow.view(f.id);assert.equal(review.entries.length,2);assert.equal(review.internal_incomplete_count,2);assert.equal(review.entries.filter(entry=>entry.asset.review_status==='NEEDS_REVISION').length,0);
  assert.deepEqual(state.assets.x,f.original.assets.x);assert.deepEqual(state.decisions,f.original.decisions);
 });
 
