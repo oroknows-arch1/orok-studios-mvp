@@ -840,5 +840,11 @@
     "production_writes": 0,
     "external_distribution": 0,
     "remaining_verification": "Verify the live provider and quarantine counts after separately authorised release."
+  },
+  "november_18_clean_restart": {
+    "status": "RELEASE_IN_PROGRESS",
+    "snapshot_date": "2026-11-18",
+    "source_sha256": "30ca5047700fdb60ddbbf0720c5e59980490ef04fd05b18d59ae5d6366c8afa5",
+    "scope": "Verify scanner release sidecar against live and archive bytes, retire disposable campaigns, and issue one claim-gated owner review. Preserve delivery history and existing evidence budgets."
   }
 }

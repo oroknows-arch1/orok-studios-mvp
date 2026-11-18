@@ -1,3 +1,4 @@
+import restartPolicy from '../../../src/emradar-v3-clean-restart.cjs';
 import {isReviewPhase} from './contracts.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import emailBrand from '../../../src/email-brand.cjs';
@@ -37,11 +38,12 @@ export class CampaignStore {
     }
     throw Error('CONCURRENT_UPDATE_RETRY_EXHAUSTED');
   }
-  async start(scan) {
+  async start(scan,{restartKey}={}) {
     const verified = assertScan(scan);
-    const id = 'v3-' + sha256(verified.source_key).slice(0,32);
+    const id=restartPolicy.campaignIdentity(verified.source_key,restartKey);
     await this.mutate(id, previous => {
       if (previous) {
+        if(previous.phase==='CLOSED')throw Error('CAMPAIGN_RETIRED');
         if (previous.scan.source_key !== verified.source_key) throw Error('SCAN_IDENTITY_CONFLICT');
         return previous;
       }

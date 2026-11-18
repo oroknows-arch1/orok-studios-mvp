@@ -20,10 +20,10 @@ export class CampaignPreparation {
   if(!store?.select || typeof discover!=='function' || typeof write!=='function' || typeof renderVisual!=='function') throw Error('PREPARATION_DEPENDENCIES_REQUIRED');
   this.store=store;this.discover=discover;this.write=write;this.renderVisual=renderVisual;
  }
- async prepare({scan,document,history=[]}) {
+ async prepare({scan,document,restartKey,history=[]}) {
   assertCheckedDocument(document,scan);
   if(!document.evidence.length)throw Error('V3_NO_VERIFIED_ANGLE');
-  const campaignId=await this.store.start(scan);
+  const campaignId=await this.store.start(scan,{restartKey});
   const existing=(await this.store.adapter.read(campaignId))?.value;
   if(isReviewPhase(existing?.phase)) return {campaignId,status:'ALREADY_PREPARED'};
   if(existing?.phase!=='SCAN_VERIFIED' && existing?.phase!=='DESTINATIONS_SELECTED') throw Error('CAMPAIGN_PHASE_UNSUPPORTED');

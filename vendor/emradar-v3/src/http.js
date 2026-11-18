@@ -160,6 +160,8 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
     logRevisionDiagnostic('V3_REVIEW_REVISION_FAILED '+JSON.stringify({reason:code,status,diagnostic_id}));
     return reply(status,{error:code,diagnostic_id});
    }
+   if(url.pathname==='/api/review/discover'&&['CAMPAIGN_NOT_READY','CAMPAIGN_RETIRED','V3_CHECKED_CLAIM_EVIDENCE_REQUIRED'].includes(error.message))
+    return reply(409,{error:error.message});
    const status=/ACCESS_DENIED|SESSION_REQUIRED|REVIEW_NOT_OPEN/.test(error.message)?403:400;
    return reply(status,{error:status===403?'ACCESS_DENIED':'INVALID_REQUEST'});
   }

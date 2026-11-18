@@ -3,6 +3,7 @@ const {Pool}=require('pg');
 const {createHash}=require('node:crypto');
 const {readFileSync,readdirSync}=require('node:fs');
 const path=require('node:path');
+const {restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals}=require('./emradar-v3-clean-restart.cjs');
 const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
@@ -79,6 +80,14 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
    releaseAttestation?.campaign_authority?.required_stop==='PUBLICATION_REVIEW'&&
    releaseAttestation?.campaign_authority?.external_publication_allowed===false&&
    /^[a-f0-9]{64}$/.test(expectedSha256||'');
+  if(!publicationRecord&&releaseAttestation&&date===restartDate){
+   const input={snapshotDate:date,expectedSha256:releaseAttestation.source_sha256,liveUrl:SCAN_ORIGIN+'/data/discovery.json',archiveUrl,releaseAttestation};
+   try{
+    const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
+    await verifyPublishedScan({...input,fetcher});
+    return input;
+   }catch{blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;}
+  }
   if(!authorized){
    // A published source artifact is an independent authorization and integrity
    // path only when both optional sidecars are absent. Never override a partial,
@@ -107,7 +116,7 @@ function mergeCurrentPublishedScan(archived,current){
  for(const item of current){
   const existing=candidates.get(item.snapshotDate);
   if(existing&&existing.expectedSha256!==item.expectedSha256)throw Error('SCAN_ARCHIVE_IDENTITY_CONFLICT');
-  if(!existing)candidates.set(item.snapshotDate,item);
+  if(!existing&&!(archived.blocked??[]).some(entry=>entry.snapshotDate===item.snapshotDate&&entry.reason==='PUBLICATION_ATTESTATION_INVALID'))candidates.set(item.snapshotDate,item);
  }
  const merged=[...candidates.values()].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
  Object.defineProperty(merged,'blocked',{value:archived.blocked??[],enumerable:false});
@@ -123,12 +132,12 @@ async function fetchHistoricalPublishedScan(snapshotDate){
  const archiveUrl='https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+snapshotDate+'.json';
  return {snapshotDate,expectedSha256,liveUrl:archiveUrl,archiveUrl,bundledBytes:bytes};
 }
-const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snapshotDate+':'+published.expectedSha256).digest('hex').slice(0,32);
+const campaignIdFor=published=>campaignIdentity(published.snapshotDate+':'+published.expectedSha256,published.restartKey);
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
   if(existing?.claim_gate_attempt?.status==='NO_VERIFIED_ANGLE'||existing?.claim_gate_attempt?.status==='RUNNING')continue;
-  if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
+  if(!['PUBLICATION_REVIEW','CLOSED'].includes(existing?.phase))return {...candidate,resume:Boolean(existing)};
  }
  return null;
 }
@@ -325,7 +334,12 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   });
   const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
   const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
-  const published=async()=>mergeCurrentPublishedScan(await enumeratePublishedScans({fetcher}),await refreshPublishedScans({fetcher}));
+  const published=async()=>{
+   const available=mergeCurrentPublishedScan(await enumeratePublishedScans({fetcher}),await refreshPublishedScans({fetcher}));
+   const restart=available.find(item=>item.snapshotDate===restartDate);
+   if(restart&&restart.releaseAttestation)restart.restartKey=restartKey;
+   return available;
+  };
   const verify=async selected=>{
    const sourceFetcher=selected.bundledBytes?async url=>{
     if(url!==selected.archiveUrl)throw Error('UNTRUSTED_SCAN_URL');
@@ -346,6 +360,11 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async(snapshotDate)=>{
+   const available=await published();
+   const restart=available.find(item=>item.restartKey===restartKey);
+   const restartState=restart&&(await service.store.adapter.read(campaignIdFor(restart)))?.value;
+   if(!snapshotDate&&restart&&restartState?.phase!=='PUBLICATION_REVIEW'&&!['NO_VERIFIED_ANGLE','RUNNING'].includes(restartState?.claim_gate_attempt?.status))snapshotDate=restartDate;
+   if(!snapshotDate&&!restart&&available.blocked?.some(item=>item.snapshotDate===restartDate)&&!available.some(item=>item.snapshotDate>restartDate))return {status:'CLEAN_RESTART_ATTESTATION_HELD',snapshotDate:restartDate};
    // Retry one persisted incomplete review per hourly poll. A failure is logged
    // and isolated so it cannot block intake of another independently valid scan.
    if(!snapshotDate){
@@ -356,7 +375,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    }
    // Recover a completed persisted review before attempting fresh archive intake.
    // The durable review record and database lock prevent duplicate invitations.
-   const pending=await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
+   const pending=snapshotDate?{rows:[]}:await pool.query(`SELECT c.campaign_id FROM v3_campaign_state c
     LEFT JOIN v3_campaign_state r ON r.campaign_id='review:'||c.campaign_id
     WHERE c.payload->>'phase'='PUBLICATION_REVIEW'
       AND c.payload->'review_completion'->>'complete'='true'
@@ -384,9 +403,8 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    // Existing discovery recovery remains available independently.
    // Historical runs require the source's paired release attestations and exact archive digest.
    // Never substitute the current live scan for a requested historical date.
-   const available=await published();
    if(available.blocked?.length)console.warn('V3_ARCHIVE_ENTRIES_NOT_VERIFIABLE',JSON.stringify(available.blocked));
-   const selected=snapshotDate?available.find(item=>item.snapshotDate===snapshotDate):await selectNextPublishedScan({published:available,readCampaign:async id=>(await service.store.adapter.read(id))?.value});
+   const selected=snapshotDate?available.find(item=>item.snapshotDate===snapshotDate):await selectNextPublishedScan({published:available.filter(item=>item.snapshotDate>=restartDate),readCampaign:async id=>(await service.store.adapter.read(id))?.value});
    if(!selected) return {status:snapshotDate?'SCAN_NOT_IN_VERIFIED_ARCHIVE':'NO_UNPROCESSED_SCAN',archive_unverified_dates:available.blocked?.map(item=>item.snapshotDate).filter(Boolean)??[]};
    const campaignId=campaignIdFor(selected);
    // Hold a database session lock through preparation. A crashed process releases
@@ -397,6 +415,13 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     if(!lock.rows[0]?.acquired)return {status:'SCAN_PREPARATION_IN_PROGRESS',campaignId};
     const adapter=service.store.adapter;
     const prior=(await adapter.read(campaignId))?.value;
+    if(prior?.phase==='CLOSED')return {campaignId,status:'CAMPAIGN_RETIRED'};
+    if(selected.restartKey&&!prior){
+     await verify(selected);
+     const retired=await retireDisposableCampaigns(pool,campaignId);
+     const approvalsRetired=await retireUnsentApprovals(pool,campaignId);
+     console.info('V3_CLEAN_RESTART_RETIRED',JSON.stringify({campaignId,count:retired.length,approvalsRetired}));
+    }
     const review=(await adapter.read('review:'+campaignId))?.value;
     if(prior?.phase==='PUBLICATION_REVIEW'&&review){
      const completion=await service.reviewCompletion(campaignId);

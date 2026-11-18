@@ -218,6 +218,7 @@ export async function createPreparationReviewService({
   const progress=researchHistory.find(r=>r.publication===coverageKey)??{};
   completion.discovery_coverage=assessDiscoveryCoverage({document:doc,progress,destinations:(await directory.list()).filter(d=>d.verification?.scan_evidence_digest===scanDigest)});
   await store.mutate(campaignId,current=>{
+   if(!isReviewPhase(current.phase))throw Error('CAMPAIGN_NOT_READY');
    current.discovery_coverage=completion.discovery_coverage;
    const phase=completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED';
    if(current.phase!==phase)current.events.push({type:completion.complete?'PUBLICATION_REVIEW_READY':'PREPARATION_INCOMPLETE'});
@@ -228,6 +229,7 @@ export async function createPreparationReviewService({
  const resumeIntelligentDiscovery=async (campaignId,{notifyOwner=true}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
+  assertCheckedDocument(state.preparation_input.document,state.scan);
   if(autonomousDiscovery)await excludeSourceInstitutionDestinations({store,directory,campaignId});
   await saveCompletion(campaignId);
   let resumed,completion;
