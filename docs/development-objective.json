@@ -68,7 +68,7 @@
     "external_distribution": 0
   },
   "october_18_quality_correction": {
-    "status": "LOCALLY_VERIFIED_NOT_DEPLOYED",
+    "status": "FIRST_BATCH_DEPLOYED_ACTIONABLE_INVITATION_PENDING",
     "failure_campaign_id": "v3-d83c24859c18659fda4b707fb982fe10",
     "failure_campaign_version": 25,
     "target_campaign_id": "v3-df5b240c718018880410c03a4c392d64",
@@ -865,6 +865,10 @@
       "x_posts_published": 0,
       "production_campaign_mutations": 0
     },
-    "next_action": "Commit and deploy through main, verify Render health, issue one revision-bound private owner invitation, and prove the live review contains only actionable assets."
+    "first_batch_commit": "5860a9c99e9b45ae34e95e2722d174d83bbffd3b",
+    "first_batch_deploy": "dep-dbukukui0phs73b5m2b0",
+    "first_batch_deploy_status": "live",
+    "second_batch": "Add one idempotent revision-bound private owner invitation for the existing claim-gated 18 November campaign. This path invokes only owner notification; publisher email and X release paths remain untouched.",
+    "next_action": "Verify the second batch, deploy through main, confirm the Purelymail receipt and prove the live review contains only actionable assets."
   }
 }

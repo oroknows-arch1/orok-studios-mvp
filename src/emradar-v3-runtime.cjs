@@ -554,7 +554,13 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
    return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
   };
-  return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  const actionableCampaignId='v3-2a62987f506ca31032b2efe258581e3b';
+  const actionableRevisionId='actionable-review-2026-11-18-v1';
+  const actionableCampaign=(await service.store.adapter.read(actionableCampaignId))?.value;
+  const actionableReview=(await service.store.adapter.read('review:'+actionableCampaignId))?.value;
+  const actionableReviewPending=actionableCampaign?.phase==='PUBLICATION_REVIEW'&&actionableCampaign.review_completion?.review_ready===true&&actionableReview?.revision_id!==actionableRevisionId;
+  const runActionableReview=()=>service.workflow.issue(actionableCampaignId,{revisionId:actionableRevisionId});
+  return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,actionableReviewPending,runActionableReview,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
