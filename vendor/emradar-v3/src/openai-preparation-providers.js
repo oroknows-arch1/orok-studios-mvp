@@ -33,6 +33,33 @@ function sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible})
  brand.brand(asset);
  return asset;
 }
+// Compose copy without introducing any material wording beyond the sealed angle.
+export function writeCheckedRestartDraft({campaignId,destination,document,scan}){
+ assertCheckedDocument(document,scan);
+ const allowed=new Set(destination.evidence?.ids??[]);
+ const record=document.records.find(item=>document.evidence.some(e=>e.record_id===item.id&&allowed.has(e.id)));
+ const evidence=document.evidence.filter(e=>e.record_id===record?.id&&allowed.has(e.id)&&e.verified===true&&e.excerpt&&e.page_sha256);
+ const allClaims=document.evidence.filter(e=>e.record_id===record?.id);
+ if(!record?.theme||!record.why_surfaced||!evidence.length||evidence.length!==allClaims.length)throw Error('V3_CHECKED_ANGLE_REQUIRED');
+ const limitations='The wider market formation remains under investigation.';
+ const fields={subject:record.theme,analytical_finding:record.why_surfaced,limitations,story_evidence_ids:evidence.map(e=>e.id)};
+ const story={evidence};
+ if(destination.id==='x'){
+  const body=[record.theme,record.why_surfaced,limitations,...new Set(evidence.map(e=>e.source_url))].join('\n\n');
+  validateEditorialStory({...fields,body},story);
+  return bindClaimEvidence({campaign_id:campaignId,destination_id:'x',kind:'X',subject:fields.subject,body,
+   from:brand.identity.address,evidence_ids:fields.story_evidence_ids,story_record_id:record.id,
+   analytical_finding:fields.analytical_finding,evidence_limitations:limitations},document);
+ }
+ recipientPolicy.assertVerifiedDestination(destination);
+ if(!isEditorialDestination(destination))throw Error('V3_EDITORIAL_ROUTE_REQUIRED');
+ const draft=enforceSharedProgression(fields);
+ validateEditorialStory(draft,story);
+ validateEditorialCorrespondence(draft);
+ const asset=approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible:true});
+ return bindClaimEvidence({...asset,editorial_reference:EDITORIAL_REFERENCE,editorial_enforcement:EDITORIAL_ENFORCEMENT_VERSION,
+  story_record_id:record.id,recipient_verification:destination.contact},document);
+}
 export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',imageModel='gpt-image-1',proposalVerificationMaxToolCalls=3,proposalVerificationMaxInvestigations=8,readPage,onWriterDraft,onVisualInspection}={}) {
  if(typeof openai?.chat?.completions?.create!=='function')
   throw Error('V3_OPENAI_PROVIDER_REQUIRED');

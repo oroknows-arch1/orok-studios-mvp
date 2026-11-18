@@ -67,3 +67,25 @@ test('recovery selects only the strongest supported angle interrupted by a provi
  assert.equal(recoverableRecord({...state,claim_gate_previous:{}},restartKey),null);
  assert.equal(recoverableRecord(state),null);
 });
+
+test('restart copy uses the checked angle verbatim and rejects missing claim links or tampering',async()=>{
+ const {writeCheckedRestartDraft}=await import('../vendor/emradar-v3/src/openai-preparation-providers.js');
+ const {checkedDocument}=require('./fixtures/v3-claim-fixtures.cjs');
+ const proof=require('../vendor/emradar-v3-authoritative/src/claim-evidence.cjs');
+ const scan={artifact_sha256:expectedSha256,snapshot_date:restartDate};
+ const theme='A financing mechanism for cleaner textile production';
+ const finding='The announced fund combines equipment finance with technical assistance for suppliers.';
+ const evidence=[{id:'e1',record_id:'r',verified:true,fact:finding}];
+ const document=checkedDocument({records:[{id:'r',theme,why_surfaced:finding}],evidence},scan);
+ const fixture={campaignId:'restart',document,scan};
+ const destination={id:'x',evidence:{ids:['e1']}};
+ const x=writeCheckedRestartDraft({...fixture,destination});
+ assert.ok(x.body.includes(finding));assert.ok(x.body.includes('remains under investigation'));
+ assert.equal(x.subject,theme);
+ assert.ok(proof.hasAssetClaimEvidence({scan,preparation_input:{document}},x));
+ const email=require('./fixtures/v3-verified-recipient.cjs')('journal',evidence);
+ const asset=writeCheckedRestartDraft({...fixture,destination:{...email,evidence:{ids:['e1']}}});
+ assert.ok(asset.body.includes(finding));assert.ok(proof.hasAssetClaimEvidence({scan,preparation_input:{document}},asset));
+ assert.throws(()=>writeCheckedRestartDraft({...fixture,destination:{...destination,evidence:{ids:['different']}}}),/V3_CHECKED_ANGLE_REQUIRED/);
+ assert.throws(()=>writeCheckedRestartDraft({...fixture,destination,document:{...document,records:[]}}),/V3_CHECKED_CLAIM_EVIDENCE_REQUIRED/);
+});

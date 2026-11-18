@@ -7,7 +7,7 @@ import {cleanUnverifiedRecipients} from './verified-recipient-recovery.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {refreshUnreviewedEditorialDrafts} from './editorial-standard-refresh.js';
 import {prepareEditorialAlternatives} from './editorial-alternatives.js';
-import {createOpenAiPreparationProviders} from './openai-preparation-providers.js';
+import {createOpenAiPreparationProviders,writeCheckedRestartDraft} from './openai-preparation-providers.js';
 import {PostgresAdapter} from './adapters/postgres.js';
 import {CampaignStore} from './state.js';
 import {OutletDirectory} from './outlet-directory.js';
@@ -238,10 +238,49 @@ export async function createPreparationReviewService({
   });
   return completion;
  };
+ const isCleanRestart=state=>Boolean(state?.scan?.source_key&&state.scan.snapshot_date===restartPolicy.restartDate&&
+  state.id===restartPolicy.campaignIdentity(state.scan.source_key,restartPolicy.restartKey));
+ const recoverCheckedDrafts=async campaignId=>{
+  const state=(await adapter.read(campaignId))?.value;
+  if(!isCleanRestart(state)||!isReviewPhase(state.phase))throw Error('CAMPAIGN_NOT_READY');
+  const document=state.preparation_input?.document;
+  assertCheckedDocument(document,state.scan);
+  for(const destination of state.destinations){
+   const id=destination.id,entry=state.assets[id];
+   if(entry?.asset?.review_status!=='NEEDS_REVISION'||state.decisions[id]||state.deliveries[id])continue;
+   if(id!=='x'&&!recipientPolicy.verifiedDestination(destination))continue;
+   const linked=new Set(destination.evidence?.ids??[]);
+   if(!document.evidence.length||!document.evidence.every(e=>linked.has(e.id)))continue;
+   const asset=writeCheckedRestartDraft({campaignId,destination,document,scan:state.scan});
+   if(id==='x'){
+    const visual=await renderVerifiedVisual({asset,document,scan:state.scan});
+    asset.visual_sha256=visual.sha256;asset.visual_url=visual.url;
+   }
+   verifyEditorialAsset(asset,{evidenceIds:new Set(document.evidence.map(item=>item.id))});
+   asset.review_status='READY';
+   await store.mutate(campaignId,current=>{
+    if(!isReviewPhase(current.phase)||current.assets[id]?.fingerprint!==entry.fingerprint||current.decisions[id]||current.deliveries[id])return current;
+    if(!hasAssetClaimEvidence(current,asset))throw Error('V3_ASSET_CLAIM_EVIDENCE_REQUIRED');
+    current.editorial_versions??={};current.editorial_versions[id]??=[];
+    current.editorial_versions[id].push(structuredClone(current.assets[id]));
+    current.assets[id]={asset,fingerprint:assetFingerprint(asset)};
+    if(!Object.keys(current.group_approvals??{}).length)delete current.email_groups;
+    current.events.push({type:'CHECKED_RESTART_DRAFT_RECOVERED',destination_id:id});
+    return current;
+   });
+  }
+  await store.ensureEmailGroups(campaignId);
+  return saveCompletion(campaignId);
+ };
  const resumeIntelligentDiscovery=async (campaignId,{notifyOwner=true}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
   assertCheckedDocument(state.preparation_input.document,state.scan);
+  if(isCleanRestart(state)){
+   const completion=await recoverCheckedDrafts(campaignId);
+   const notification=completion.complete&&notifyOwner?await ensureOwnerReview(campaignId):null;
+   return {campaignId,...completion,status:completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED',notification:notification?.status??'NOT_REQUESTED'};
+  }
   if(autonomousDiscovery)await excludeSourceInstitutionDestinations({store,directory,campaignId});
   await saveCompletion(campaignId);
   let resumed,completion;
@@ -310,6 +349,11 @@ export async function createPreparationReviewService({
   const result=await prepare(input);
   if(result.status==='CLAIM_EVIDENCE_HELD')return result;
   const prior=(await adapter.read(result.campaignId))?.value;
+  if(isCleanRestart(prior)){
+   const completion=await recoverCheckedDrafts(result.campaignId);
+   if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
+   return {...result,status:'PUBLICATION_REVIEW',...completion};
+  }
   if(result.status==='ALREADY_PREPARED'&&!prior?.review_completion)await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});
   let completion=await saveCompletion(result.campaignId);
   if(!completion.complete){
