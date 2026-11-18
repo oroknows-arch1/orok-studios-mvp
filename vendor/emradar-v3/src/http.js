@@ -163,6 +163,11 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
    }
    if(requestPath==='/api/review/discover'&&['CAMPAIGN_NOT_READY','CAMPAIGN_RETIRED','V3_CHECKED_CLAIM_EVIDENCE_REQUIRED'].includes(error.message))
     return reply(409,{error:error.message});
+   if(requestPath==='/api/review/request-access'){
+    const accessErrors=new Map([['REVIEW_ACCESS_DENIED',403],['REVIEW_NOT_OPEN',403],['REVIEW_ACCESS_REQUEST_ALREADY_RECORDED',429],['REVIEW_NOTIFICATION_AMBIGUOUS',503],['REVIEW_LINK_ALREADY_ISSUED',409]]);
+    const code=accessErrors.has(error.message)?error.message:'REQUEST_FAILED';
+    return reply(accessErrors.get(code)??503,{error:code});
+   }
    const status=/ACCESS_DENIED|SESSION_REQUIRED|REVIEW_NOT_OPEN/.test(error.message)?403:400;
    return reply(status,{error:status===403?'ACCESS_DENIED':'INVALID_REQUEST'});
   }
