@@ -34,3 +34,20 @@ test('canonical replies retain exact original receipt matching; legacy Gmail rec
  assert.equal(matchOutcome(parsed,r,'fixture','sean@emradar.net').state,'RESPONSE_RECEIVED');assert.equal(matchOutcome(parsed,r,'fixture'),null);
  parsed.to.value[0].address='oroknows@gmail.com';assert.equal(matchOutcome(parsed,r,'fixture').state,'RESPONSE_RECEIVED');
 });
+
+
+test('new EMRADAR signature is consistent across reviewed text and HTML; prior signature normalizes once',()=>{
+ const slogan='See the change. Live your pattern.';
+ const previous='Tracking how world changes create market opportunities and real-world consequences.';
+ assert.ok(brand.signature.includes(slogan));
+ const input=['Hello editor,','','An evidence-backed editorial proposal.','','Sean Walker','EMRADAR'].join('\n');
+ const email=brand.brand({kind:'EMAIL',subject:'Proposal',body:input});
+ assert.ok(email.body.includes(slogan));
+ assert.ok(email.html.includes(slogan));
+ assert.equal(email.body.includes(previous),false);
+ assert.equal(brand.reviewBody(email.body),email.body);
+ const previousBody=email.body.replace(slogan,previous);
+ assert.equal(brand.reviewBody(previousBody),email.body);
+ assert.equal(brand.envelope(email).text,email.body);
+ assert.throws(()=>brand.envelope({...email,body:previousBody}),/EXACT_REVIEWED_BRAND_REQUIRED/);
+});
