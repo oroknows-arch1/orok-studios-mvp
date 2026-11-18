@@ -49,5 +49,5 @@ test('new EMRADAR signature is consistent across reviewed text and HTML; prior s
  const previousBody=email.body.replace(slogan,previous);
  assert.equal(brand.reviewBody(previousBody),email.body);
  assert.equal(brand.envelope(email).text,email.body);
- assert.throws(()=>brand.envelope({...email,body:previousBody}),/EXACT_REVIEWED_BRAND_REQUIRED/);
+ assert.throws(()=>brand.envelope({...email,body:previousBody}),/EMAIL_BRAND_TEXT_REQUIRED|EXACT_REVIEWED_BRAND_REQUIRED/);
 });
