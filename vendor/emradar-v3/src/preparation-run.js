@@ -1,3 +1,4 @@
+import restartPolicy from '../../../src/emradar-v3-clean-restart.cjs';
 import {isReviewPhase} from './contracts.js';
 import {createHash,randomUUID} from 'node:crypto';
 import {verifyPublishedScan} from './scan-intake.js';
@@ -37,18 +38,22 @@ export function createPreparationRun({store,verifyClaims,discover,write,renderVi
   const campaignId=await store.start(scan,{restartKey});
   let state=(await store.adapter.read(campaignId)).value;
   if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
-  if(!hasCheckedDocument(state.preparation_input?.document,scan)){
+  const recoverRecordId=hasCheckedDocument(state.preparation_input?.document,scan)?restartPolicy.recoverableRecord(state,restartKey):null;
+  if(recoverRecordId||!hasCheckedDocument(state.preparation_input?.document,scan)){
    const attempt=randomUUID();
    state=await store.mutate(campaignId,current=>{
-    if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING'};
+    if(recoverRecordId&&restartPolicy.recoverableRecord(current,restartKey)===recoverRecordId){
+     current.claim_gate_previous={attempt:current.claim_gate_attempt,document:current.preparation_input.document};
+     current.claim_gate_attempt={id:attempt,status:'RUNNING',recovery_record_id:recoverRecordId};
+    }else if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING'};
     return current;
    });
    if(state.claim_gate_attempt?.id!==attempt)return {campaignId,status:'CLAIM_EVIDENCE_HELD'};
-   const checked=await verifyClaims({scan,document});
+   const checked=await verifyClaims({scan,document,recoverRecordId});
    assertCheckedDocument(checked,scan);
    state=await store.mutate(campaignId,current=>{
     current.preparation_input={document:checked};
-    current.claim_gate_attempt={id:attempt,status:checked.evidence.length?'VERIFIED':'NO_VERIFIED_ANGLE'};
+    current.claim_gate_attempt={...current.claim_gate_attempt,status:checked.evidence.length?'VERIFIED':'NO_VERIFIED_ANGLE'};
     // Resume pre-upgrade interrupted preparation from the checked dossier.
     if(current.phase==='DESTINATIONS_SELECTED'){current.phase='SCAN_VERIFIED';current.destinations=[];}
     return current;

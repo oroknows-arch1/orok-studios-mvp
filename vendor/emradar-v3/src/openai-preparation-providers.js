@@ -40,7 +40,7 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
  const complete=async (system,payload)=>{
   const response=await openai.chat.completions.create({
    model,response_format:{type:'json_object'},
-   messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(payload)}],max_completion_tokens:4096
+   messages:[{role:'system',content:system+'\nReturn a valid JSON object.'},{role:'user',content:JSON.stringify(payload)}],max_completion_tokens:4096
   },{maxRetries:0,timeout:90000});
   console.info('V3_WRITER_USAGE '+JSON.stringify({model,usage:response.usage}));
   let parsed;

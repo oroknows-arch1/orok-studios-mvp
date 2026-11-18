@@ -56,3 +56,14 @@ test('Postgres retirement preserves sent records, retires only unsent approvals,
  assert.deepEqual(await retireDisposableCampaigns(db,ids[2]),[]);
  assert.equal(await retireUnsentApprovals(db,ids[2]),0);
 });
+
+test('recovery selects only the strongest supported angle interrupted by a provider failure, once',()=>{
+ const {recoverableRecord}=require('../src/emradar-v3-clean-restart.cjs');
+ const make=(record_id,status,count)=>({record_id,status,claims:Array.from({length:count},()=>({status:'SUPPORTED'}))});
+ const state={phase:'SCAN_VERIFIED',claim_gate_attempt:{status:'NO_VERIFIED_ANGLE'},preparation_input:{document:{evidence:[],claim_audit:[
+  make('weak','EVIDENCE_CHECK_FAILED',1),make('rejected','NO_SUPPORTED_SIGNIFICANT_ANGLE',3),make('best','EVIDENCE_CHECK_FAILED',2)
+ ]}}};
+ assert.equal(recoverableRecord(state,restartKey),'best');
+ assert.equal(recoverableRecord({...state,claim_gate_previous:{}},restartKey),null);
+ assert.equal(recoverableRecord(state),null);
+});
