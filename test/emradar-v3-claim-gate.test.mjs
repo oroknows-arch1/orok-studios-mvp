@@ -30,7 +30,9 @@ const useful=record('port',[source(primary,fact),source(lost,'The monopoly is al
 const raw={records:[weak,useful],evidence:[{verified:true,fact:'pre-marked injection'}]};
 const assess=async({claims,pages})=>({
  supported:claims.map(claim=>({id:claim.id,status:'SUPPORTED',url:pages[0].url,excerpt:claim.id.endsWith(':0')&&claim.id.startsWith('port')?excerpt:'A long hallucinated excerpt that appears in no downloaded page.'})),
- story:{significant:true,claim_ids:[claims[0].id],headline:'The first electric cargo berth opens',finding,industries:['Ports']}
+ story:{significant:true,claim_ids:[claims[0].id],headline:'The first electric cargo berth opens',finding,industries:['Ports'],
+  relationships:[{cause:'Only one cargo berth has shore power',effect:'Ships must reserve the available connection',mechanism:'Connection capacity is limited to one docked vessel',evidence_ids:[claims[0].id]}],
+  scenarios:[{status:'UNRESOLVED_QUESTION',proposition:'Reservation pressure may persist until more substations are connected',evidence_ids:[claims[0].id],missing_evidence:['Reservation utilisation']}]}
 });
 const gateFor=options=>claimPolicy.createClaimEvidenceGate({
  readPage:async url=>url===primary||url===replacement?page:null,
@@ -56,6 +58,8 @@ test('drops fabricated excerpts and dependent conclusions, tries the next format
  assert.deepEqual(document.claim_audit.map(x=>x.status),['NO_SUPPORTED_SIGNIFICANT_ANGLE','ADMITTED','BUDGET_HELD']);
  assert.deepEqual(document.evidence.map(x=>[x.id,x.verified,x.source_url]),[['port:0',true,primary]]);
  assert.deepEqual(document.records.map(item=>item.status),['INVESTIGATE']);
+ assert.equal(document.records[0].causal_chain.relationships[0].mechanism,'Connection capacity is limited to one docked vessel');
+ assert.equal(document.records[0].scenarios[0].status,'UNRESOLVED_QUESTION');
  assert.doesNotMatch(JSON.stringify(document.records),/monopoly|CONFIRMED/);
  assert.equal(urls.filter(url=>url===lost).length,1);
  assert.equal(urls.includes('https://held.example/case'),false);
