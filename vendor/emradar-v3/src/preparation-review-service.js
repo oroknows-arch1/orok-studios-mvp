@@ -1,3 +1,4 @@
+import restartPolicy from '../../../src/emradar-v3-clean-restart.cjs';
 import {createCoverageDiscovery,assessDiscoveryCoverage,coverageKey,isEditorialSourceInstitution} from '../../emradar-v3-authoritative/src/discovery-coverage.js';
 import {GRAPHIC_STANDARD} from './graphic-standard.js';
 import {assetFingerprint} from './contracts.js';
@@ -97,8 +98,19 @@ export async function createPreparationReviewService({
  const directoryDiscover=createDirectoryDiscovery({
   directory,linkEvidence:autonomousDiscovery?createCoverageDiscovery({directory,scanDigest:document=>sha256(JSON.stringify(document.evidence.filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url).map(e=>[e.id,e.fact,e.source_url]))),searchFormation:createAutonomousOutletDiscovery({openai,directory,fetcher})}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
  });
- const discover=input=>{
+ const discover=async input=>{
   assertCheckedDocument(input.document,input.scan);
+  if(input.restartKey===restartPolicy.restartKey){
+   const outlets=await directory.list();
+   const saved=selectPersistedDraftDestinations({candidates:outlets,document:input.document})
+    .filter(candidate=>candidate.delivery_eligible&&recipientPolicy.verifiedDestination(candidate));
+   if(saved.length){
+    const reuse=createDirectoryDiscovery({directory,linkEvidence:async()=>saved.map(candidate=>({
+     outlet_id:candidate.id,evidence_ids:candidate.evidence.ids
+    }))});
+    return reuse(input);
+   }
+  }
   return directoryDiscover(input);
  };
  const prepare=createPreparationRun({store,verifyClaims,discover,write,renderVisual,fetcher});

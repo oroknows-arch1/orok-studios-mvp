@@ -31,7 +31,7 @@ export class CampaignPreparation {
   let destinations;
   if(existing.phase==='DESTINATIONS_SELECTED') destinations=existing.destinations;
   else {
-   try{destinations=await this.discover({scan,document,history});}
+   try{destinations=await this.discover({scan,document,restartKey,history});}
    catch(error){
     warnings.push({stage:'DISCOVERY',code:failureCode(error)});
     destinations=[{id:'x',category:'social',contact_verified:true,evidence:{ids:(document?.evidence??[]).filter(e=>e?.verified===true).map(e=>e.id)}}];
