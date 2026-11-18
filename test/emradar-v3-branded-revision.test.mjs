@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedPrepare}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import brand from '../src/email-brand.cjs';
@@ -9,12 +11,12 @@ import {assetFingerprint,identicalEmailGroupKey} from '../vendor/emradar-v3/src/
 import {MemoryAdapter} from '../vendor/emradar-v3-authoritative/src/adapters/memory.js';
 
 for(const shared of [false,true])test((shared?'shared':'individual')+' branded email replacement persists through authenticated revision HTTP and fresh view',async t=>{
- const adapter=new MemoryAdapter(),store=new CampaignStore(adapter),digest='a'.repeat(64);
+ const adapter=new MemoryAdapter(),store=new CampaignStore(adapter,{verifyDraft:async()=>true}),digest='a'.repeat(64);
  const id=await store.start({snapshot_date:'2026-11-03',artifact_sha256:digest,live_artifact_sha256:digest,archive_artifact_sha256:digest,publication_verified:true});
  const destinations=shared?[destination('one'),destination('two')]:[destination('one')];
  await store.select(id,destinations);
  const assets=destinations.map(d=>brand.brand({campaign_id:id,destination_id:d.id,kind:'EMAIL',contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1'],subject:'Subject',body:'Original investigation\n\nSean Walker\nEMRADAR',to:d.contact.email}));
- await store.prepare(id,assets);
+ await checkedPrepare(store,id,assets);
  let link;const diagnostics=[];
  const workflow=new ReviewWorkflow({store,adapter,baseUrl:'https://review.example',notify:async message=>{link=message.link;return {accepted:true,provider_id:'mock-only',recipient:message.recipient,campaign_id:message.campaignId};}});
  await workflow.issue(id);

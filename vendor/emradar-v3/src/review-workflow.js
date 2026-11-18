@@ -114,10 +114,10 @@ export class ReviewWorkflow {
     rejection_feedback:historical?null:(campaign.review_feedback??[]).filter(item=>item.destination_id===asset.destination_id),
     decision:historical?decision:campaign.decisions[asset.destination_id]??null,
     delivery:historical?null:campaign.deliveries[asset.destination_id]??null,
-    verification:historical?null:campaign.proposal_verifications?.[asset.destination_id]?.at(-1)??null};
+    verification:historical?null:campaign.proposal_verifications?.[asset.destination_id]?.findLast(item=>item.asset_sha256===fingerprint)??null};
   };
   const history=[];
-  for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft'}));
+  for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:entry.hold_reason?'Held for claim evidence review':'Previous draft'}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
   return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};

@@ -21,7 +21,7 @@ function oauthDiagnostic(stage,error,status,log){
  log('V3_X_OAUTH_CALLBACK_FAILURE '+JSON.stringify(result));
  return {stage:result.stage,diagnostic_id:result.diagnostic_id};
 }
-const REVISION_ERRORS=new Set(['STALE_ASSET_REVISION','STALE_GROUP_VERSION','GROUP_REVISION_REQUIRED','GROUP_CONTENT_MISMATCH','REVISION_AFTER_DISTRIBUTION','INVALID_REVISION','INVALID_REVISION_FIELDS','INVALID_REVISION_TEXT','EMAIL_BRAND_TEXT_REQUIRED','REQUEST_TOO_LARGE','CONCURRENT_UPDATE_RETRY_EXHAUSTED']);
+const REVISION_ERRORS=new Set(['STALE_ASSET_REVISION','STALE_GROUP_VERSION','GROUP_REVISION_REQUIRED','GROUP_CONTENT_MISMATCH','REVISION_AFTER_DISTRIBUTION','INVALID_REVISION','INVALID_REVISION_FIELDS','INVALID_REVISION_TEXT','EMAIL_BRAND_TEXT_REQUIRED','V3_DRAFT_CLAIMS_UNSUPPORTED','V3_ASSET_CLAIM_EVIDENCE_REQUIRED','REQUEST_TOO_LARGE','CONCURRENT_UPDATE_RETRY_EXHAUSTED']);
 const sessionCookie=campaignId=>'emradar_v3_session_'+createHash('sha256').update(String(campaignId)).digest('hex').slice(0,16);
 const cookie=(req,name)=>{
  const found=(req.headers.cookie??'').split(';').map(s=>s.trim()).find(s=>s.startsWith(name+'='));

@@ -1,4 +1,5 @@
 'use strict';
+const {checkedAsset,checkedState}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
@@ -14,9 +15,11 @@ test('V3 PostgreSQL: competing email and owner notification reservations permit 
  const store=new V3Reservations(pool);
  const id='v3-ci-'+crypto.randomUUID(),destination=id+'-journal';
  const {destination:outlet,asset}=await require('./fixtures/v3-persisted-email.cjs')(pool,id,destination);
+ const fixture=checkedState({});
+ checkedAsset(asset,fixture.preparation_input.document);
  const approval={campaign_id:id,destination_id:destination,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
  const key=hash([id,destination,approval.asset_sha256]);
- const state={phase:'PUBLICATION_REVIEW',destinations:[outlet],assets:{[destination]:{asset,fingerprint:hash(asset)}},decisions:{[destination]:approval},deliveries:{[destination]:{status:'ATTEMPTING',idempotency_key:key}}};
+ const state={...fixture,phase:'PUBLICATION_REVIEW',destinations:[outlet],assets:{[destination]:{asset,fingerprint:hash(asset)}},decisions:{[destination]:approval},deliveries:{[destination]:{status:'ATTEMPTING',idempotency_key:key}}};
  await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb)',[id,JSON.stringify(state)]);
  assert.equal(await createV3ApprovalVerifier({pool})({campaign_id:id,destination_id:destination,asset,approval,idempotency_key:key}),true);
  const send={idempotency_key:key,campaign_id:id,destination_id:destination,asset_sha256:approval.asset_sha256};

@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedAsset,checkedState}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import verified from './fixtures/v3-verified-recipient.cjs';
@@ -10,7 +12,9 @@ function fixture(){
  const destination=verified('epoch');
  destination.name='Epoch AI';destination.website='https://epoch.ai';destination.verification.publication_proof_url='https://epoch.ai/about';destination.contact={...destination.contact,email:'donate@epoch.ai',purpose:'general',source_url:'https://epoch.ai/about',published_excerpt:'Donate. Please contact us at donate@epoch.ai for donation details.',page_sha256:'a'.repeat(64)};
  const asset={campaign_id:'campaign',destination_id:'epoch',kind:'EMAIL',to:'donate@epoch.ai',subject:'Existing subject',body:'Existing body\nRegards, Sean',from:'sean@emradar.net',contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1'],review_status:'READY'};
- const fingerprint=assetFingerprint(asset),state={id:'campaign',phase:'PUBLICATION_REVIEW',destinations:[destination],assets:{epoch:{asset,fingerprint}},decisions:{epoch:{authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:'campaign',destination_id:'epoch'}},deliveries:{},events:[]};
+ const fixture=checkedState({});
+ checkedAsset(asset,fixture.preparation_input.document);
+ const fingerprint=assetFingerprint(asset),state={...fixture,id:'campaign',phase:'PUBLICATION_REVIEW',destinations:[destination],assets:{epoch:{asset,fingerprint}},decisions:{epoch:{authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:'campaign',destination_id:'epoch'}},deliveries:{},events:[]};
  let version=1;
  const adapter={read:async()=>({version,value:structuredClone(state)}),compareAndSwap:async(_id,prior,next)=>{if(prior!==version)return false;version++;Object.assign(state,structuredClone(next));return true;}};
  const store=new CampaignStore(adapter);

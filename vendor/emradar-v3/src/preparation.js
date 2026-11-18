@@ -3,6 +3,9 @@ import {verifyEditorialAsset} from './destination-selection.js';
 import {assertDestinations} from './contracts.js';
 import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
 
+import claimPolicy from '../../emradar-v3-authoritative/src/claim-evidence.cjs';
+const {assertCheckedDocument}=claimPolicy;
+
 const failureCode=error=>/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'PREPARATION_WORKER_FAILED';
 const incompleteAsset=({campaignId,destination,evidenceIds,error})=>({
  campaign_id:campaignId,destination_id:destination.id,kind:destination.id==='x'?'X':'EMAIL',
@@ -18,6 +21,8 @@ export class CampaignPreparation {
   this.store=store;this.discover=discover;this.write=write;this.renderVisual=renderVisual;
  }
  async prepare({scan,document,history=[]}) {
+  assertCheckedDocument(document,scan);
+  if(!document.evidence.length)throw Error('V3_NO_VERIFIED_ANGLE');
   const campaignId=await this.store.start(scan);
   const existing=(await this.store.adapter.read(campaignId))?.value;
   if(isReviewPhase(existing?.phase)) return {campaignId,status:'ALREADY_PREPARED'};

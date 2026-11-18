@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedProviders}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import verified from './fixtures/v3-verified-recipient.cjs';
@@ -9,12 +11,12 @@ const good={subject:'Contribution on India’s semiconductor suppliers',body:ori
 for(const publication of ['Real Assets Adviser','The Africa Report'])test(`${publication} rejected analytical-memo pattern must regenerate into the sole approved progression`,async()=>{
  const bad={...good,body:'I’m Sean Walker at EMRADAR. Equipment investment shows emerging capacity constraints. We can offer insights. Would you be interested?',analytical_finding:'Equipment investment shows emerging capacity constraints.',limitations:'Capacity remains uncertain.'};
  let calls=0;const requests=[];
- const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async request=>{requests.push(request);return {choices:[{message:{content:JSON.stringify(calls++===0?bad:good)}}]};}}}}});
+ const provider=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async request=>{requests.push(request);return {choices:[{message:{content:JSON.stringify(calls++===0?bad:good)}}]};}}}}});
  const result=await provider.write({campaignId:'production-shaped',destination:{...destination,name:publication},document:{evidence}});
  assert.equal(calls,2);assert.equal(result.editorial_enforcement,EDITORIAL_ENFORCEMENT_VERSION);assert(requests.every(r=>r.messages[0].content.includes(originalOutreach)));assert.match(result.body,/Would this be suitable as an article or research contribution/);
 });
 test('two alternative-style generations fail closed even with valid source IDs, finding and caveat',async()=>{
  const bad={...good,body:'I’m Sean Walker at EMRADAR. The evidence shows processing constraints. Capacity remains uncertain. Would an article interest you?',analytical_finding:'The evidence shows processing constraints.',limitations:'Capacity remains uncertain.'};let calls=0;
- const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{calls++;return {choices:[{message:{content:JSON.stringify(bad)}}]};}}}}});
+ const provider=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async()=>{calls++;return {choices:[{message:{content:JSON.stringify(bad)}}]};}}}}});
  await assert.rejects(provider.write({campaignId:'production-shaped',destination,document:{evidence}}),/V3_EDITORIAL_PROGRESSION_REQUIRED/);assert.equal(calls,2);
 });

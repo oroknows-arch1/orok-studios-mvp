@@ -1,4 +1,5 @@
 'use strict';
+const {checkedAsset,checkedState}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
@@ -12,9 +13,11 @@ test('V3 PostgreSQL: uncertain SMTP outcome remains AMBIGUOUS and cannot be retr
  t.after(async()=>pool.end());
  const id='v3-'+crypto.randomUUID(),destination=id+'-outlet';
  const {destination:outlet,asset}=await require('./fixtures/v3-persisted-email.cjs')(pool,id,destination);
+ const fixture=checkedState({});
+ checkedAsset(asset,fixture.preparation_input.document);
  const fingerprint=hash(asset),approval={authority:'OWNER',decision:'APPROVE',asset_sha256:fingerprint,campaign_id:id,destination_id:destination};
  const key=hash([id,destination,fingerprint]);
- const state={phase:'PUBLICATION_REVIEW',destinations:[outlet],assets:{[destination]:{asset,fingerprint}},decisions:{[destination]:approval},deliveries:{[destination]:{status:'ATTEMPTING',idempotency_key:key}}};
+ const state={...fixture,phase:'PUBLICATION_REVIEW',destinations:[outlet],assets:{[destination]:{asset,fingerprint}},decisions:{[destination]:approval},deliveries:{[destination]:{status:'ATTEMPTING',idempotency_key:key}}};
  await pool.query('INSERT INTO v3_campaign_state(campaign_id,version,payload) VALUES($1,1,$2::jsonb)',[id,JSON.stringify(state)]);
  let sends=0;const token='test-token'.padEnd(48,'x');
  const integration=createV3PreparedIntegration({pool,token,reviewOrigin:'https://review.example.org',sendOwnerReview:async()=>{throw Error('NOT_USED');},sendApprovedEmail:async()=>{sends++;throw Error('SMTP_CONNECTION_LOST_AFTER_HANDOFF');}});

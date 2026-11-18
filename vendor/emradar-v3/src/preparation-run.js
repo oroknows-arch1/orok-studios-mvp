@@ -1,8 +1,10 @@
 import {isReviewPhase} from './contracts.js';
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {verifyPublishedScan} from './scan-intake.js';
 import {CampaignPreparation} from './preparation.js';
 import {normalizePublishedEvidence} from './scan-evidence-adapter.js';
+import claimPolicy from '../../emradar-v3-authoritative/src/claim-evidence.cjs';
+const {hasCheckedDocument,assertCheckedDocument}=claimPolicy;
 
 
 export function createVerifiedVisualRenderer(renderVisual){
@@ -25,8 +27,8 @@ export function createVerifiedVisualRenderer(renderVisual){
 
 // Compose existing preparation workers. Providers are injected; this entry point
 // never issues a review notification, approves content or distributes anything.
-export function createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher}) {
- if(typeof researchEvidence!=='function' || typeof renderVisual!=='function' || typeof store?.mutate!=='function') throw Error('PREPARATION_RUN_DEPENDENCIES_REQUIRED');
+export function createPreparationRun({store,verifyClaims,discover,write,renderVisual,fetcher}) {
+ if(typeof verifyClaims!=='function' || typeof renderVisual!=='function' || typeof store?.mutate!=='function') throw Error('PREPARATION_RUN_DEPENDENCIES_REQUIRED');
  const preparation=new CampaignPreparation({store,discover,write,renderVisual:createVerifiedVisualRenderer(renderVisual)});
  return async ({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,history=[]})=>{
   const verified=await verifyPublishedScan({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,fetcher});
@@ -35,21 +37,24 @@ export function createPreparationRun({store,researchEvidence,discover,write,rend
   const campaignId=await store.start(scan);
   let state=(await store.adapter.read(campaignId)).value;
   if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
-  if(!state.preparation_input) {
-   let research,warning=null;
-   try{research=await researchEvidence({scan,document});if(!Array.isArray(research?.evidence))throw Error('EVIDENCE_RESEARCH_RESULT_REQUIRED');}
-   catch(error){warning=/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'EVIDENCE_RESEARCH_FAILED';research={status:'NEEDS_REVISION',evidence:[],warning};}
-   // Retain the original source and uncertainty verbatim. Research remains a
-   // separate sourced record; it cannot overwrite an existing evidence identity.
-   const evidence=new Map((document.evidence??[]).map(item=>[item.id,item]));
-   for(const item of research.evidence) if(item?.id && !evidence.has(item.id)) evidence.set(item.id,item);
-   const input={...document,evidence:[...evidence.values()],research};
+  if(!hasCheckedDocument(state.preparation_input?.document,scan)){
+   const attempt=randomUUID();
    state=await store.mutate(campaignId,current=>{
-    if(!current.preparation_input) current.preparation_input={document:input};
-    if(warning)current.preparation_warnings=[...(current.preparation_warnings??[]),{stage:'EVIDENCE_RESEARCH',code:warning}];
+    if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING'};
+    return current;
+   });
+   if(state.claim_gate_attempt?.id!==attempt)return {campaignId,status:'CLAIM_EVIDENCE_HELD'};
+   const checked=await verifyClaims({scan,document});
+   assertCheckedDocument(checked,scan);
+   state=await store.mutate(campaignId,current=>{
+    current.preparation_input={document:checked};
+    current.claim_gate_attempt={id:attempt,status:checked.evidence.length?'VERIFIED':'NO_VERIFIED_ANGLE'};
+    // Resume pre-upgrade interrupted preparation from the checked dossier.
+    if(current.phase==='DESTINATIONS_SELECTED'){current.phase='SCAN_VERIFIED';current.destinations=[];}
     return current;
    });
   }
+  if(!state.preparation_input.document.evidence.length)return {campaignId,status:'CLAIM_EVIDENCE_HELD'};
   return preparation.prepare({scan,document:state.preparation_input.document,history});
  };
 }

@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedAsset,checkedDocument}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CampaignPreparation} from '../vendor/emradar-v3/src/preparation.js';
@@ -10,7 +12,7 @@ import {validateEditorialCorrespondence,validateEditorialStory} from '../vendor/
 
 const digest='a'.repeat(64);
 const scan={snapshot_date:'2026-10-25',artifact_sha256:digest,live_artifact_sha256:digest,archive_artifact_sha256:digest,publication_verified:true};
-const document={evidence:[{id:'shared',verified:true},{id:'other',verified:true}],uncertainty:[]};
+const document=checkedDocument({evidence:[{id:'shared',verified:true},{id:'other',verified:true}],uncertainty:[]},scan);
 const destination=(id,evidence=['shared'])=>{const records=document.evidence.filter(item=>evidence.includes(item.id)).map(item=>({...item,fact:item.id,source_url:'https://source.example/'+item.id}));const base=verifiedRecipient(id,records);return {...base,editorial_group_id:'group-'+id,evidence:{ids:evidence}};};
 const email=(campaignId,destination,body)=>({campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',subject:'Shared subject',body,from:'sean@emradar.net',to:destination.contact?.email??null,contact_status:destination.contact_verified?'VERIFIED':'UNVERIFIED',delivery_eligible:destination.contact_verified,evidence_ids:destination.evidence.ids});
 
@@ -24,10 +26,12 @@ test('shared progression fallback remains evidence-bound and passes the existing
 test('parent runtime prepares one shared proposal and exposes one persisted group',async()=>{
  const store=new CampaignStore(new MemoryAdapter()),calls=[];
  const destinations=[{id:'x',contact_verified:true,evidence:{ids:['shared']}},...Array.from({length:5},(_,index)=>destination('publication-'+index)),destination('individual',['other'])];
+ const id=await store.start(scan);
+ await store.mutate(id,current=>({...current,preparation_input:{document}}));
  const preparation=new CampaignPreparation({store,discover:async()=>destinations,renderVisual:async()=>({sha256:digest,url:'https://example.org/x.png'}),write:async input=>{
   calls.push(input.sharedDestinations?.map(item=>item.id)??[input.destination.id]);
-  if(input.destination.id==='x')return {campaign_id:input.campaignId,destination_id:'x',kind:'X',subject:'X',body:'Evidence',evidence_ids:['shared']};
-  return email(input.campaignId,input.destination,input.sharedDestinations?'Exact shared body':'Individual body');
+  if(input.destination.id==='x')return checkedAsset({campaign_id:input.campaignId,destination_id:'x',kind:'X',subject:'X',body:'Evidence',evidence_ids:['shared']},document);
+  return checkedAsset(email(input.campaignId,input.destination,input.sharedDestinations?'Exact shared body':'Individual body'),document);
  }});
  const result=await preparation.prepare({scan,document});
  assert.equal(result.status,'PUBLICATION_REVIEW');
@@ -42,10 +46,11 @@ test('parent runtime prepares one shared proposal and exposes one persisted grou
 });
 
 test('parent group edit, exclusion and atomic approval survive reload',async()=>{
- const adapter=new MemoryAdapter(),store=new CampaignStore(adapter);
+ const adapter=new MemoryAdapter(),store=new CampaignStore(adapter,{verifyDraft:async()=>true});
  const id=await store.start(scan),destinations=Array.from({length:5},(_,index)=>destination('publication-'+index));
  await store.select(id,destinations);
- await store.prepare(id,destinations.map(item=>email(id,item,'Exact shared body')));
+ await store.mutate(id,current=>({...current,preparation_input:{document}}));
+ await store.prepare(id,destinations.map(item=>checkedAsset(email(id,item,'Exact shared body'),document)));
  const review=new ReviewWorkflow({store,adapter,baseUrl:'https://review.example',notify:async()=>({accepted:true})});review.authenticate=async()=>true;
  let group=(await review.view(id,'owner','secret')).groups[0];
  const stale={hash:group.content_hash,version:group.version};

@@ -1,4 +1,5 @@
 'use strict';
+const {checkedAsset,checkedState}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createV3PreparedIntegration}=require('../src/emradar-v3-integration.cjs');
@@ -11,9 +12,10 @@ async function fixture(){
  const states=new Map(),receipts=new Map(),suppressed=[];
  const add=(id,decision='APPROVE')=>{
   const asset={campaign_id:'campaign',destination_id:id,kind:'EMAIL',to:id+'@journal.example',subject:'Article idea',body:'Evidence and possibility',evidence_ids:['e1'],from:'sean@emradar.net',contact_status:'VERIFIED',delivery_eligible:true};
+  const state=states.get('campaign')??checkedState({phase:'PUBLICATION_REVIEW',destinations:[],assets:{},decisions:{},deliveries:{}});
+  checkedAsset(asset,state.preparation_input.document);
   const fingerprint=sha256(asset),approval={authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:'campaign',destination_id:id};
   const key=sha256(['campaign',id,fingerprint]);
-  const state=states.get('campaign')??{phase:'PUBLICATION_REVIEW',destinations:[],assets:{},decisions:{},deliveries:{}};
   state.destinations.push(verified(id));
   state.assets[id]={asset,fingerprint};if(decision)state.decisions[id]=approval;
   state.deliveries[id]={status:'ATTEMPTING',idempotency_key:key};states.set('campaign',state);
@@ -132,7 +134,7 @@ test('edit save reload binds approval and distribution payload to the persisted 
  const untouched=structuredClone(state.assets.x),destinations=structuredClone(state.destinations);
  let version=1;
  const adapter={read:async id=>({version,value:structuredClone(f.states.get(id))}),compareAndSwap:async(id,prior,next)=>{if(prior!==version)return false;version++;f.states.set(id,structuredClone(next));return true;}};
- const workflow=()=>{const store=new CampaignStore(adapter),w=new ReviewWorkflow({store,adapter,baseUrl:'https://review.example',notify:async()=>{throw Error('NO_REAL_SEND');}});w.authenticate=async()=>true;return w;};
+ const workflow=()=>{const store=new CampaignStore(adapter,{verifyDraft:async()=>true}),w=new ReviewWorkflow({store,adapter,baseUrl:'https://review.example',notify:async()=>{throw Error('NO_REAL_SEND');}});w.authenticate=async()=>true;return w;};
  await workflow().revise('campaign',null,null,'editor',stale.approval.asset_sha256,{body:'Edited persisted body',subject:'Edited subject'});
  const reloaded=workflow(),view=await reloaded.view('campaign'),entry=view.entries.find(e=>e.asset.destination_id==='editor');
  assert.equal(entry.asset.body,'Edited persisted body');assert.equal(entry.asset.subject,'Edited subject');

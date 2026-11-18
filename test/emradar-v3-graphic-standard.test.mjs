@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedDocument,checkedProviders}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -37,7 +39,7 @@ test('production provider deterministically renders the fixed formation card wit
  input.asset.subject='Free State EV investment';input.asset.kind='X';
  input.scan={snapshot_date:'2026-10-09'};
  const before=structuredClone(input);
- let chatCalls=0;const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{chatCalls++;}}},images:{generate:async()=>{imageCalls++;}}}});
+ let chatCalls=0;const providers=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async()=>{chatCalls++;}}},images:{generate:async()=>{imageCalls++;}}}});
  const visual=await providers.renderVisual(input),bytes=Buffer.from(visual.base64,'base64');
  assert.equal(visual.brand_version,GRAPHIC_STANDARD.version);assert.equal(bytes.subarray(0,8).toString('hex'),'89504e470d0a1a0a');assert.equal(imageCalls,0);assert.equal(chatCalls,0);assert.deepEqual(input,before);
  assert.equal(GRAPHIC_STANDARD.version,'emradar-formation-card-v3');
@@ -68,19 +70,19 @@ test('October 7 failed production scan preserves its evidence states and account
  assert.match(composeGraphicSvg(input).svg,/>WEAKENING<\/text>/);
 });
 test('missing source evidence retains the existing verification failure and never calls image generation',async()=>{
- let calls=0;const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{}}},images:{generate:async()=>{calls++;}}}});
+ let calls=0;const provider=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async()=>{}}},images:{generate:async()=>{calls++;}}}});
  await assert.rejects(provider.renderVisual({asset:{kind:'X',subject:'Verified subject',body:'Verified body.',evidence_ids:['unverified']},document:{records:[{id:'unverified'}],evidence:[{id:'unverified',verified:false,fact:'Not verified'}]},scan:{snapshot_date:'2026-10-19'}}),/V3_X_EVIDENCE_REQUIRED/);assert.equal(calls,0);
 });
 test('invalid formation title fails before the production provider returns an image',async()=>{
  const input=structuredClone(saved);
  input.document.records[0].theme='K';
  input.scan={snapshot_date:'2026-10-09'};
- const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{throw Error('UNEXPECTED_MODEL_CALL');}}}}});
+ const provider=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async()=>{throw Error('UNEXPECTED_MODEL_CALL');}}}}});
  await assert.rejects(provider.renderVisual(input),/V3_X_VALID_FORMATION_TITLE_REQUIRED/);
 });
 test('existing PUBLICATION_REVIEW campaigns are not regenerated and their approved graphics and receipts survive',async()=>{
  const state={phase:'PUBLICATION_REVIEW',assets:{x:{asset:{...saved.asset,visual_sha256:'approved-graphic'},fingerprint:'approved'}},decisions:{x:{decision:'APPROVE',asset_sha256:'approved'}},deliveries:{email:{status:'ACCEPTED',receipt:{provider_id:'existing'}}}};
  const before=structuredClone(state);let calls=0;
  const preparation=new CampaignPreparation({store:{start:async()=>saved.asset.campaign_id,select:async()=>{throw Error('NO_SELECTION');},adapter:{read:async()=>({value:state})}},discover:async()=>{throw Error('NO_DISCOVERY');},write:async()=>{throw Error('NO_WRITING');},renderVisual:async()=>{calls++;}});
- assert.equal((await preparation.prepare({scan:{},document:saved.document})).status,'ALREADY_PREPARED');assert.equal(calls,0);assert.deepEqual(state,before);
+ assert.equal((await preparation.prepare({scan:{artifact_sha256:'a'.repeat(64)},document:checkedDocument(saved.document)})).status,'ALREADY_PREPARED');assert.equal(calls,0);assert.deepEqual(state,before);
 });

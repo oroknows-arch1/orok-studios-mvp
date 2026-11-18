@@ -1,3 +1,5 @@
+import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
+const {checkedAsset,checkedState}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
@@ -13,6 +15,7 @@ async function harness({count=10,failAfter=null,replaceVisual=false}={}){
  const input={snapshotDate:'2026-10-17',expectedSha256:digest,liveUrl:'https://emerging-markets-radar.onrender.com/data/current.json',archiveUrl:'https://emerging-markets-radar.onrender.com/data/archive.json'};
  const x={asset:{campaign_id:id,destination_id:'x',kind:'X',body:'Saved X text',visual_url:'data:image/png;base64,keep',visual_sha256:'a'.repeat(64),evidence_ids:['e1']},fingerprint:'keep-approved-x'};
  const state={id,scan:{snapshot_date:'2026-10-17',artifact_sha256:digest,source_key:'2026-10-17:'+digest},phase:'PUBLICATION_REVIEW',destinations:[{id:'x'}],assets:{x},decisions:{x:{decision:'REJECT',asset_sha256:x.fingerprint}},deliveries:{},events:[{type:'SCAN_VERIFIED'}],preparation_input:{document}};
+ checkedState(state);checkedAsset(x.asset,state.preparation_input.document);
  if(replaceVisual)state.decisions={};
  const records=new Map([[id,{version:1,payload:state}]]),directory=new Map();let searches=0,writes=0,notifications=0,images=0,fail=failAfter;
  const pool={query:async(sql,args=[])=>{
@@ -26,9 +29,9 @@ async function harness({count=10,failAfter=null,replaceVisual=false}={}){
   throw Error('UNEXPECTED_SQL');
  }};
  let service;
- service=await createPreparationReviewService({pool,reviewOrigin:'https://review.example',reviewedLinks:[],fetcher:async()=>({ok:true,arrayBuffer:async()=>bytes}),researchEvidence:async()=>{throw Error('NO_RESEARCH_REPEAT');},renderVisual:async()=>{if(!replaceVisual)throw Error('NO_X_REGENERATION');images++;return {base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jq1sAAAAASUVORK5CYII=',brand_version:GRAPHIC_STANDARD.version};},write:async({campaignId,destination})=>{
+ service=await createPreparationReviewService({pool,reviewOrigin:'https://review.example',reviewedLinks:[],fetcher:async()=>({ok:true,arrayBuffer:async()=>bytes}),verifyClaims:async()=>{throw Error('NO_RESEARCH_REPEAT');},renderVisual:async()=>{if(!replaceVisual)throw Error('NO_X_REGENERATION');images++;return {base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jq1sAAAAASUVORK5CYII=',brand_version:GRAPHIC_STANDARD.version};},write:async({campaignId,destination,document})=>{
   if(fail!==null&&writes>=fail)throw Error('PROVIDER_UNAVAILABLE');writes++;
-  return {campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',subject:'Research contribution',body:'A sourced proposal for '+destination.name+'. Would an article interest you?',from:'sean@emradar.net',to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1']};
+  return checkedAsset({campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',subject:'Research contribution',body:'A sourced proposal for '+destination.name+'. Would an article interest you?',from:'sean@emradar.net',to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1']},document);
  },notify:async({campaignId,recipient})=>{notifications++;return {accepted:true,provider_id:'owner-invitation',campaign_id:campaignId,recipient};},discoverLinks:async()=>{
   searches++;
   for(let n=0;n<count;n++)await service.directory.upsert(verified('publication-'+n,evidence));
