@@ -75,9 +75,13 @@ export class ReviewWorkflow {
   const current=(await this.adapter.read('review:'+campaignId))?.value;
   const equalHash=(expected,secret)=>{if(typeof expected!=='string'||typeof secret!=='string')return false;const a=Buffer.from(expected,'hex'),b=createHash('sha256').update(secret).digest();return a.length===b.length&&timingSafeEqual(a,b);};
   const session=current?.owner_session;
-  const proof=equalHash(current?.token_hash,token)||(session?.id===sessionId&&session?.revoked_at===null&&equalHash(session?.secret_hash,sessionSecret));
+  const tokenProof=equalHash(current?.token_hash,token);
+  let sessionProof=false;
+  if(session?.id===sessionId){try{validateOwnerSession(session,sessionSecret,campaignId,{now:this.clock()});sessionProof=true;}catch{}}
   // This proof permits an email to the fixed owner only; it never authenticates a view or release.
-  if(!proof)throw Error('REVIEW_ACCESS_DENIED');
+  if(!tokenProof&&!sessionProof)throw Error('REVIEW_ACCESS_DENIED');
+  // A valid reusable session needs no replacement invitation. The normal view request renews it.
+  if(sessionProof)return {status:'ACTIVE_SESSION'};
   if(current&&!['CONSUMED','EXPIRED'].includes(current.status)&&current.expires_at>this.clock())return {status:'EXISTING_INVITATION'};
   // Fixed owner recipient; one durable request per campaign/day, never automatic resend.
   const key='review-access-request:'+campaignId+':'+new Date(this.clock()).toISOString().slice(0,10);
