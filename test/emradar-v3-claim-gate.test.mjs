@@ -30,7 +30,9 @@ const useful=record('port',[source(primary,fact),source(lost,'The monopoly is al
 const raw={records:[weak,useful],evidence:[{verified:true,fact:'pre-marked injection'}]};
 const assess=async({claims,pages})=>({
  supported:claims.map(claim=>({id:claim.id,status:'SUPPORTED',url:pages[0].url,excerpt:claim.id.endsWith(':0')&&claim.id.startsWith('port')?excerpt:'A long hallucinated excerpt that appears in no downloaded page.'})),
- story:{significant:true,claim_ids:[claims[0].id],headline:'The first electric cargo berth opens',finding,industries:['Ports']}
+ story:{significant:true,claim_ids:[claims[0].id],headline:'The first electric cargo berth opens',finding,industries:['Ports'],
+  relationships:[{cause:'Only one cargo berth has shore power',effect:'Ships must reserve the available connection',mechanism:'Connection capacity is limited to one docked vessel',evidence_ids:[claims[0].id]}],
+  scenarios:[{status:'UNRESOLVED_QUESTION',proposition:'Reservation pressure may persist until more substations are connected',evidence_ids:[claims[0].id],missing_evidence:['Reservation utilisation']}]}
 });
 const gateFor=options=>claimPolicy.createClaimEvidenceGate({
  readPage:async url=>url===primary||url===replacement?page:null,
@@ -56,12 +58,32 @@ test('drops fabricated excerpts and dependent conclusions, tries the next format
  assert.deepEqual(document.claim_audit.map(x=>x.status),['NO_SUPPORTED_SIGNIFICANT_ANGLE','ADMITTED','BUDGET_HELD']);
  assert.deepEqual(document.evidence.map(x=>[x.id,x.verified,x.source_url]),[['port:0',true,primary]]);
  assert.deepEqual(document.records.map(item=>item.status),['INVESTIGATE']);
+ assert.equal(document.records[0].causal_chain.relationships[0].mechanism,'Connection capacity is limited to one docked vessel');
+ assert.equal(document.records[0].scenarios[0].status,'UNRESOLVED_QUESTION');
  assert.doesNotMatch(JSON.stringify(document.records),/monopoly|CONFIRMED/);
  assert.equal(urls.filter(url=>url===lost).length,1);
  assert.equal(urls.includes('https://held.example/case'),false);
  assert.equal(claimPolicy.hasCheckedDocument(document,fakeScan),true);
  assert.equal(claimPolicy.hasCheckedDocument({...document,evidence:[]},fakeScan),false);
  assert.equal(claimPolicy.hasCheckedDocument(document,{...fakeScan,artifact_sha256:'2'.repeat(64)}),false);
+});
+
+test('admits a significant causal formation without inventing an alternative scenario',async()=>{
+ const noScenario=await gateFor({assess:async input=>{const result=await assess(input);return {...result,story:{...result.story,
+  context:{world_change:[{text:'The port opened its first electric cargo berth',evidence_ids:[input.claims[0].id]}],pressures:[],bottlenecks:[],connected_companies:[],consequences:[]},scenarios:[]}};}})({scan:fakeScan,document:normalizePublishedEvidence(raw)});
+ assert.equal(noScenario.records.length,1);
+ assert.deepEqual(noScenario.records[0].scenarios,[]);
+ assert.equal(noScenario.records[0].causal_chain.world_change[0].evidence_ids[0],'port:0');
+});
+
+test('discards unsupported competing explanations and consequences instead of making them admission requirements',async()=>{
+ const checked=await gateFor({assess:async input=>{const result=await assess(input);return {...result,story:{...result.story,
+  context:{consequences:[{text:'Every terminal will close',evidence_ids:['missing']}],world_change:[],pressures:[],bottlenecks:[],connected_companies:[]},
+  scenarios:[{status:'COMPETING_EXPLANATION',proposition:'A monopoly caused the berth opening',evidence_ids:['missing'],missing_evidence:[]}]}};}})({scan:fakeScan,document:normalizePublishedEvidence(raw)});
+ assert.equal(checked.records.length,1);
+ assert.deepEqual(checked.records[0].causal_chain.consequences,[]);
+ assert.deepEqual(checked.records[0].scenarios,[]);
+ assert.doesNotMatch(JSON.stringify(checked),/Every terminal|monopoly caused/);
 });
 
 test('requires a fetched independent replacement and exact support; a search hit alone never passes',async()=>{
@@ -114,6 +136,8 @@ test('actual intake and preparation validate scan SHA, gate before router/writer
  assert.deepEqual(stages,['gate','route','write']);
  const state=(await adapter.read(result.campaignId)).value;
  assert.equal(state.phase,'PUBLICATION_REVIEW');
+ assert.equal(state.preparation_input.document.records[0].causal_chain.relationships[0].evidence_ids[0],'port:0');
+ assert.equal(state.preparation_input.document.records[0].scenarios[0].status,'UNRESOLVED_QUESTION');
  assert.ok(claimPolicy.hasAssetClaimEvidence(state,state.assets.x.asset));
  assert.deepEqual(state.decisions,{});
  assert.deepEqual(state.deliveries,{});
