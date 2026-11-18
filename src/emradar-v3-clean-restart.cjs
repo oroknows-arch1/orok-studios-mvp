@@ -42,7 +42,7 @@ async function retireUnsentApprovals(pool,keepId){
   )
   UPDATE v3_campaign_state c SET version=c.version+1,updated_at=now(),
    payload=c.payload || jsonb_build_object(
-    'decisions',c.payload->'decisions'-stale.ids,
+    'decisions',(c.payload->'decisions')-stale.ids,
     'group_approvals',coalesce(c.payload->'group_approvals','{}')-stale.groups,
     'retired_unsent_approvals',coalesce(c.payload->'retired_unsent_approvals','{}')||stale.decisions,
     'retired_unsent_group_approvals',coalesce(c.payload->'retired_unsent_group_approvals','{}')||
