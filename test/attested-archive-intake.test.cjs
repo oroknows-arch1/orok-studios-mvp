@@ -33,5 +33,5 @@ test('contradictory campaign authority fails closed',async()=>{
 });
 test('tampered archive bytes fail exact SHA-256 comparison',async()=>{
  const tampered=Buffer.from(JSON.stringify({snapshot_date:DATE,publication_state:'PUBLISHED',findings:['tampered']}));
- await assert.rejects(verify(attestation,sha,async()=>({ok:true,status:200,arrayBuffer:async()=>tampered})),/SCAN_ARTIFACT|SHA|IDENTITY|MISMATCH/i);
+ await assert.rejects(verify(attestation,sha,async()=>({ok:true,status:200,arrayBuffer:async()=>tampered})),/UNVERIFIED_PUBLICATION|SCAN_ARTIFACT|SHA|IDENTITY|MISMATCH/i);
 });
