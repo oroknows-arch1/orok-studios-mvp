@@ -26,7 +26,7 @@ test('incorrect archive digest fails closed',async()=>{
  await assert.rejects(verify(attestation,'0'.repeat(64)),/UNTRUSTED_HISTORICAL_RELEASE|INVALID_SCAN_IDENTITY/);
 });
 test('missing attestation cannot use archive-only fallback',async()=>{
- await assert.rejects(verify(undefined),/UNTRUSTED_SCAN_HOST|SCAN_HTTP|INVALID_SCAN_IDENTITY/);
+ await assert.rejects(verify(null),/UNTRUSTED_SCAN_HOST|SCAN_HTTP|INVALID_SCAN_IDENTITY/);
 });
 test('contradictory campaign authority fails closed',async()=>{
  await assert.rejects(verify({...attestation,campaign_authority:{...attestation.campaign_authority,external_publication_allowed:true}}),/UNTRUSTED_HISTORICAL_RELEASE/);
