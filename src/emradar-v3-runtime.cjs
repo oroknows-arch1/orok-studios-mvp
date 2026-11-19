@@ -80,8 +80,8 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
    releaseAttestation?.campaign_authority?.required_stop==='PUBLICATION_REVIEW'&&
    releaseAttestation?.campaign_authority?.external_publication_allowed===false&&
    /^[a-f0-9]{64}$/.test(expectedSha256||'');
-  if(!publicationRecord&&releaseAttestation&&date===restartDate){
-   const input={snapshotDate:date,expectedSha256:releaseAttestation.source_sha256,liveUrl:SCAN_ORIGIN+'/data/discovery.json',archiveUrl,releaseAttestation};
+  if(!publicationRecord&&releaseAttestation){
+   const input={snapshotDate:date,expectedSha256:releaseAttestation.source_sha256,liveUrl:archiveUrl,archiveUrl,releaseAttestation};
    try{
     const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
     await verifyPublishedScan({...input,fetcher});
