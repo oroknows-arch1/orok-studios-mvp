@@ -4,7 +4,7 @@ import { assertScan } from './contracts.js';
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 export async function verifyPublishedScan({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,fetcher=fetch}) {
  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotDate||'') || !/^[a-f0-9]{64}$/.test(expectedSha256||'')) throw Error('INVALID_SCAN_IDENTITY');
- const historical=publicationRecord!==undefined;
+ const historical=publicationRecord!==undefined || (releaseAttestation!==undefined && liveUrl===archiveUrl);
  if(historical||releaseAttestation!==undefined){
   const a=releaseAttestation;
   if(a?.snapshot_date!==snapshotDate||a?.source_sha256!==expectedSha256||a?.publication_state!=='PUBLISHED'||
@@ -13,7 +13,7 @@ export async function verifyPublishedScan({snapshotDate,expectedSha256,liveUrl,a
      a?.campaign_authority?.external_publication_allowed!==false||a?.source_path!==`data/checkpoints/discovery-${snapshotDate}.json`)
    throw Error('UNTRUSTED_HISTORICAL_RELEASE');
   const p=publicationRecord;
-  if(historical&&(p?.snapshot_date!==snapshotDate||p?.public_verification?.artifact_sha256!==expectedSha256||
+  if(publicationRecord!==undefined&&(p?.snapshot_date!==snapshotDate||p?.public_verification?.artifact_sha256!==expectedSha256||
      p?.public_verification?.verification_contract!=='live-reader-exact-identity-v2'||p?.gates?.public_snapshot_verification!=='PASS'||
      p?.downstream_release_allowed!==true||p?.public_verification?.archive_data_url!==archiveUrl))
    throw Error('UNTRUSTED_HISTORICAL_RELEASE');
