@@ -311,3 +311,16 @@ test('production source-reader recovery disables paid alternative search and rec
  const result=await provider({scan:fakeScan,document:normalizePublishedEvidence(raw),recoverRecordIds:['port']});
  assert.equal(searches,0);assert.equal(result.evidence.length,1);assert.equal(result.records[0].id,'port');
 });
+
+test('independent wording check retains downloaded article identity with the sealed passage',async()=>{
+ let inspected=false;
+ const api=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async request=>{
+  const payload=JSON.parse(request.messages[1].content);inspected=true;
+  assert.equal(payload.evidence[0].source,'Port authority release');
+  assert.equal(payload.evidence[0].page_sha256,page.sha256);
+  assert.equal(payload.evidence[0].excerpt,excerpt);
+  return {choices:[{message:{content:'{"supported":false}'}}]};
+ }}}}});
+ assert.equal(await api.verifyDraft({draft:{subject:'Port',body:'Unsupported expansion'},evidence:[{id:'port:0',fact,source:'Port authority release',source_url:primary,excerpt,page_sha256:page.sha256}]}),false);
+ assert.equal(inspected,true);
+});
