@@ -38,6 +38,7 @@ export function createPreparationRun({store,verifyClaims,discover,write,renderVi
   const campaignId=await store.start(scan,{restartKey});
   let state=(await store.adapter.read(campaignId)).value;
   if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
+  const reuseResearch=state.claim_gate_attempt?.status==='VERIFIED'&&hasCheckedDocument(state.preparation_input?.document,scan);
   const recoveryIds=current=>restartPolicy.recoverableRecords(current,restartKey)?.length?restartPolicy.recoverableRecords(current,restartKey):restartPolicy.recoverableSourceRecords(current);
   const recoverRecordIds=hasCheckedDocument(state.preparation_input?.document,scan)?recoveryIds(state):null;
   if(recoverRecordIds?.length||!hasCheckedDocument(state.preparation_input?.document,scan)){
@@ -61,6 +62,6 @@ export function createPreparationRun({store,verifyClaims,discover,write,renderVi
    });
   }
   if(!state.preparation_input.document.evidence.length)return {campaignId,status:'CLAIM_EVIDENCE_HELD'};
-  return preparation.prepare({scan,restartKey,document:state.preparation_input.document,history});
+  return preparation.prepare({scan,restartKey,document:state.preparation_input.document,history,reuseResearch});
  };
 }

@@ -75,3 +75,16 @@ test('explicit research-only recovery completes drafts without sending an owner 
  const f=await harness({count:3});const result=await f.service.resumeIntelligentDiscovery(f.id,{notifyOwner:false});
  assert.equal(result.complete,true);assert.equal(result.notification,'NOT_REQUESTED');assert.equal(f.metrics().notifications,0);assert.equal(f.records.has('review:'+f.id),false);assert.deepEqual(f.records.get(f.id).payload.assets.x,f.original.assets.x);
 });
+
+test('interrupted verified intake reuses exact-scan recipient research without another publication search',async()=>{
+ const f=await harness({count:1});
+ const state=f.records.get(f.id).payload;
+ const recipient=verified('saved-publication',state.preparation_input.document.evidence);
+ await f.service.directory.upsert(recipient);
+ const found=await f.service.discover({scan:state.scan,document:state.preparation_input.document,reuseResearch:true});
+ assert.ok(found.some(item=>item.id==='saved-publication'));
+ assert.equal(f.metrics().searches,0);
+ const changed=structuredClone(state.preparation_input.document);changed.evidence[0].fact+=' Additional unlinked fact.';
+ await assert.rejects(f.service.discover({scan:state.scan,document:changed,reuseResearch:true}),/V3_CHECKED_CLAIM_EVIDENCE_REQUIRED/);
+ assert.equal(f.metrics().searches,0);
+});

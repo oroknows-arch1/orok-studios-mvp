@@ -20,7 +20,7 @@ export class CampaignPreparation {
   if(!store?.select || typeof discover!=='function' || typeof write!=='function' || typeof renderVisual!=='function') throw Error('PREPARATION_DEPENDENCIES_REQUIRED');
   this.store=store;this.discover=discover;this.write=write;this.renderVisual=renderVisual;
  }
- async prepare({scan,document,restartKey,history=[]}) {
+ async prepare({scan,document,restartKey,history=[],reuseResearch=false}) {
   assertCheckedDocument(document,scan);
   if(!document.evidence.length)throw Error('V3_NO_VERIFIED_ANGLE');
   const campaignId=await this.store.start(scan,{restartKey});
@@ -31,7 +31,7 @@ export class CampaignPreparation {
   let destinations;
   if(existing.phase==='DESTINATIONS_SELECTED') destinations=existing.destinations;
   else {
-   try{destinations=await this.discover({scan,document,restartKey,history});}
+   try{destinations=await this.discover({scan,document,restartKey,history,reuseResearch});}
    catch(error){
     warnings.push({stage:'DISCOVERY',code:failureCode(error)});
     destinations=[{id:'x',category:'social',contact_verified:true,evidence:{ids:(document?.evidence??[]).filter(e=>e?.verified===true).map(e=>e.id)}}];

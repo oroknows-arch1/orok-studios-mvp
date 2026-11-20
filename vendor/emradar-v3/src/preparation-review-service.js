@@ -100,7 +100,7 @@ export async function createPreparationReviewService({
  });
  const discover=async input=>{
   assertCheckedDocument(input.document,input.scan);
-  if(input.restartKey===restartPolicy.restartKey){
+  if(input.restartKey===restartPolicy.restartKey||input.reuseResearch===true){
    const outlets=await directory.list();
    const saved=selectPersistedDraftDestinations({candidates:outlets,document:input.document})
     .filter(candidate=>candidate.delivery_eligible&&recipientPolicy.verifiedDestination(candidate));
