@@ -116,7 +116,7 @@ test('production search client ignores bare generated URL and enforces the tool 
 
 test('actual intake and preparation validate scan SHA, gate before router/writer, and stop for review',async()=>{
  const adapter=new MemoryAdapter(),store=new CampaignStore(adapter);
- const bytes=Buffer.from(JSON.stringify(raw));
+ const bytes=Buffer.from(JSON.stringify({...raw,snapshot_date:fakeScan.snapshot_date,publication_state:"PUBLISHED"}));
  const snapshotDate=fakeScan.snapshot_date,expectedSha256=createHash('sha256').update(bytes).digest('hex');
  const origin='https://emerging-markets-radar.onrender.com';
  const archiveUrl=origin+'/data/checkpoints/discovery-'+snapshotDate+'.json';

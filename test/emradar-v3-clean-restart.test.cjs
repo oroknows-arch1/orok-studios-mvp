@@ -14,7 +14,7 @@ const input={snapshotDate:restartDate,expectedSha256,liveUrl:origin+'/data/disco
   campaign_authority:{external_publication_allowed:false,required_stop:'PUBLICATION_REVIEW'}}};
 const response=bytes=>({ok:true,arrayBuffer:async()=>bytes});
 
-test('the authorized release attestation alone requires exact live and archive bytes and refuses explicit denial',async()=>{
+test('the authorized release attestation alone requires exact signed archive bytes and refuses explicit denial',async()=>{
  const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
  const accepted=await verifyPublishedScan({...input,fetcher:async()=>response(scanBytes)});
  assert.equal(accepted.scan.artifact_sha256,expectedSha256);

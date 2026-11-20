@@ -870,5 +870,16 @@
     "first_batch_deploy_status": "live",
     "second_batch": "Add one idempotent revision-bound private owner invitation for the existing claim-gated 18 November campaign. This path invokes only owner notification; publisher email and X release paths remain untouched.",
     "next_action": "Verify the second batch, deploy through main, confirm the Purelymail receipt and prove the live review contains only actionable assets."
+  },
+  "november_20_owner_review_delivery_repair": {
+    "status": "OFFLINE_VERIFIED_RELEASE_PENDING",
+    "root_cause": "Release-only attestation restricted to restartDate and matching live-current bytes. DRAFT live scan aborts intake; stale restart hold suppresses later signed archives.",
+    "tests": "38 passed, 2 disposable PostgreSQL skips; V3 integration 17/17 and development harness pass. Local loopback-restricted tests require existing network-capable runner.",
+    "scope": "Signed immutable archive validation independent of live advancement; isolate inaccessible entries; recover persisted reviews before network intake. Existing hourly worker, paid-attempt holds, evidence, recipients, approvals and notification reservations retained.",
+    "missing_dates": [
+      "2026-11-19",
+      "2026-11-20"
+    ],
+    "next_action": "Deploy through existing controls; recover releases and record provider receipts and ledgers."
   }
 }

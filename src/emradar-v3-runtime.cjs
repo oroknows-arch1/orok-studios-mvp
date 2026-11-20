@@ -80,8 +80,8 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
    releaseAttestation?.campaign_authority?.required_stop==='PUBLICATION_REVIEW'&&
    releaseAttestation?.campaign_authority?.external_publication_allowed===false&&
    /^[a-f0-9]{64}$/.test(expectedSha256||'');
-  if(!publicationRecord&&releaseAttestation&&date===restartDate){
-   const input={snapshotDate:date,expectedSha256:releaseAttestation.source_sha256,liveUrl:SCAN_ORIGIN+'/data/discovery.json',archiveUrl,releaseAttestation};
+  if(!publicationRecord&&releaseAttestation){
+   const input={snapshotDate:date,expectedSha256:releaseAttestation.source_sha256,liveUrl:archiveUrl,archiveUrl,releaseAttestation};
    try{
     const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
     await verifyPublishedScan({...input,fetcher});
@@ -92,7 +92,7 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
    // A published source artifact is an independent authorization and integrity
    // path only when both optional sidecars are absent. Never override a partial,
    // contradictory or explicitly denied attestation.
-   if(publicationRecord||releaseAttestation){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;}
+   if(publicationRecord||releaseAttestation||date>=restartDate){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;}
    const response=await fetcher(archiveUrl,{method:'GET',redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
    if(response.status===404){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_UNAVAILABLE'});return null;}
    if(!response.ok){blocked.push({snapshotDate:date,reason:'PUBLICATION_ARCHIVE_UNAVAILABLE'});return null;}
@@ -106,7 +106,7 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
    return {snapshotDate:date,expectedSha256,liveUrl:archiveUrl,archiveUrl,publicationAuthorization:'PUBLISHED_ARCHIVE_EXACT_SHA256'};
   }
   return {snapshotDate:date,expectedSha256,liveUrl:SCAN_ORIGIN+'/data/discovery.json',archiveUrl,publicationRecord,releaseAttestation};
- }));
+ }).map((promise,index)=>promise.catch(()=>{blocked.push({snapshotDate:candidates[index].snapshotDate,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;})));
  const eligible=verified.filter(Boolean).sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
  Object.defineProperty(eligible,'blocked',{value:blocked,enumerable:false});
  return eligible;
@@ -121,6 +121,15 @@ function mergeCurrentPublishedScan(archived,current){
  const merged=[...candidates.values()].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
  Object.defineProperty(merged,'blocked',{value:archived.blocked??[],enumerable:false});
  return merged;
+}
+async function collectPublishedScans({fetcher=fetch}={}){
+ const archived=await enumeratePublishedScans({fetcher});
+ // A DRAFT or unavailable live document cannot suppress independently signed archives.
+ // Retain current-only legacy intake for dates without an explicit attestation failure.
+ let current=[];
+ try{current=await refreshPublishedScans({fetcher});}
+ catch(error){console.warn('V3_LIVE_SCAN_DEFERRED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'SCAN_UNAVAILABLE');}
+ return mergeCurrentPublishedScan(archived,current);
 }
 // Historical archives are verified from the original published source, not local attestations.
 async function fetchHistoricalPublishedScan(snapshotDate){
@@ -335,7 +344,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
   const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
   const published=async()=>{
-   const available=mergeCurrentPublishedScan(await enumeratePublishedScans({fetcher}),await refreshPublishedScans({fetcher}));
+   const available=await collectPublishedScans({fetcher});
    const restart=available.find(item=>item.snapshotDate===restartDate);
    if(restart&&restart.releaseAttestation)restart.restartKey=restartKey;
    return available;
@@ -360,11 +369,6 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   // Newest verified unprocessed scan; review invitation is issued only
   // after durable PUBLICATION_REVIEW. Never delivers to destinations.
   const runCampaign=async(snapshotDate)=>{
-   const available=await published();
-   const restart=available.find(item=>item.restartKey===restartKey);
-   const restartState=restart&&(await service.store.adapter.read(campaignIdFor(restart)))?.value;
-   if(!snapshotDate&&restart&&restartState?.phase!=='PUBLICATION_REVIEW'&&(!['NO_VERIFIED_ANGLE','RUNNING'].includes(restartState?.claim_gate_attempt?.status)||recoverableRecords(restartState,restartKey)?.length))snapshotDate=restartDate;
-   if(!snapshotDate&&!restart&&available.blocked?.some(item=>item.snapshotDate===restartDate)&&!available.some(item=>item.snapshotDate>restartDate))return {status:'CLEAN_RESTART_ATTESTATION_HELD',snapshotDate:restartDate};
    // Retry one persisted incomplete review per hourly poll. A failure is logged
    // and isolated so it cannot block intake of another independently valid scan.
    if(!snapshotDate){
@@ -403,6 +407,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    // Existing discovery recovery remains available independently.
    // Historical runs require the source's paired release attestations and exact archive digest.
    // Never substitute the current live scan for a requested historical date.
+   const available=await published();
    if(available.blocked?.length)console.warn('V3_ARCHIVE_ENTRIES_NOT_VERIFIABLE',JSON.stringify(available.blocked));
    const selected=snapshotDate?available.find(item=>item.snapshotDate===snapshotDate):await selectNextPublishedScan({published:available.filter(item=>item.snapshotDate>=restartDate),readCampaign:async id=>(await service.store.adapter.read(id))?.value});
    if(!selected) return {status:snapshotDate?'SCAN_NOT_IN_VERIFIED_ARCHIVE':'NO_UNPROCESSED_SCAN',archive_unverified_dates:available.blocked?.map(item=>item.snapshotDate).filter(Boolean)??[]};
@@ -563,4 +568,4 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,actionableReviewPending,runActionableReview,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
-module.exports={resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
+module.exports={collectPublishedScans,resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
