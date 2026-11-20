@@ -3,7 +3,7 @@ const {Pool}=require('pg');
 const {createHash}=require('node:crypto');
 const {readFileSync,readdirSync}=require('node:fs');
 const path=require('node:path');
-const {restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals,recoverableRecords}=require('./emradar-v3-clean-restart.cjs');
+const {restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals,recoverableRecords,recoverableSourceRecords}=require('./emradar-v3-clean-restart.cjs');
 const {createV3IsolatedWiring}=require('./emradar-v3-wiring.cjs');
 
 const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
@@ -146,7 +146,7 @@ const campaignIdFor=published=>campaignIdentity(published.snapshotDate+':'+publi
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
-  if(existing?.claim_gate_attempt?.status==='NO_VERIFIED_ANGLE'||existing?.claim_gate_attempt?.status==='RUNNING')continue;
+  if((existing?.claim_gate_attempt?.status==='NO_VERIFIED_ANGLE'&&!recoverableSourceRecords(existing)?.length)||existing?.claim_gate_attempt?.status==='RUNNING')continue;
   if(!['PUBLICATION_REVIEW','CLOSED'].includes(existing?.phase))return {...candidate,resume:Boolean(existing)};
  }
  return null;

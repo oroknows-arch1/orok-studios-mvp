@@ -3,6 +3,14 @@ const {createHash}=require('node:crypto');
 
 const restartDate='2026-11-18';
 const restartKey='claim-evidence-restart-2026-11-18';
+const sourceReaderRevision='article-body-blocks-v2';
+function recoverableSourceRecords(state){
+ if(state?.phase!=='SCAN_VERIFIED'||state.claim_gate_attempt?.status!=='NO_VERIFIED_ANGLE'||
+    state.claim_gate_previous||state.claim_gate_attempt?.source_reader_revision===sourceReaderRevision)return null;
+ const document=state.preparation_input?.document;
+ if(document?.evidence?.length!==0)return null;
+ return (document.claim_audit??[]).filter(item=>item.status==='SOURCE_INACCESSIBLE').map(item=>item.record_id);
+}
 function campaignIdentity(sourceKey,key){
  return 'v3-'+createHash('sha256').update(key?sourceKey+':'+key:sourceKey).digest('hex').slice(0,32);
 }
@@ -61,4 +69,4 @@ function recoverableRecords(state,key){
  return eligible.sort((a,b)=>b.claims.filter(c=>c.status==='SUPPORTED').length-a.claims.filter(c=>c.status==='SUPPORTED').length).map(item=>item.record_id);
 }
 const recoverableRecord=(state,key)=>recoverableRecords(state,key)?.[0]??null;
-module.exports={restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals,recoverableRecords,recoverableRecord};
+module.exports={sourceReaderRevision,recoverableSourceRecords,restartDate,restartKey,campaignIdentity,retireDisposableCampaigns,retireUnsentApprovals,recoverableRecords,recoverableRecord};

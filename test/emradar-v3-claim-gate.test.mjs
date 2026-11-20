@@ -269,3 +269,45 @@ test('PostgreSQL dry-run archives one old approval and leaves sent history byte-
  assert.deepEqual(await quarantineSavedProposals({pool:client,store}),[]);
  assert.equal((await adapter.read(campaign)).version,saved.version);
 });
+
+test('visible numbered official releases are full-text evidence; navigation, hidden lists and previews are not',()=>{
+ const body='<ol><li><div>'+excerpt+'</div></li><li><div>The port authority says vessels must reserve a connection before arrival. The other two cargo berths cannot supply shore power because their substations have yet to be connected.</div></li></ol>';
+ assert.ok(readArticleBody('<title>Official release</title><article>'+body+'</article>').text.includes(excerpt));
+ assert.equal(readArticleBody('<title>Official release</title><nav>'+body+'</nav>'),null);
+ assert.equal(readArticleBody('<title>Official release</title><article><div hidden>'+body+'</div></article>'),null);
+ assert.equal(readArticleBody('<title>Official release</title><article class="preview snippet">'+body+'</article>'),null);
+ assert.equal(readArticleBody('<title>Official release</title><article>'+body+'<p>Subscribe to continue reading the complete article now.</p></article>'),null);
+});
+
+test('source-reader recovery is once-only, selects inaccessible records and makes no additional web searches',async()=>{
+ const {default:restart}=await import('../src/emradar-v3-clean-restart.cjs');
+ const bytes=Buffer.from(JSON.stringify(raw)),expectedSha256=createHash('sha256').update(bytes).digest('hex');
+ const input={snapshotDate:fakeScan.snapshot_date,expectedSha256,liveUrl:'https://emerging-markets-radar.onrender.com/data/discovery.json',archiveUrl:'https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-'+fakeScan.snapshot_date+'.json'};
+ const store=new CampaignStore(new MemoryAdapter());let calls=0;
+ const baseGate=gateFor();
+ const prepare=createPreparationRun({store,fetcher:async()=>({ok:true,arrayBuffer:async()=>bytes}),verifyClaims:async args=>{
+  calls++;
+  if(calls===1){
+   const output=await claimPolicy.createClaimEvidenceGate({readPage:async()=>null,findSources:async()=>[],assess:async()=>assert.fail('no accessible pages'),checkAngle:async()=>false,maxInvestigations:2})(args);
+   return output;
+  }
+  assert.deepEqual(args.recoverRecordIds,['weak','port']);
+  return baseGate(args);
+ },discover:async()=>[{id:'x',contact_verified:true,evidence:{ids:['port:0']}}],write:async({campaignId,document})=>claimPolicy.bindClaimEvidence(originalAsset(campaignId),document),renderVisual:async()=>({bytes:png})});
+ const first=await prepare(input);assert.equal(first.status,'CLAIM_EVIDENCE_HELD');
+ // Simulate an actual pre-upgrade durable campaign, which has no reader revision.
+ await store.mutate(first.campaignId,current=>{delete current.claim_gate_attempt.source_reader_revision;return current;});
+ assert.equal(restart.recoverableSourceRecords((await store.adapter.read(first.campaignId)).value).length,2);
+ const recovered=await prepare(input);assert.equal(recovered.status,'PUBLICATION_REVIEW');
+ const saved=(await store.adapter.read(first.campaignId)).value;
+ assert.equal(saved.claim_gate_previous.document.claim_audit[0].status,'SOURCE_INACCESSIBLE');
+ assert.equal(restart.recoverableSourceRecords(saved),null);
+ assert.equal((await prepare(input)).status,'ALREADY_PREPARED');assert.equal(calls,2);
+});
+
+test('production source-reader recovery disables paid alternative search and rechecks original body proof',async()=>{
+ let searches=0;
+ const provider=createClaimEvidenceProvider({openai:{responses:{create:async()=>{searches++;throw Error('MUST_NOT_SEARCH');}}},complete:async(_prompt,payload)=>payload.claims?assess(payload):{supported:true},maxInvestigations:2,maxToolCalls:3,readPage:async url=>url===primary?page:null});
+ const result=await provider({scan:fakeScan,document:normalizePublishedEvidence(raw),recoverRecordIds:['port']});
+ assert.equal(searches,0);assert.equal(result.evidence.length,1);assert.equal(result.records[0].id,'port');
+});

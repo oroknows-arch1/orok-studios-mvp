@@ -22,15 +22,20 @@ export function readArticleBody(html){
    if(['footer','header','nav','aside','dialog','template','noscript','script','style'].includes(current.name))return false;
    const attrs=current.attribs??{};
    if(Object.hasOwn(attrs,'hidden')||attrs['aria-hidden']==='true'||/display\s*:\s*none|visibility\s*:\s*hidden/i.test(attrs.style??'')||
-      /\b(?:related|paywall|teaser|excerpt|snippet|cookie-banner)\b/i.test(attrs.class??''))return false;
+      /\b(?:related|paywall|teaser|preview|excerpt|snippet|cookie-banner|breadcrumbs|menu)\b/i.test(attrs.class??''))return false;
   }
   return true;
  };
  const visibleText=node=>!visible(node)?'':node.type==='text'?node.data:(node.children??[]).map(visibleText).join('');
- const paragraphs=[...new Set(containers.flatMap(node=>findAll(child=>child.name==='p'&&visible(child),node.children).map(paragraph=>visibleText(paragraph).replace(/\s+/gu,' ').trim())))].filter(item=>item.length>=60);
+ // Official releases may put the full article in numbered list items instead
+ // of paragraph tags (for example JBIC). Keep the same visible article scope.
+ const bodyBlock=child=>visible(child)&&(child.name==='p'||(child.name==='li'&&
+  !findAll(n=>n.name==='p'||n.name==='li',child.children??[]).length));
+ const blocks=[...new Set(containers.flatMap(node=>findAll(bodyBlock,node.children).map(paragraph=>visibleText(paragraph).replace(/\s+/gu,' ').trim())))];
+ const paragraphs=blocks.filter(item=>item.length>=60);
  const body=paragraphs.join('\n');
  if(paragraphs.length<2||body.length<250||
-    /(?:subscribe|sign in|log in|register) to (?:continue reading|read (?:more|the full|this article))|enable javascript to continue|checking your browser|your access has been blocked/i.test(body))return null;
+    /(?:subscribe|sign in|log in|register) to (?:continue reading|read (?:more|the full|this article))|enable javascript to continue|checking your browser|your access has been blocked/i.test(blocks.join('\n')))return null;
  return {title,text:body,sha256:createHash('sha256').update(html).digest('hex')};
 }
 
