@@ -240,11 +240,13 @@ export async function createPreparationReviewService({
  };
  const isCleanRestart=state=>Boolean(state?.scan?.source_key&&state.scan.snapshot_date===restartPolicy.restartDate&&
   state.id===restartPolicy.campaignIdentity(state.scan.source_key,restartPolicy.restartKey));
+ const needsCheckedRecovery=state=>Object.values(state?.assets??{}).some(entry=>entry.asset?.review_status==='NEEDS_REVISION'&&entry.asset?.preparation_error==='V3_DRAFT_CLAIMS_UNSUPPORTED');
  const recoverCheckedDrafts=async campaignId=>{
   const state=(await adapter.read(campaignId))?.value;
-  if(!isCleanRestart(state)||!isReviewPhase(state.phase))throw Error('CAMPAIGN_NOT_READY');
+  if(!isReviewPhase(state?.phase))throw Error('CAMPAIGN_NOT_READY');
   const document=state.preparation_input?.document;
   assertCheckedDocument(document,state.scan);
+  const checked=new Map();
   for(const destination of state.destinations){
    const id=destination.id,entry=state.assets[id];
    if(entry?.asset?.review_status!=='NEEDS_REVISION'||state.decisions[id]||state.deliveries[id])continue;
@@ -252,6 +254,21 @@ export async function createPreparationReviewService({
    const linked=new Set(destination.evidence?.ids??[]);
    if(!document.evidence.length||!document.evidence.every(e=>linked.has(e.id)))continue;
    const asset=writeCheckedRestartDraft({campaignId,destination,document,scan:state.scan});
+   if(!isCleanRestart(state)){
+    if(typeof verifyDraft!=='function')throw Error('V3_INDEPENDENT_DRAFT_CHECK_REQUIRED');
+    const binding=sha256(JSON.stringify({subject:asset.subject,body:asset.body,proof:document.claim_gate}));
+    if(!checked.has(binding)){
+     const prior=state.checked_draft_attempts?.[binding];
+     if(prior)checked.set(binding,prior.status==='VERIFIED');
+     else{
+      await store.mutate(campaignId,current=>{current.checked_draft_attempts??={};current.checked_draft_attempts[binding]={status:'RUNNING'};return current;});
+      const supported=await verifyDraft({draft:{subject:asset.subject,body:asset.body},evidence:document.evidence.filter(e=>asset.evidence_ids.includes(e.id))});
+      await store.mutate(campaignId,current=>{current.checked_draft_attempts[binding]={status:supported?'VERIFIED':'HELD'};return current;});
+      checked.set(binding,supported);
+     }
+    }
+    if(!checked.get(binding))continue;
+   }
    if(id==='x'){
     const visual=await renderVerifiedVisual({asset,document,scan:state.scan});
     asset.visual_sha256=visual.sha256;asset.visual_url=visual.url;
@@ -276,7 +293,7 @@ export async function createPreparationReviewService({
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
   assertCheckedDocument(state.preparation_input.document,state.scan);
-  if(isCleanRestart(state)){
+  if(isCleanRestart(state)||needsCheckedRecovery(state)){
    const completion=await recoverCheckedDrafts(campaignId);
    const notification=completion.complete&&notifyOwner?await ensureOwnerReview(campaignId):null;
    return {campaignId,...completion,status:completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED',notification:notification?.status??'NOT_REQUESTED'};
@@ -286,7 +303,7 @@ export async function createPreparationReviewService({
   let resumed,completion;
   try{
    await ensureBrandedX(campaignId);
-   await discover({scan:state.scan,document:state.preparation_input.document,history:[]});
+   await discover({scan:state.scan,document:state.preparation_input.document,history:[],reuseResearch:true});
    resumed=await resumeEditorialDrafts(campaignId);
    const fresh=new Map((await directory.list()).filter(recipientPolicy.verifiedDestination).map(d=>[d.id,d]));
    await store.mutate(campaignId,current=>{
@@ -349,7 +366,7 @@ export async function createPreparationReviewService({
   const result=await prepare(input);
   if(result.status==='CLAIM_EVIDENCE_HELD')return result;
   const prior=(await adapter.read(result.campaignId))?.value;
-  if(isCleanRestart(prior)){
+  if(isCleanRestart(prior)||needsCheckedRecovery(prior)){
    const completion=await recoverCheckedDrafts(result.campaignId);
    if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
    return {...result,status:'PUBLICATION_REVIEW',...completion};

@@ -7,15 +7,16 @@ import verified from './fixtures/v3-verified-recipient.cjs';
 import {createPreparationReviewService} from '../vendor/emradar-v3/src/preparation-review-service.js';
 import {GRAPHIC_STANDARD} from '../vendor/emradar-v3/src/graphic-standard.js';
 
-async function harness({count=10,failAfter=null,replaceVisual=false}={}){
+async function harness({count=10,failAfter=null,replaceVisual=false,draftCheck,held=false}={}){
  const evidence=[{id:'e1',record_id:'r1',verified:true,fact:'An industrial project was proposed.',source_url:'https://source.example/fact'}];
- const document={snapshot_date:'2026-10-17',publication_state:'PUBLISHED',evidence};
+ const document={snapshot_date:'2026-10-17',publication_state:'PUBLISHED',evidence,...(held?{records:[{id:'r1',theme:'An industrial project is proposed',why_surfaced:'A source announced an industrial project that remains under investigation.'}]}:{})};
  const bytes=Buffer.from(JSON.stringify(document)),digest=createHash('sha256').update(bytes).digest('hex');
  const id='v3-'+createHash('sha256').update('2026-10-17:'+digest).digest('hex').slice(0,32);
  const input={snapshotDate:'2026-10-17',expectedSha256:digest,liveUrl:'https://emerging-markets-radar.onrender.com/data/current.json',archiveUrl:'https://emerging-markets-radar.onrender.com/data/archive.json'};
  const x={asset:{campaign_id:id,destination_id:'x',kind:'X',body:'Saved X text',visual_url:'data:image/png;base64,keep',visual_sha256:'a'.repeat(64),evidence_ids:['e1']},fingerprint:'keep-approved-x'};
  const state={id,scan:{snapshot_date:'2026-10-17',artifact_sha256:digest,source_key:'2026-10-17:'+digest},phase:'PUBLICATION_REVIEW',destinations:[{id:'x'}],assets:{x},decisions:{x:{decision:'REJECT',asset_sha256:x.fingerprint}},deliveries:{},events:[{type:'SCAN_VERIFIED'}],preparation_input:{document}};
  checkedState(state);checkedAsset(x.asset,state.preparation_input.document);
+ if(held){state.phase='ASSETS_PREPARED';state.destinations[0].evidence={ids:['e1']};state.assets.x.asset={campaign_id:id,destination_id:'x',kind:'X',body:'Held',review_status:'NEEDS_REVISION',preparation_error:'V3_DRAFT_CLAIMS_UNSUPPORTED',evidence_ids:['e1']};}
  if(replaceVisual)state.decisions={};
  const records=new Map([[id,{version:1,payload:state}]]),directory=new Map();let searches=0,writes=0,notifications=0,images=0,fail=failAfter;
  const pool={query:async(sql,args=[])=>{
@@ -29,7 +30,7 @@ async function harness({count=10,failAfter=null,replaceVisual=false}={}){
   throw Error('UNEXPECTED_SQL');
  }};
  let service;
- service=await createPreparationReviewService({pool,reviewOrigin:'https://review.example',reviewedLinks:[],fetcher:async()=>({ok:true,arrayBuffer:async()=>bytes}),verifyClaims:async()=>{throw Error('NO_RESEARCH_REPEAT');},renderVisual:async()=>{if(!replaceVisual)throw Error('NO_X_REGENERATION');images++;return {base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jq1sAAAAASUVORK5CYII=',brand_version:GRAPHIC_STANDARD.version};},write:async({campaignId,destination,document})=>{
+ service=await createPreparationReviewService({pool,verifyDraft:draftCheck,reviewOrigin:'https://review.example',reviewedLinks:[],fetcher:async()=>({ok:true,arrayBuffer:async()=>bytes}),verifyClaims:async()=>{throw Error('NO_RESEARCH_REPEAT');},renderVisual:async()=>{if(!replaceVisual)throw Error('NO_X_REGENERATION');images++;return {base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jq1sAAAAASUVORK5CYII=',brand_version:GRAPHIC_STANDARD.version};},write:async({campaignId,destination,document})=>{
   if(fail!==null&&writes>=fail)throw Error('PROVIDER_UNAVAILABLE');writes++;
   return checkedAsset({campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',subject:'Research contribution',body:'A sourced proposal for '+destination.name+'. Would an article interest you?',from:'sean@emradar.net',to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1']},document);
  },notify:async({campaignId,recipient})=>{notifications++;return {accepted:true,provider_id:'owner-invitation',campaign_id:campaignId,recipient};},discoverLinks:async()=>{
@@ -87,4 +88,25 @@ test('interrupted verified intake reuses exact-scan recipient research without a
  const changed=structuredClone(state.preparation_input.document);changed.evidence[0].fact+=' Additional unlinked fact.';
  await assert.rejects(f.service.discover({scan:state.scan,document:changed,reuseResearch:true}),/V3_CHECKED_CLAIM_EVIDENCE_REQUIRED/);
  assert.equal(f.metrics().searches,0);
+});
+
+test('held wording recovers from sealed findings only after independent approval and never repeats the check or notification',async()=>{
+ let checks=0;
+ const f=await harness({held:true,replaceVisual:true,draftCheck:async({draft,evidence})=>{checks++;assert.ok(draft.body.includes('under investigation'));assert.ok(evidence[0].excerpt);return true;}});
+ const evidence=f.records.get(f.id).payload.preparation_input.document.evidence;
+ const d=verified('saved-editor',evidence);await f.service.directory.upsert(d);
+ const state=f.records.get(f.id).payload;state.destinations.push({...d,evidence:{ids:['e1']}});state.assets[d.id]={asset:{kind:'EMAIL',campaign_id:f.id,destination_id:d.id,review_status:'NEEDS_REVISION',preparation_error:'V3_DRAFT_CLAIMS_UNSUPPORTED'},fingerprint:'held-email'};
+ await f.service.prepareAndNotify(f.input);
+ assert.equal(f.records.get(f.id).payload.review_completion.complete,true);
+ assert.equal(f.metrics().notifications,1);assert.equal(f.metrics().searches,0);assert.equal(checks,2);
+ await f.service.prepareAndNotify(f.input);assert.equal(checks,2);assert.equal(f.metrics().notifications,1);
+});
+
+test('unsupported recovery wording stays held and paid rechecking is bounded across retries',async()=>{
+ let checks=0;
+ const f=await harness({held:true,replaceVisual:true,draftCheck:async()=>{checks++;return false;}});
+ await assert.rejects(f.service.prepareAndNotify(f.input),/V3_PUBLICATION_REVIEW_INCOMPLETE/);
+ await assert.rejects(f.service.prepareAndNotify(f.input),/V3_PUBLICATION_REVIEW_INCOMPLETE/);
+ assert.equal(checks,1);assert.equal(f.metrics().notifications,0);assert.equal(f.metrics().searches,0);
+ assert.equal(f.records.get(f.id).payload.assets.x.asset.review_status,'NEEDS_REVISION');
 });
