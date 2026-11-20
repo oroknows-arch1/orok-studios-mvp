@@ -207,3 +207,19 @@ test('denied, inaccessible and altered signed releases never fall back to live e
  docs.set(key,JSON.stringify(signed));
  assert.deepEqual((await collectPublishedScans({fetcher:async url=>{if(url===key)throw Error('UNAVAILABLE');return fetcher(url);}})).map(x=>x.snapshotDate),['2026-11-19']);
 });
+
+test('current scanner five-gate publication sidecar is accepted only when every recorded gate passes',async()=>{
+ const {collectPublishedScans}=require('../src/emradar-v3-runtime.cjs');
+ const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
+ const {docs,fetcher,origin}=signedReleaseFixture();
+ const date='2026-11-20',release=JSON.parse(docs.get(origin+'/verification/downstream-release-attestation-'+date+'.json'));
+ const key=origin+'/verification/publication-'+date+'.json';
+ const publication={snapshot_date:date,publication_state:'PUBLISHED',downstream_release_allowed:true,public_verification:{artifact_sha256:release.source_sha256,verification_contract:'live-reader-exact-identity-v2',archive_data_url:origin+'/'+release.source_path},gates:Object.fromEntries(['exact_current_bytes','exact_archive_bytes','archive_index','dashboard_render','exact_commit_deployment'].map(key=>[key,'PASS']))};
+ docs.set(key,JSON.stringify(publication));
+ const scans=await collectPublishedScans({fetcher});assert.equal(scans.length,2);
+ assert.equal((await verifyPublishedScan({...scans[1],fetcher})).scan.artifact_sha256,release.source_sha256);
+ for(const gate of Object.keys(publication.gates)){
+  docs.set(key,JSON.stringify({...publication,gates:{...publication.gates,[gate]:'FAIL'}}));
+  assert.deepEqual((await collectPublishedScans({fetcher})).map(x=>x.snapshotDate),['2026-11-19']);
+ }
+});

@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto';
 import { assertScan } from './contracts.js';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+export function publicationGatesPass(record){
+ return record?.gates?.public_snapshot_verification==='PASS'||
+  (record?.publication_state==='PUBLISHED'&&['exact_current_bytes','exact_archive_bytes','archive_index','dashboard_render','exact_commit_deployment'].every(key=>record?.gates?.[key]==='PASS'));
+}
 export async function verifyPublishedScan({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,fetcher=fetch}) {
  if (!/^\d{4}-\d{2}-\d{2}$/.test(snapshotDate||'') || !/^[a-f0-9]{64}$/.test(expectedSha256||'')) throw Error('INVALID_SCAN_IDENTITY');
  // A signed immutable release remains verifiable after live discovery advances.
@@ -15,7 +19,7 @@ export async function verifyPublishedScan({snapshotDate,expectedSha256,liveUrl,a
    throw Error('UNTRUSTED_HISTORICAL_RELEASE');
   const p=publicationRecord;
   if(publicationRecord!==undefined&&(p?.snapshot_date!==snapshotDate||p?.public_verification?.artifact_sha256!==expectedSha256||
-     p?.public_verification?.verification_contract!=='live-reader-exact-identity-v2'||p?.gates?.public_snapshot_verification!=='PASS'||
+     p?.public_verification?.verification_contract!=='live-reader-exact-identity-v2'||!publicationGatesPass(p)||
      p?.downstream_release_allowed!==true||p?.public_verification?.archive_data_url!==archiveUrl))
    throw Error('UNTRUSTED_HISTORICAL_RELEASE');
   if(archiveUrl!==`https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-${snapshotDate}.json`)throw Error('INVALID_HISTORICAL_ARCHIVE');

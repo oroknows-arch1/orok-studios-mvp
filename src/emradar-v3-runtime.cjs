@@ -37,6 +37,7 @@ async function refreshPublishedScans({fetcher=fetch}={}){
  archiveUrl:SCAN_ORIGIN+'/data/checkpoints/discovery-'+document.snapshot_date+'.json'}];
 }
 async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={}){
+ const {publicationGatesPass}=await import('../vendor/emradar-v3/src/scan-intake.js');
  if(indexUrl!==SCAN_INDEX_URL)throw Error('UNTRUSTED_SCAN_INDEX');
  const getJson=async url=>{
   const parsed=new URL(url);
@@ -71,7 +72,7 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
   const authorized=publicationRecord?.snapshot_date===date&&
    publicationRecord?.public_verification?.verification_contract==='live-reader-exact-identity-v2'&&
    publicationRecord?.public_verification?.archive_data_url===archiveUrl&&
-   publicationRecord?.gates?.public_snapshot_verification==='PASS'&&
+   publicationGatesPass(publicationRecord)&&
    publicationRecord?.downstream_release_allowed===true&&
    releaseAttestation?.snapshot_date===date&&releaseAttestation?.source_path===candidate.path&&
    releaseAttestation?.source_sha256===expectedSha256&&releaseAttestation?.publication_state==='PUBLISHED'&&
