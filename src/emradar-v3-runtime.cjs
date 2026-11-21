@@ -36,6 +36,7 @@ async function refreshPublishedScans({fetcher=fetch}={}){
  archiveUrl:SCAN_ORIGIN+'/data/checkpoints/discovery-'+document.snapshot_date+'.json'}];
 }
 async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={}){
+ const {publicationRecordValid,releaseAttestationValid}=await import('../vendor/emradar-v3/src/scan-intake.js');
  if(indexUrl!==SCAN_INDEX_URL)throw Error('UNTRUSTED_SCAN_INDEX');
  const getJson=async url=>{
   const parsed=new URL(url);
@@ -66,24 +67,23 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
   const archiveUrl=SCAN_ORIGIN+'/'+candidate.path;
   const publicationRecord=await getJson(`${SCAN_ORIGIN}/verification/publication-${date}.json`);
   const releaseAttestation=await getJson(`${SCAN_ORIGIN}/verification/downstream-release-attestation-${date}.json`);
-  let expectedSha256=publicationRecord?.public_verification?.artifact_sha256;
-  const authorized=publicationRecord?.snapshot_date===date&&
-   publicationRecord?.public_verification?.verification_contract==='live-reader-exact-identity-v2'&&
-   publicationRecord?.public_verification?.archive_data_url===archiveUrl&&
-   publicationRecord?.gates?.public_snapshot_verification==='PASS'&&
-   publicationRecord?.downstream_release_allowed===true&&
-   releaseAttestation?.snapshot_date===date&&releaseAttestation?.source_path===candidate.path&&
-   releaseAttestation?.source_sha256===expectedSha256&&releaseAttestation?.publication_state==='PUBLISHED'&&
-   releaseAttestation?.downstream_release_allowed===true&&releaseAttestation?.native_gates?.publication==='PASS'&&
-   releaseAttestation?.attested_by==='AUTHORIZED_SOURCE_RELEASE_REVIEW'&&
-   releaseAttestation?.campaign_authority?.required_stop==='PUBLICATION_REVIEW'&&
-   releaseAttestation?.campaign_authority?.external_publication_allowed===false&&
+  let expectedSha256=publicationRecord?.public_verification?.artifact_sha256??publicationRecord?.source_sha256;
+  const authorized=publicationRecordValid(publicationRecord,{snapshotDate:date,expectedSha256,archiveUrl,releaseAttestation})&&
+   releaseAttestationValid(releaseAttestation,{snapshotDate:date,expectedSha256,modern:!publicationRecord?.public_verification})&&
    /^[a-f0-9]{64}$/.test(expectedSha256||'');
+  if(!publicationRecord&&releaseAttestation){
+   const input={snapshotDate:date,expectedSha256:releaseAttestation.source_sha256,liveUrl:archiveUrl,archiveUrl,releaseAttestation};
+   try{
+    const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
+    await verifyPublishedScan({...input,fetcher});
+    return input;
+   }catch{blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;}
+  }
   if(!authorized){
    // A published source artifact is an independent authorization and integrity
    // path only when both optional sidecars are absent. Never override a partial,
    // contradictory or explicitly denied attestation.
-   if(publicationRecord||releaseAttestation){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;}
+   if(publicationRecord||releaseAttestation||date>='2026-11-18'){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;}
    const response=await fetcher(archiveUrl,{method:'GET',redirect:'error',signal:AbortSignal.timeout(15000),headers:{accept:'application/json','cache-control':'no-cache'}});
    if(response.status===404){blocked.push({snapshotDate:date,reason:'PUBLICATION_ATTESTATION_UNAVAILABLE'});return null;}
    if(!response.ok){blocked.push({snapshotDate:date,reason:'PUBLICATION_ARCHIVE_UNAVAILABLE'});return null;}
@@ -97,7 +97,7 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
    return {snapshotDate:date,expectedSha256,liveUrl:archiveUrl,archiveUrl,publicationAuthorization:'PUBLISHED_ARCHIVE_EXACT_SHA256'};
   }
   return {snapshotDate:date,expectedSha256,liveUrl:SCAN_ORIGIN+'/data/discovery.json',archiveUrl,publicationRecord,releaseAttestation};
- }));
+ }).map((promise,index)=>promise.catch(()=>{blocked.push({snapshotDate:candidates[index].snapshotDate,reason:'PUBLICATION_ATTESTATION_INVALID'});return null;})));
  const eligible=verified.filter(Boolean).sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
  Object.defineProperty(eligible,'blocked',{value:blocked,enumerable:false});
  return eligible;
@@ -107,11 +107,20 @@ function mergeCurrentPublishedScan(archived,current){
  for(const item of current){
   const existing=candidates.get(item.snapshotDate);
   if(existing&&existing.expectedSha256!==item.expectedSha256)throw Error('SCAN_ARCHIVE_IDENTITY_CONFLICT');
-  if(!existing)candidates.set(item.snapshotDate,item);
+  if(!existing&&!(archived.blocked??[]).some(entry=>entry.snapshotDate===item.snapshotDate&&entry.reason==='PUBLICATION_ATTESTATION_INVALID'))candidates.set(item.snapshotDate,item);
  }
  const merged=[...candidates.values()].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate));
  Object.defineProperty(merged,'blocked',{value:archived.blocked??[],enumerable:false});
  return merged;
+}
+async function collectPublishedScans({fetcher=fetch}={}){
+ const archived=await enumeratePublishedScans({fetcher});
+ // A DRAFT or unavailable live document cannot suppress independently signed archives.
+ // Retain current-only legacy intake for dates without an explicit attestation failure.
+ let current=[];
+ try{current=await refreshPublishedScans({fetcher});}
+ catch(error){console.warn('V3_LIVE_SCAN_DEFERRED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'SCAN_UNAVAILABLE');}
+ return mergeCurrentPublishedScan(archived,current);
 }
 // Historical archives are verified from the original published source, not local attestations.
 async function fetchHistoricalPublishedScan(snapshotDate){
@@ -324,7 +333,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   });
   const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
   const {normalizePublishedEvidence}=await import('../vendor/emradar-v3/src/scan-evidence-adapter.js');
-  const published=async()=>mergeCurrentPublishedScan(await enumeratePublishedScans({fetcher}),await refreshPublishedScans({fetcher}));
+  const published=async()=>collectPublishedScans({fetcher});
   const verify=async selected=>{
    const sourceFetcher=selected.bundledBytes?async url=>{
     if(url!==selected.archiveUrl)throw Error('UNTRUSTED_SCAN_URL');
