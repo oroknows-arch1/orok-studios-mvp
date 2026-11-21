@@ -337,10 +337,8 @@ test('production assessor may retain a literal narrower fact with a testable unr
    if(input.claims){assert.match(prompt,/passage_id/);assert.ok(input.pages[0].passages[0].text.includes(excerpt));return {supported:[{id:input.claims[0].id,status:'SUPPORTED',url:input.pages[0].url,passage_id:input.pages[0].passages[0].id,verified_fact:narrower}],
     story:{significant:true,claim_ids:[input.claims[0].id],headline:'One electric cargo berth opens',
      finding:'Ships must reserve the only available shore-power connection before arrival.',industries:['ports'],relationships:[],
-     investigative_question:'',scenarios:[]}};}
-   if(input.supported){repairs++;assert.match(prompt,/testable investigative question/);return {
-    investigative_question:'Will berth reservations constrain arriving cargo vessels?',
-    scenarios:[{status:'UNRESOLVED_QUESTION',proposition:'Reservations may exceed available connections',evidence_ids:[input.supported[0].id],missing_evidence:['Daily reservations and arrivals']}]};}
+     investigative_question:'Will berth reservations constrain arriving cargo vessels?',
+     scenarios:[{status:'UNRESOLVED_QUESTION',proposition:'Reservations may exceed available connections',evidence_ids:[input.claims[0].id],missing_evidence:['Daily reservations and arrivals']}]}};}
    checks++;assert.match(prompt,/original_fact/);assert.equal(input.evidence[0].fact,narrower);assert.equal(input.evidence[0].original_fact,bundled);return {supported:true};
   }});
  const result=await provider({scan:fakeScan,document,recoverRecordIds:['port']});
