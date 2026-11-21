@@ -330,19 +330,42 @@ test('production assessor may retain a literal narrower fact with a testable unr
  const bundled='The port authority opened its first electric cargo berth, all vessels converted, and every terminal closed.';
  const narrower='The port authority opened its first electric cargo berth';
  const document=normalizePublishedEvidence({records:[record('port',[source(primary,bundled)])]});
- let checks=0;
+ let checks=0,repairs=0;
  const provider=createClaimEvidenceProvider({openai:{responses:{create:async()=>assert.fail('existing source should avoid web search')}},maxInvestigations:1,maxToolCalls:3,
   readPage:async()=>page,
   complete:async(prompt,input)=>{
    if(input.claims){assert.match(prompt,/passage_id/);assert.ok(input.pages[0].passages[0].text.includes(excerpt));return {supported:[{id:input.claims[0].id,status:'SUPPORTED',url:input.pages[0].url,passage_id:input.pages[0].passages[0].id,verified_fact:narrower}],
     story:{significant:true,claim_ids:[input.claims[0].id],headline:'One electric cargo berth opens',
      finding:'Ships must reserve the only available shore-power connection before arrival.',industries:['ports'],relationships:[],
-     investigative_question:'Will berth reservations constrain arriving cargo vessels?',
-     scenarios:[{status:'UNRESOLVED_QUESTION',proposition:'Reservations may exceed available connections',evidence_ids:[input.claims[0].id],missing_evidence:['Daily reservations and arrivals']}]}};}
+     investigative_question:'',scenarios:[]}};}
+   if(input.supported){repairs++;assert.match(prompt,/testable investigative question/);return {
+    investigative_question:'Will berth reservations constrain arriving cargo vessels?',
+    scenarios:[{status:'UNRESOLVED_QUESTION',proposition:'Reservations may exceed available connections',evidence_ids:[input.supported[0].id],missing_evidence:['Daily reservations and arrivals']}]};}
    checks++;assert.match(prompt,/original_fact/);assert.equal(input.evidence[0].fact,narrower);assert.equal(input.evidence[0].original_fact,bundled);return {supported:true};
   }});
- const result=await provider({scan:fakeScan,document});
- assert.equal(checks,1);assert.equal(result.claim_audit[0].claims[0].status,'PARTIAL_SUPPORTED');
+ const result=await provider({scan:fakeScan,document,recoverRecordIds:['port']});
+ assert.equal(checks,1);assert.equal(repairs,0);assert.equal(result.claim_audit[0].claims[0].status,'PARTIAL_SUPPORTED');
  assert.equal(result.records.length,1);assert.equal(result.evidence[0].partial,true);
  assert.doesNotMatch(JSON.stringify(result.records),/every terminal closed|all vessels converted/i);
+});
+
+
+test('bounded Colombia question completion still needs independent source check',async()=>{
+ const claim='ANI records the official start of works, 17.96 km scope, COP1.9 trillion construction investment, 66-month duration and environmental adaptations; faithful English summary by EMRADAR.';
+ const official='https://ani.example/works';
+ const body='The authority announced the start of works and described the approved construction programme. Monthly certified progress and wetland monitoring results will be published in later reports.';
+ const article={title:'Official release',text:body,sha256:'a'.repeat(64)};
+ const document=normalizePublishedEvidence({records:[record('colombia-accesos-norte-ii-construction-2026',[source(official,claim)])]});
+ let repairs=0,checks=0;
+ const provider=createClaimEvidenceProvider({openai:{responses:{create:async()=>assert.fail('no web search')}},maxInvestigations:1,maxToolCalls:3,readPage:async()=>article,
+  complete:async(_prompt,input)=>{
+   if(input.claims)return {supported:[{id:input.claims[0].id,status:'SUPPORTED',url:official,passage_id:input.pages[0].passages[0].id,verified_fact:'ANI records the official start of works'}],
+    story:{significant:true,claim_ids:[input.claims[0].id],headline:'Construction begins on the northern corridor',finding:'The authority announced the start of works while execution outcomes remain unresolved.',industries:['transport'],relationships:[],scenarios:[]}};
+   if(input.supported){repairs++;return {investigative_question:'Will certified progress match the announced works schedule?',
+    scenarios:[{status:'UNRESOLVED_QUESTION',proposition:'Certified progress may diverge from the announced programme',evidence_ids:[input.supported[0].id],missing_evidence:['Monthly certified progress reports']}]};}
+   checks++;assert.equal(input.evidence[0].partial,true);return {supported:false};
+  }});
+ const result=await provider({scan:fakeScan,document,recoverRecordIds:['colombia-accesos-norte-ii-construction-2026']});
+ assert.equal(repairs,1);assert.equal(checks,1);assert.equal(result.records.length,0);
+ assert.equal(result.claim_audit[0].status,'NO_SUPPORTED_SIGNIFICANT_ANGLE');
 });
