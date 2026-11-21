@@ -16,8 +16,11 @@ function recoverableSourceRecords(state){
  if(document?.evidence?.length!==0)return null;
  if(creditRecovery)return (document.claim_audit??[]).filter(item=>item.status==='EVIDENCE_CHECK_FAILED'&&
   item.provider_code==='credit_balance_exhausted').map(item=>item.record_id);
- if(figureRecovery)return (document.claim_audit??[]).filter(item=>item.record_id==='colombia-accesos-norte-ii-construction-2026'&&
-  item.status==='NO_SUPPORTED_SIGNIFICANT_ANGLE').map(item=>item.record_id);
+ if(figureRecovery){
+  const eligible=(document.claim_audit??[]).filter(item=>item.record_id==='colombia-accesos-norte-ii-construction-2026'&&
+   item.status==='NO_SUPPORTED_SIGNIFICANT_ANGLE').map(item=>item.record_id);
+  return eligible.length?eligible:null;
+ }
  const statuses=revision==='investigative-question-v1'?['EVIDENCE_CHECK_FAILED']:
   ['SOURCE_INACCESSIBLE','NO_SUPPORTED_SIGNIFICANT_ANGLE','EVIDENCE_CHECK_FAILED'];
  return (document.claim_audit??[]).filter(item=>statuses.includes(item.status)).map(item=>item.record_id);
