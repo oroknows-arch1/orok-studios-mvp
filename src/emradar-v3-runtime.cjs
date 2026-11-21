@@ -127,6 +127,9 @@ const campaignIdFor=published=>'v3-'+createHash('sha256').update(published.snaps
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
+  // A retired historical campaign is terminal. It must never monopolise
+  // later published scans after returning to the pre-19 November runtime.
+  if(existing?.phase==='CLOSED')continue;
   if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
  }
  return null;

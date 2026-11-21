@@ -35,7 +35,26 @@ export function createPreparationRun({store,researchEvidence,discover,write,rend
   const campaignId=await store.start(scan);
   let state=(await store.adapter.read(campaignId)).value;
   if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
-  if(!state.preparation_input) {
+  // The 18-21 November claim-gate revision sometimes persisted an empty
+  // checked dossier before any V3 proposal could be prepared. On rollback,
+  // let the 17 November bounded research worker examine the original signed
+  // scan ONCE instead of treating that empty dossier as finished research.
+  const heldFromNewerGate=state.phase==='SCAN_VERIFIED'&&
+   state.claim_gate_attempt?.status==='NO_VERIFIED_ANGLE'&&
+   state.preparation_input?.document?.claim_gate&&
+   state.preparation_input.document.evidence?.length===0&&
+   !state.rollback_research_attempted_at;
+  if(heldFromNewerGate){
+   state=await store.mutate(campaignId,current=>{
+    if(current.rollback_research_attempted_at)return current;
+    current.rollback_research_attempted_at=new Date().toISOString();
+    current.rollback_checked_dossier=structuredClone(current.preparation_input);
+    current.events??=[];
+    current.events.push({type:'ROLLBACK_RESEARCH_RESTARTED',at:current.rollback_research_attempted_at});
+    return current;
+   });
+  }
+  if(!state.preparation_input||heldFromNewerGate) {
    let research,warning=null;
    try{research=await researchEvidence({scan,document});if(!Array.isArray(research?.evidence))throw Error('EVIDENCE_RESEARCH_RESULT_REQUIRED');}
    catch(error){warning=/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'EVIDENCE_RESEARCH_FAILED';research={status:'NEEDS_REVISION',evidence:[],warning};}
@@ -45,7 +64,10 @@ export function createPreparationRun({store,researchEvidence,discover,write,rend
    for(const item of research.evidence) if(item?.id && !evidence.has(item.id)) evidence.set(item.id,item);
    const input={...document,evidence:[...evidence.values()],research};
    state=await store.mutate(campaignId,current=>{
-    if(!current.preparation_input) current.preparation_input={document:input};
+    if(!current.preparation_input||(heldFromNewerGate&&current.rollback_research_attempted_at&&current.preparation_input.document?.claim_gate)){
+     current.preparation_input={document:input};
+     if(heldFromNewerGate)current.rollback_research_result=warning?'HELD':'RESEARCHED';
+    }
     if(warning)current.preparation_warnings=[...(current.preparation_warnings??[]),{stage:'EVIDENCE_RESEARCH',code:warning}];
     return current;
    });
