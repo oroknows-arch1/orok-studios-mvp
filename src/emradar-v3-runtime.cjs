@@ -10,7 +10,7 @@ const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
 const SCAN_ORIGIN='https://emerging-markets-radar.onrender.com';
 const SCAN_INDEX_URL=SCAN_ORIGIN+'/data/archive-index.json';
 const FIXED_X_TEMPLATE_VERSION='emradar-formation-card-v2';
-const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/verify','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
+const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/verify','/api/review/investigation-triage','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
  return readdirSync(attestationDir).filter(name=>/^publication-\d{4}-\d{2}-\d{2}\.json$/.test(name)).map(name=>name.slice(12,-5)).filter(date=>{

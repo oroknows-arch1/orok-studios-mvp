@@ -13,6 +13,13 @@ const isOwnerInvestigation=campaign=>campaign?.phase==='SCAN_VERIFIED'&&
  [campaign?.preparation_input?.document?.claim_audit,campaign?.claim_gate_previous?.document?.claim_audit]
   .some(audit=>Array.isArray(audit)&&audit.length>0);
 const canOpenOwnerReview=campaign=>isReviewPhase(campaign?.phase)||isOwnerInvestigation(campaign);
+const ownerResearchCandidateIds=campaign=>new Set([
+ ...(campaign?.owner_investigation_records??[]).map(item=>item.id),
+ ...(campaign?.claim_gate_history??[]).flatMap(item=>item?.document?.claim_audit??[]).map(item=>item.record_id),
+ ...(campaign?.claim_gate_previous?.document?.claim_audit??[]).map(item=>item.record_id),
+ ...(campaign?.preparation_input?.document?.claim_audit??[]).map(item=>item.record_id),
+ ...(campaign?.preparation_input?.document?.records??[]).map(item=>item.id)
+].filter(id=>typeof id==='string'&&id.length>0));
 
 export class ReviewWorkflow {
  constructor({store,adapter,notify,baseUrl,verifyRecipient,verifier=null,clock=()=>Date.now()}) {
@@ -159,12 +166,37 @@ export class ReviewWorkflow {
   }
   const sourceById=new Map(scanRecords.map(item=>[item.id,item]));
   const investigation=[...investigationById.values()].map(item=>({
-   ...item,admitted:admitted.has(item.id),
+   ...item,owner_triage:campaign.owner_investigation_triage?.[item.id]??null,
+   admitted:admitted.has(item.id),
    scanner_theme:sourceById.get(item.id)?.theme??'',
    scanner_rationale:sourceById.get(item.id)?.why_surfaced??'',
    scanner_status:sourceById.get(item.id)?.scanner_status??'UNKNOWN'
   }));
   return {campaignId,phase:campaign.phase,investigation_only:isOwnerInvestigation(campaign),completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:actionable,internal_incomplete_count:described.length-actionable.length,history,groups,investigation};
+ }
+ async triageInvestigation(campaignId,sessionId,secret,recordId,decision,note='') {
+  await this.authenticate(campaignId,sessionId,secret);
+  if(typeof recordId!=='string'||!recordId||recordId.length>180||
+     !['PRIORITIZE','DEFER','EXCLUDE'].includes(decision)||typeof note!=='string'||note.length>1500)
+   throw Error('INVALID_INVESTIGATION_TRIAGE');
+  const state=(await this.adapter.read(campaignId))?.value;
+  if(!canOpenOwnerReview(state))throw Error('REVIEW_NOT_OPEN');
+  const candidates=ownerResearchCandidateIds(state);
+  if(!candidates.has(recordId))throw Error('UNKNOWN_INVESTIGATION_RECORD');
+  // Owner triage selects research priority, NEVER overrides verified evidence,
+  // creates a publication asset, or grants X/email release permission.
+  await this.store.mutate(campaignId,current=>{
+   if(!canOpenOwnerReview(current)||!ownerResearchCandidateIds(current).has(recordId))
+    throw Error('STALE_INVESTIGATION_RECORD');
+   const prior=current.owner_investigation_triage?.[recordId];
+   current.owner_investigation_triage??={};
+   const timestamp=new Date(this.clock()).toISOString();
+   current.owner_investigation_triage[recordId]={decision,note,updated_at:timestamp};
+   current.events??=[];
+   current.events.push({type:'OWNER_INVESTIGATION_TRIAGED',record_id:recordId,decision,updated_at:timestamp,previous_decision:prior?.decision??null});
+   return current;
+  });
+  return {saved:true,record_id:recordId,decision};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
