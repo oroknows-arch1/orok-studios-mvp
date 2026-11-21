@@ -53,3 +53,12 @@ test('triage refuses retired campaigns',async()=>{
  data.get(scanId).phase='CLOSED';
  await assert.rejects(workflow.triageInvestigation(scanId,'session','secret','record-1','PRIORITIZE'),/REVIEW_NOT_OPEN/);
 });
+
+test('older review with preserved claim audit supports manual triage without new scanner summary',async()=>{
+ const {workflow,data}=fixture();
+ data.get(scanId).phase='PUBLICATION_REVIEW';
+ delete data.get(scanId).owner_investigation_records;
+ await workflow.triageInvestigation(scanId,'session','secret','record-3','PRIORITIZE','Recheck source');
+ const view=await workflow.view(scanId,'session','secret');
+ assert.equal(view.investigation.find(item=>item.id==='record-3').owner_triage.decision,'PRIORITIZE');
+});
