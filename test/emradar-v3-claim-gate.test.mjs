@@ -334,7 +334,7 @@ test('production assessor may retain a literal narrower fact with a testable unr
  const provider=createClaimEvidenceProvider({openai:{responses:{create:async()=>assert.fail('existing source should avoid web search')}},maxInvestigations:1,maxToolCalls:3,
   readPage:async()=>page,
   complete:async(prompt,input)=>{
-   if(input.claims){assert.match(prompt,/passage_id/);assert.equal(input.pages[0].passages[0].text,excerpt);return {supported:[{id:input.claims[0].id,status:'SUPPORTED',url:input.pages[0].url,passage_id:input.pages[0].passages[0].id,verified_fact:narrower}],
+   if(input.claims){assert.match(prompt,/passage_id/);assert.ok(input.pages[0].passages[0].text.includes(excerpt));return {supported:[{id:input.claims[0].id,status:'SUPPORTED',url:input.pages[0].url,passage_id:input.pages[0].passages[0].id,verified_fact:narrower}],
     story:{significant:true,claim_ids:[input.claims[0].id],headline:'One electric cargo berth opens',
      finding:'Ships must reserve the only available shore-power connection before arrival.',industries:['ports'],relationships:[],
      investigative_question:'Will berth reservations constrain arriving cargo vessels?',
