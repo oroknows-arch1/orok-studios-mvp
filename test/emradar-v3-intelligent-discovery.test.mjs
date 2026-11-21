@@ -25,12 +25,12 @@ test('a directory cannot borrow an editor from the next publication or an unveri
  await assert.rejects(researchPublishedDirectory({read:async()=>wrong,url:'https://press.example/directory',website:'https://journal.example',publication:'Mining Journal'}),/DIRECTORY_PUBLICATION_CONTACT_NOT_PROVEN/);
  await assert.rejects(researchPublishedDirectory({read:async url=>url.pathname==='/about'?'Access denied':listing,url:'https://press.example/directory',website:'https://journal.example',publication:'Mining Journal'}),/DIRECTORY_IDENTITY_NOT_PROVEN/);
 });
-test('each blocked candidate gets one fallback; indexed URLs are retrieved, successes persist and later failures are isolated',async()=>{
+test('fallback budget isolates later failures while indexed URLs recover a verified recipient',async()=>{
  const saved=[],history=[],calls=[],reads=[];
  const openai={responses:{create:async request=>{calls.push(request);if(Array.isArray(request.input))return response({candidates:[candidate(),candidate('Second Journal','second.example'),candidate('Third Journal','third.example')]});return {...response({urls:[]}),output:[{type:'web_search_call',action:{sources:[{url:'https://press.example/directory/journal'}]}},...response({urls:[]}).output]};}}};
  const directory={list:async()=>saved,upsert:async record=>saved.push(record),researchHistory:async()=>[],recordResearch:async record=>history.push(structuredClone(record))};
  const worker=createAutonomousOutletDiscovery({openai,directory,resolver:async()=>[{address:'8.8.8.8'}],contactReader:async url=>{reads.push(url.href);if(url.hostname==='press.example')return url.pathname==='/about'?identity:listing;throw Error('CONTACT_HTTP_403');}});
- const links=await worker({document});assert.equal(saved.length,1);assert.equal(saved[0].contact.email,'news@journal.example');assert.equal(links.length,1);assert.equal(history.length,3);assert.equal(history[0].status,'VERIFIED');assert.equal(history[1].status,'UNRESOLVED');assert.equal(history[2].status,'UNRESOLVED');assert.equal(calls.length,4);
+ const links=await worker({document});assert.equal(saved.length,1);assert.equal(saved[0].contact.email,'news@journal.example');assert.equal(links.length,1);assert.equal(history.length,3);assert.equal(history[0].status,'VERIFIED');assert.equal(history[1].status,'UNRESOLVED');assert.equal(history[2].status,'UNRESOLVED');assert.equal(calls.length,3);
  assert(history[1].failures.some(f=>f.reason==='CONTACT_HTTP_403'));assert(history[1].retry_eligible_at);assert.equal(new Set(reads).size,reads.length);
 });
 test('fallback search failure for one publication cannot stop a later verified publication',async()=>{
