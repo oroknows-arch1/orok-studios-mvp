@@ -353,7 +353,7 @@ test('production assessor may retain a literal narrower fact with a testable unr
 test('bounded Colombia question completion still needs independent source check',async()=>{
  const claim='ANI records the official start of works, 17.96 km scope, COP1.9 trillion construction investment, 66-month duration and environmental adaptations; faithful English summary by EMRADAR.';
  const official='https://ani.example/works';
- const body='The authority announced the start of works and described the approved construction programme. Monthly certified progress and wetland monitoring results will be published in later reports.';
+ const body='The authority announced the start of works and described the approved construction programme. Monthly certified progress and wetland monitoring results will be published in later reports. The announcement lists the road corridor, bus priority works and drainage as parts of the programme. Its completion date remains a future target, not a confirmed delivery outcome.';
  const article={title:'Official release',text:body,sha256:'a'.repeat(64)};
  const document=normalizePublishedEvidence({records:[record('colombia-accesos-norte-ii-construction-2026',[source(official,claim)])]});
  let repairs=0,checks=0;
