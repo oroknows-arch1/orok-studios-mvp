@@ -47,7 +47,8 @@ export function createPreparationRun({store,verifyClaims,discover,write,renderVi
     if(recoverRecordIds?.length&&JSON.stringify(recoveryIds(current))===JSON.stringify(recoverRecordIds)){
      current.claim_gate_history=[...(current.claim_gate_history??[]),{attempt:current.claim_gate_attempt,document:current.preparation_input.document}].slice(-3);
      current.claim_gate_previous={attempt:current.claim_gate_attempt,document:current.preparation_input.document};
-     current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision,policy_revision:'provider-diagnostics-v2',recovery_record_ids:recoverRecordIds};
+     const policyRevision=current.claim_gate_attempt?.policy_revision==='provider-diagnostics-v2'?'credit-restored-v3':'provider-diagnostics-v2';
+     current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision,policy_revision:policyRevision,recovery_record_ids:recoverRecordIds};
     }else if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision};
     return current;
    });

@@ -7,9 +7,14 @@ const sourceReaderRevision='article-body-blocks-v2';
 function recoverableSourceRecords(state){
  if(state?.phase!=='SCAN_VERIFIED'||state.claim_gate_attempt?.status!=='NO_VERIFIED_ANGLE')return null;
  const revision=state.claim_gate_attempt?.policy_revision;
- if(revision==='provider-diagnostics-v2'||(state.claim_gate_previous&&revision!=='investigative-question-v1'))return null;
+ const creditRecovery=revision==='provider-diagnostics-v2'&&
+  state.id==='v3-24f5f995f02b72406c040e3f4ca5189f'&&
+  state.scan?.artifact_sha256==='709ce5ead1e5b34a190db9a31835ab58d9c0a2fa1a5bcd90c19489171759cff5';
+ if(revision==='credit-restored-v3'||(state.claim_gate_previous&&revision!=='investigative-question-v1'&&!creditRecovery))return null;
  const document=state.preparation_input?.document;
  if(document?.evidence?.length!==0)return null;
+ if(creditRecovery)return (document.claim_audit??[]).filter(item=>item.status==='EVIDENCE_CHECK_FAILED'&&
+  item.provider_code==='credit_balance_exhausted').map(item=>item.record_id);
  const statuses=revision==='investigative-question-v1'?['EVIDENCE_CHECK_FAILED']:
   ['SOURCE_INACCESSIBLE','NO_SUPPORTED_SIGNIFICANT_ANGLE','EVIDENCE_CHECK_FAILED'];
  return (document.claim_audit??[]).filter(item=>statuses.includes(item.status)).map(item=>item.record_id);
