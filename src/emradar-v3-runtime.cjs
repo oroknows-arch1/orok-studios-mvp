@@ -453,6 +453,20 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
        await service.store.mutate(campaignId,current=>({...current,owner_investigation_notified_at:current.owner_investigation_notified_at??new Date().toISOString()}));
        return {...prepared,investigation_review:'EXISTING',snapshotDate:selected.snapshotDate};
       }
+      // The previous phase verifier could reject the owner invitation BEFORE
+      // SMTP reservation. Zero reservation rows prove that no SMTP send began.
+      // Repair that single pre-send ambiguity without blind resends or a new
+      // campaign. A repeated failure for this revision remains held.
+      if(priorReview.status==='NOTIFICATION_AMBIGUOUS'&&priorReview.revision_id!==
+         'held-investigation-access-v1'){
+       const reservation=await pool.query(`SELECT 1 FROM v3_owner_notification_reservations
+        WHERE campaign_id LIKE $1 LIMIT 1`,[campaignId+':review:%']);
+       if(reservation.rows.length===0){
+        const invitation=await service.workflow.issue(campaignId,{revisionId:'held-investigation-access-v1'});
+        await service.store.mutate(campaignId,current=>({...current,owner_investigation_notified_at:new Date().toISOString()}));
+        return {...prepared,investigation_review:invitation.status,recovery:'NO_SMTP_RESERVATION',snapshotDate:selected.snapshotDate};
+       }
+      }
       return {...prepared,investigation_review:'NOTIFICATION_AMBIGUOUS',snapshotDate:selected.snapshotDate};
      }
     }
