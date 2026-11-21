@@ -88,6 +88,23 @@ async function refresh(){
  main.replaceChildren();
  const automatic=view.automaticVerification;
  if(automatic){const summary=document.createElement('article');summary.append(text('h2','Automatic proposal verification'),text('p',automatic.status+' · '+automatic.verified+' verified · '+automatic.investigation_required+' requiring investigation · '+automatic.investigations_used+' of '+automatic.max_investigations+' investigation calls used · '+automatic.reused_successes+' successful results reused'));main.append(summary);}
+ const investigation=view.investigation??[];
+ if(investigation.length){
+  const register=document.createElement('article');
+  const admitted=investigation.filter(item=>item.admitted).length;
+  register.append(text('h2','Original scan investigation · '+admitted+' of '+investigation.length+' admitted'),
+   text('p','Research candidates are shown for owner triage only. Held discoveries are not approved proposals and cannot be sent to publishers or posted on X.'));
+  const pending=document.createElement('details');
+  pending.open=true;pending.append(text('summary','Show all '+investigation.length+' discovery outcomes'));
+  const list=document.createElement('ul');
+  for(const item of investigation){
+   const label=item.id.replace(/-20[0-9]{2}(?:-[0-9]+)?$/,'').replace(/-/g,' ');
+   const detail=item.admitted?'Admitted for proposal preparation':
+    'Held for investigation ('+item.status+')';
+   list.append(text('li',label+' — '+detail+' · '+item.supported_claims+' supported claim(s), '+item.unresolved_claims+' unresolved'));
+  }
+  pending.append(list);register.append(pending);main.append(register);
+ }
  const counts={approved:0,rejected:0,undecided:0};
  for(const entry of view.entries){
   if(entry.decision?.decision==='APPROVE')counts.approved++;
