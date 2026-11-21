@@ -6,7 +6,7 @@ import claimPolicy from '../vendor/emradar-v3-authoritative/src/claim-evidence.c
 import {normalizePublishedEvidence} from '../vendor/emradar-v3/src/scan-evidence-adapter.js';
 
 const scans=['2026-10-18','2026-11-18'];
-const fixture=date=>normalizePublishedEvidence(JSON.parse(readFileSync(new URL(`../../emerging-markets-radar/data/checkpoints/discovery-${date}.json`,import.meta.url))));
+const fixture=date=>normalizePublishedEvidence(JSON.parse(readFileSync(new URL(`./fixtures/discovery-${date}.json`,import.meta.url))));
 const compact=value=>String(value??'').replace(/\s+/g,' ').trim();
 
 test('historical scan records retain causal structure using simulated downloaded passages and zero search',async()=>{
