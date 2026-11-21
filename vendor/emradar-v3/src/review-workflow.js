@@ -2,7 +2,7 @@ import {isReviewPhase} from './contracts.js';
 import {proposalBinding} from './proposal-verification.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {randomUUID,createHash,timingSafeEqual} from 'node:crypto';
-import {issueReviewAccess,consumeReviewAccess} from './review-access.js';
+import {issueReviewAccess,consumeReviewAccess,matchesReviewAccess} from './review-access.js';
 import {createOwnerSession,validateOwnerSession,OWNER_SESSION_TTL_MS} from './owner-sessions.js';
 import {validateNotificationReceipt} from './owner-notification.js';
 
@@ -32,11 +32,13 @@ export class ReviewWorkflow {
    if(['ISSUED','NOTIFICATION_AMBIGUOUS'].includes(existing.status))throw Error('REVIEW_NOTIFICATION_AMBIGUOUS');
   }
   const replaceForRevision=Boolean(revisionId&&existing?.revision_id!==revisionId);
-  if(existing && !replaceForRevision && !['EXPIRED','CONSUMED'].includes(existing.status) && existing.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
+  if(existing && !replaceForRevision && ['NOTIFIED','CONSUMED'].includes(existing.status))return {campaignId,status:'NOTIFIED',existing:true};
+  if(existing && !replaceForRevision && ['ISSUED','NOTIFICATION_AMBIGUOUS'].includes(existing.status))throw Error('REVIEW_NOTIFICATION_AMBIGUOUS');
   const {token,record}=issueReviewAccess({campaignId,now});
   await this.update(key,old=>{
    if(old?.revision_id===revisionId&&revisionId&&['NOTIFIED','CONSUMED'].includes(old.status))throw Error('REVIEW_REVISION_ALREADY_NOTIFIED');
-   if(old && !replaceForRevision && !['EXPIRED','CONSUMED'].includes(old.status) && old.expires_at>now) throw Error('REVIEW_LINK_ALREADY_ISSUED');
+   if(old && !replaceForRevision && ['NOTIFIED','CONSUMED'].includes(old.status))throw Error('REVIEW_LINK_ALREADY_ISSUED');
+   if(old && !replaceForRevision && ['ISSUED','NOTIFICATION_AMBIGUOUS'].includes(old.status))throw Error('REVIEW_NOTIFICATION_AMBIGUOUS');
    return {...record,status:'ISSUED',revision_id:revisionId,owner_session:null,notification_id:randomUUID(),previous_reviews:old?[...(old.previous_reviews??[]),Object.fromEntries(Object.entries(old).filter(([key])=>key!=='previous_reviews'))]:[]};
   });
   const link=this.baseUrl+'/review/access#token='+encodeURIComponent(token)+'&campaign='+encodeURIComponent(campaignId);
@@ -58,8 +60,16 @@ export class ReviewWorkflow {
   const sessionId=randomUUID();
   await this.update(key,current=>{
    if(!current || current.campaign_id!==campaignId) throw Error('REVIEW_ACCESS_DENIED');
-   const consumed=consumeReviewAccess(current,token,{now});
-   return {...consumed,status:'CONSUMED',owner_session:{id:sessionId,...record}};
+   if(!matchesReviewAccess(current,token))throw Error('REVIEW_ACCESS_DENIED');
+   // Reusable invitation: a 30-day secure browser session may expire, but the
+   // email link itself stays usable. Review content always comes from current
+   // durable campaign state, preventing approval of stale asset fingerprints.
+   const consumed=consumeReviewAccess(
+    matchesReviewAccess({...current,previous_reviews:[]},token)?current:
+     current.previous_reviews.find(previous=>previous.campaign_id===campaignId&&matchesReviewAccess(previous,token)),
+    token,{now});
+   return {...current,consumed_at:current.consumed_at??consumed.consumed_at,
+    status:'CONSUMED',owner_session:{id:sessionId,...record}};
   });
   return {sessionId,secret,expiresAt:record.expires_at};
  }
@@ -75,10 +85,11 @@ export class ReviewWorkflow {
   const current=(await this.adapter.read('review:'+campaignId))?.value;
   const equalHash=(expected,secret)=>{if(typeof expected!=='string'||typeof secret!=='string')return false;const a=Buffer.from(expected,'hex'),b=createHash('sha256').update(secret).digest();return a.length===b.length&&timingSafeEqual(a,b);};
   const session=current?.owner_session;
-  const proof=equalHash(current?.token_hash,token)||(session?.id===sessionId&&session?.revoked_at===null&&equalHash(session?.secret_hash,sessionSecret));
+  const proof=matchesReviewAccess(current,token)||(session?.id===sessionId&&session?.revoked_at===null&&equalHash(session?.secret_hash,sessionSecret));
   // This proof permits an email to the fixed owner only; it never authenticates a view or release.
   if(!proof)throw Error('REVIEW_ACCESS_DENIED');
-  if(current&&!['CONSUMED','EXPIRED'].includes(current.status)&&current.expires_at>this.clock())return {status:'EXISTING_INVITATION'};
+  if(matchesReviewAccess(current,token))return {status:'EXISTING_INVITATION'};
+  if(current&&['NOTIFIED','CONSUMED'].includes(current.status))return {status:'EXISTING_INVITATION'};
   // Fixed owner recipient; one durable request per campaign/day, never automatic resend.
   const key='review-access-request:'+campaignId+':'+new Date(this.clock()).toISOString().slice(0,10);
   if(!await this.adapter.compareAndSwap(key,null,{status:'REQUESTED',requested_at:this.clock()}))throw Error('REVIEW_ACCESS_REQUEST_ALREADY_RECORDED');
