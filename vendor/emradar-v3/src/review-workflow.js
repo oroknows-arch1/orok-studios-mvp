@@ -13,6 +13,13 @@ const isOwnerInvestigation=campaign=>campaign?.phase==='SCAN_VERIFIED'&&
  [campaign?.preparation_input?.document?.claim_audit,campaign?.claim_gate_previous?.document?.claim_audit]
   .some(audit=>Array.isArray(audit)&&audit.length>0);
 const canOpenOwnerReview=campaign=>isReviewPhase(campaign?.phase)||isOwnerInvestigation(campaign);
+const ownerResearchCandidateIds=campaign=>new Set([
+ ...(campaign?.owner_investigation_records??[]).map(item=>item.id),
+ ...(campaign?.claim_gate_history??[]).flatMap(item=>item?.document?.claim_audit??[]).map(item=>item.record_id),
+ ...(campaign?.claim_gate_previous?.document?.claim_audit??[]).map(item=>item.record_id),
+ ...(campaign?.preparation_input?.document?.claim_audit??[]).map(item=>item.record_id),
+ ...(campaign?.preparation_input?.document?.records??[]).map(item=>item.id)
+].filter(id=>typeof id==='string'&&id.length>0));
 
 export class ReviewWorkflow {
  constructor({store,adapter,notify,baseUrl,verifyRecipient,verifier=null,clock=()=>Date.now()}) {
@@ -174,12 +181,12 @@ export class ReviewWorkflow {
    throw Error('INVALID_INVESTIGATION_TRIAGE');
   const state=(await this.adapter.read(campaignId))?.value;
   if(!canOpenOwnerReview(state))throw Error('REVIEW_NOT_OPEN');
-  const candidates=new Set((state.owner_investigation_records??[]).map(item=>item.id));
+  const candidates=ownerResearchCandidateIds(state);
   if(!candidates.has(recordId))throw Error('UNKNOWN_INVESTIGATION_RECORD');
   // Owner triage selects research priority, NEVER overrides verified evidence,
   // creates a publication asset, or grants X/email release permission.
   await this.store.mutate(campaignId,current=>{
-   if(!canOpenOwnerReview(current)||(current.owner_investigation_records??[]).every(item=>item.id!==recordId))
+   if(!canOpenOwnerReview(current)||!ownerResearchCandidateIds(current).has(recordId))
     throw Error('STALE_INVESTIGATION_RECORD');
    const prior=current.owner_investigation_triage?.[recordId];
    current.owner_investigation_triage??={};
