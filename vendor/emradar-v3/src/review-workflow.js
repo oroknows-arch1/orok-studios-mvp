@@ -128,7 +128,23 @@ export class ReviewWorkflow {
   const actionable=described.filter(entry=>entry.asset.review_status!=='NEEDS_REVISION'&&entry.recipient_ready!==false);
   const actionableIds=new Set(actionable.map(entry=>entry.asset.destination_id));
   const groups=Object.values(campaign.email_groups??{}).map(group=>({...group,destination_ids:group.destination_ids.filter(id=>actionableIds.has(id)),approval:campaign.group_approvals?.[group.id]??null})).filter(group=>group.destination_ids.length);
-  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:actionable,internal_incomplete_count:described.length-actionable.length,history,groups};
+  // Owner-only, read-only visibility into the original scan investigation. Held
+  // candidates are NOT publication assets and never receive an approval control.
+  // Historical retry audits are preserved so a one-record recovery does not
+  // erase the seven other discoveries from the owner's view.
+  const audits=[...(campaign.claim_gate_history??[]).map(item=>item?.document?.claim_audit),campaign.claim_gate_previous?.document?.claim_audit,campaign.preparation_input?.document?.claim_audit].filter(Array.isArray);
+  const investigationById=new Map();
+  for(const audit of audits)for(const item of audit){
+   if(typeof item?.record_id!=='string'||!item.record_id)continue;
+   investigationById.set(item.record_id,{
+    id:item.record_id,status:item.status??'UNRESOLVED',
+    supported_claims:(item.claims??[]).filter(claim=>claim.status==='SUPPORTED'||claim.status==='PARTIAL_SUPPORTED').length,
+    unresolved_claims:(item.claims??[]).filter(claim=>claim.status!=='SUPPORTED'&&claim.status!=='PARTIAL_SUPPORTED').length
+   });
+  }
+  const admitted=new Set(campaign.preparation_input?.document?.records?.map(record=>record.id)??[]);
+  const investigation=[...investigationById.values()].map(item=>({...item,admitted:admitted.has(item.id)}));
+  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:actionable,internal_incomplete_count:described.length-actionable.length,history,groups,investigation};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
