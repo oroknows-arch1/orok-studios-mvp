@@ -90,3 +90,16 @@ test('restart copy uses the checked angle verbatim and rejects missing claim lin
  assert.throws(()=>writeCheckedRestartDraft({...fixture,destination:{...destination,evidence:{ids:['different']}}}),/V3_CHECKED_ANGLE_REQUIRED/);
  assert.throws(()=>writeCheckedRestartDraft({...fixture,destination,document:{...document,records:[]}}),/V3_CHECKED_CLAIM_EVIDENCE_REQUIRED/);
 });
+
+
+test('question-led campaign retries only provider failures once without revisiting inaccessible sources',()=>{
+ const {recoverableSourceRecords}=require('../src/emradar-v3-clean-restart.cjs');
+ const state={phase:'SCAN_VERIFIED',claim_gate_previous:{attempt:{status:'NO_VERIFIED_ANGLE'}},
+  claim_gate_attempt:{status:'NO_VERIFIED_ANGLE',policy_revision:'investigative-question-v1'},
+  preparation_input:{document:{evidence:[],claim_audit:[
+   {record_id:'failed',status:'EVIDENCE_CHECK_FAILED'},
+   {record_id:'blocked',status:'SOURCE_INACCESSIBLE'},
+   {record_id:'weak',status:'NO_SUPPORTED_SIGNIFICANT_ANGLE'}]}}};
+ assert.deepEqual(recoverableSourceRecords(state),['failed']);
+ assert.equal(recoverableSourceRecords({...state,claim_gate_attempt:{...state.claim_gate_attempt,policy_revision:'provider-diagnostics-v2'}}),null);
+});
