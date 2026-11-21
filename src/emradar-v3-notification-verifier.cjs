@@ -22,7 +22,7 @@ function createV3NotificationVerifier({pool,reviewOrigin,clock=()=>Date.now()}={
   const {rows}=await pool.query('SELECT campaign_id,payload FROM v3_campaign_state WHERE campaign_id=ANY($1::text[])',[[id,'review:'+id]]);
   const records=new Map(rows.map(row=>[row.campaign_id,row.payload]));
   const campaign=records.get(id),review=records.get('review:'+id);
-  if(campaign?.phase!=='PUBLICATION_REVIEW'||review?.campaign_id!==id||!['ISSUED','NOTIFICATION_AMBIGUOUS'].includes(review.status)||review.consumed_at!==null||!Number.isFinite(review.expires_at)||clock()>=review.expires_at)throw Error('V3_DURABLE_NOTIFICATION_REQUIRED');
+  if(campaign?.phase!=='PUBLICATION_REVIEW'||review?.campaign_id!==id||!['ISSUED','NOTIFICATION_AMBIGUOUS'].includes(review.status)||review.consumed_at!==null||(review.expires_at!==null&&(!Number.isFinite(review.expires_at)||clock()>=review.expires_at)))throw Error('V3_DURABLE_NOTIFICATION_REQUIRED');
   const a=Buffer.from(review.token_hash||'','hex'),b=Buffer.from(digest(token),'hex');
   if(a.length!==32||!crypto.timingSafeEqual(a,b))throw Error('V3_PRIVATE_LINK_MISMATCH');
   return true;
