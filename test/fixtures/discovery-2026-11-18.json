@@ -1,0 +1,959 @@
+{
+  "version": 49,
+  "snapshot_date": "2026-11-18",
+  "started_at": "2026-11-18T09:26:14+11:00",
+  "completed_at": "2026-11-18T09:27:39+11:00",
+  "timezone": "Australia/Sydney",
+  "publication_state": "PUBLISHED",
+  "contract": "causal-chain-evolution-v1",
+  "rule": "Fresh global blank-table discovery; every status re-earned from current-run evidence.",
+  "run_mode": "fresh_global_blank_table",
+  "scope_note": "Fresh on-time 18 November Sydney scan. The candidate table began blank; the 17 November artifact was consulted only after today's candidates existed, solely for chain evolution and absence reporting.",
+  "scan_report": "The 18 November scan finds development finance moving deeper into operating systems rather than stopping at capital commitments. **CONFIRMED:** Türkiye signed the [TARGET agrifood platform](https://tkdk.gov.tr/Haber/tkdk-tarafindan-uygulanacak-target-projesinin-kredi-anlasmasi-cop31-de-imzalandi-13211?lang=tr), whose first US$750 million phase is designed to recycle repayments into a decade-long finance channel. Timor-Leste's [72 MW solar-plus-storage project](https://timor-leste.gov.tl/?lang=en&p=50692) is now connected to an IFC/IDA-PSW/MIGA finance stack, turning an earlier groundbreaking into a transferable small-island project model. Pakistan's [US$500 million pension reform loan](https://radio.gov.pk/17-11-2026/adb-approves-500m-loan-for-pakistans-pension-reforms) institutionalises a defined-contribution system for new federal employees while legacy liabilities remain. **FORMING:** AfDB's [US$102 million Sterling Bank package](https://www.afdb.org/en/news-and-events/press-releases/nigeria-afdb-provides-us102-million-through-98641) layers SME credit, sustainable finance, concessional farming support and trade guarantees, but is approved rather than disbursed. Türkiye's industrial platform is organising plant-level decarbonisation in hard-to-abate export sectors; the first financed conversions are still missing. A new textile fund links IFC, GEF resources, technical assistance and global buyers, but its size, brands and first factories remain undisclosed. **INVESTIGATE:** the World Bank Group's [regulated stablecoin exploration](https://www.worldbank.org/en/news/press-release/2026/11/17/world-bank-group-explores-regulated-stablecoins-to-modernize-payments-redirect-res) could create a 24/7 settlement layer for development funds, but no country pilot has executed. **UNKNOWN:** ADB's 17 November calendar contained two additional policy programmes whose approval outcomes were not resolved; no approval is inferred from scheduling. The common bottleneck is now operational identity: who administers contributions, originates loans, settles payments, selects factories and verifies real-world delivery.",
+  "scan_statistics": {
+    "candidates_reviewed": 30,
+    "displayed": 8,
+    "confirmed": 3,
+    "forming": 3,
+    "investigate": 1,
+    "unknown": 1,
+    "discarded_or_not_promoted": 22,
+    "regions_represented": 6,
+    "primary_or_official_sources": 13,
+    "local_language_sources": 2
+  },
+  "candidate_table": [
+    {
+      "candidate": "Türkiye TARGET agrifood revolving finance",
+      "classification": "CONFIRMED",
+      "promoted": true
+    },
+    {
+      "candidate": "Timor-Leste solar and battery finance stack",
+      "classification": "CONFIRMED",
+      "promoted": true
+    },
+    {
+      "candidate": "Pakistan federal pension conversion",
+      "classification": "CONFIRMED",
+      "promoted": true
+    },
+    {
+      "candidate": "Nigeria Sterling multi-window finance",
+      "classification": "FORMING",
+      "promoted": true
+    },
+    {
+      "candidate": "WBG regulated stablecoin settlement exploration",
+      "classification": "INVESTIGATE",
+      "promoted": true
+    },
+    {
+      "candidate": "Türkiye industrial decarbonisation platform",
+      "classification": "FORMING",
+      "promoted": true
+    },
+    {
+      "candidate": "Global textile clean-production blended fund",
+      "classification": "FORMING",
+      "promoted": true
+    },
+    {
+      "candidate": "ADB unresolved 17 November policy programs",
+      "classification": "UNKNOWN",
+      "promoted": true
+    },
+    {
+      "candidate": "IFC Africa fourteen-project package",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "RAMP distributed-energy receivables warehouse",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "South Africa open infrastructure reform",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Brazil AmpliAR airport bundling",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Transnordestina FDNE allocation",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "IFC trade synthetic securitisation",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Türkiye climate policy finance",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Senegal universal electricity commitments",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Pakistan contingent disaster finance",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "ADB Korea AI fund",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "ASEAN river and digital finance initiatives",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "QNB Türkiye sustainability bond",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Brazil regional AFD funds",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "AfDF-17 Japan loan",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Bolivia reform budget support",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "IDB Honduras road connectivity",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Belize MSME guarantee fund",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "EBRD Azerbaijan GEFF board item",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "CAF El Niño preparedness facility",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Timor-Leste branch roads and Baucau water approvals",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "AIIB GGGI cooperation",
+      "classification": "DISCARD",
+      "promoted": false
+    },
+    {
+      "candidate": "WBG COP31 aggregate mobilisation",
+      "classification": "FORMING",
+      "promoted": false
+    }
+  ],
+  "records": [
+    {
+      "id": "turkiye-target-agrifood-revolving-finance-2026",
+      "theme": "Revolving agrifood transformation finance",
+      "location": "Türkiye",
+      "status": "CONFIRMED",
+      "new_to_radar": true,
+      "why_surfaced": "A signed first-phase US$750 million facility is designed to recycle repayments and reach US$5.3 billion of financing volume over ten years.",
+      "causal_chain": {
+        "world_change": "Agricultural development finance is shifting from one-off loans toward revolving value-chain platforms.",
+        "pressure": "Farmers and food processors need longer-term capital, stronger buyer links and lower-emission production.",
+        "bottleneck_or_scarcity": "A durable origination and recycling mechanism connecting farms, processors and markets.",
+        "formation": "A World Bank-backed revolving agrifood finance platform linking rural investment to employment and market access.",
+        "industries": [
+          "agriculture",
+          "food processing",
+          "rural finance",
+          "logistics"
+        ],
+        "connected_companies_and_tickers": [
+          "Listed Turkish agrifood and bank exposures are contextual only; no allocation is disclosed."
+        ],
+        "consequences": "If repayments recycle as designed, the mechanism could outgrow its initial sovereign facility and create a decade-long investment channel."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-12",
+          "source": "Türkiye Agriculture and Rural Development Support Institution (TKDK)",
+          "language": "Turkish",
+          "fact": "The TARGET loan agreement was signed at COP31; phase one provides US$750 million, later phases target US$2 billion, and recycling aims at US$5.3 billion over ten years.",
+          "url": "https://tkdk.gov.tr/Haber/tkdk-tarafindan-uygulanacak-target-projesinin-kredi-anlasmasi-cop31-de-imzalandi-13211?lang=tr"
+        },
+        {
+          "date": "2026-11-17",
+          "source": "World Bank Group",
+          "language": "English",
+          "fact": "The World Bank Group said the Türkiye agriculture operation is expected to benefit 225,000 farmers and support more than 100,000 job equivalents.",
+          "url": "https://www.worldbank.org/en/news/press-release/2026/11/17/world-bank-group-puts-jobs-at-the-center-of-climate-investment-at-cop31"
+        }
+      ],
+      "contradictions": [
+        "The ten-year US$5.3 billion figure depends on repayment and relending performance.",
+        "Sub-borrower selection and realised commercial cofinance are not yet disclosed."
+      ],
+      "missing_evidence": [
+        "First disbursement and implementing rules",
+        "Eligibility and pricing for farms and processors",
+        "Actual repayment-recycling performance"
+      ],
+      "what_to_check_next": "Track the first TKDK calls, intermediary terms and disbursements.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Which value-chain participants qualify first?",
+          "Does repayment recycling deliver the projected multiplier?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "CONFIRMED",
+        "what_changed": "The current blank-table scan independently surfaced this mechanism from fresh official evidence.",
+        "why_state_changed": "The signal was not promoted in the preceding dated scan.",
+        "strengthening_evidence": [
+          "2026-11-12: The TARGET loan agreement was signed at COP31; phase one provides US$750 million, later phases target US$2 billion, and recycling aims at US$5.3 billion over ten years.",
+          "2026-11-17: The World Bank Group said the Türkiye agriculture operation is expected to benefit 225,000 farmers and support more than 100,000 job equivalents."
+        ],
+        "weakening_evidence": [
+          "The ten-year US$5.3 billion figure depends on repayment and relending performance.",
+          "Sub-borrower selection and realised commercial cofinance are not yet disclosed."
+        ],
+        "break_conditions": [
+          "The announced mechanism does not become executable finance, regulation, procurement or operating capacity.",
+          "Named commitments are cancelled, materially reduced or remain unused beyond their stated horizon."
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "First disbursement and implementing rules",
+          "Eligibility and pricing for farms and processors",
+          "Actual repayment-recycling performance"
+        ],
+        "new_links": [
+          "agriculture",
+          "food processing",
+          "rural finance",
+          "logistics"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "timor-leste-solar-storage-finance-2026",
+      "theme": "Small-island solar and storage transition",
+      "location": "Timor-Leste",
+      "status": "CONFIRMED",
+      "new_to_radar": true,
+      "why_surfaced": "The World Bank Group now identifies the finance stack behind a 72 MW solar-plus-storage project already under construction.",
+      "causal_chain": {
+        "world_change": "A fuel-import-dependent small island is moving utility-scale solar and storage into physical construction using blended finance and guarantees.",
+        "pressure": "Imported generation fuel raises fiscal costs and energy-security risk.",
+        "bottleneck_or_scarcity": "Bankable IPP contracts, storage integration, sovereign-risk mitigation and grid controls.",
+        "formation": "A replicable blended-finance solar-plus-storage model for small island systems.",
+        "industries": [
+          "solar generation",
+          "battery storage",
+          "grid controls",
+          "project finance"
+        ],
+        "connected_companies_and_tickers": [
+          "Manatuto Renewables Power S.A. (unlisted)"
+        ],
+        "consequences": "If commissioned, the plant could reduce annual energy costs by an estimated 1.5%–2.0% of GDP and provide a template for other islands."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-17",
+          "source": "World Bank Group",
+          "language": "English",
+          "fact": "IFC financing, IDA-PSW support and a MIGA guarantee back a Timor-Leste solar plant with battery storage; expected annual savings are 1.5%–2.0% of GDP.",
+          "url": "https://www.worldbank.org/en/news/press-release/2026/11/17/world-bank-group-puts-jobs-at-the-center-of-climate-investment-at-cop31"
+        },
+        {
+          "date": "2026-07-24",
+          "source": "Government of Timor-Leste",
+          "language": "English",
+          "fact": "Groundbreaking occurred for a 72 MW solar plant with 36 MWh battery storage and SCADA grid integration at Laleia.",
+          "url": "https://timor-leste.gov.tl/?lang=en&p=50692"
+        }
+      ],
+      "contradictions": [
+        "Groundbreaking does not prove completion, grid acceptance or operating savings.",
+        "The financing announcement does not publish the full PPA or guarantee terms."
+      ],
+      "missing_evidence": [
+        "Construction milestones and EPC performance",
+        "PPA tariff and currency structure",
+        "Grid integration and commissioning evidence"
+      ],
+      "what_to_check_next": "Track construction, battery delivery, grid tests and commercial operation.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Are projected savings realised after PPA and grid costs?",
+          "Can the structure transfer to other Pacific islands?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "CONFIRMED",
+        "what_changed": "The current blank-table scan independently surfaced this mechanism from fresh official evidence.",
+        "why_state_changed": "The signal was not promoted in the preceding dated scan.",
+        "strengthening_evidence": [
+          "2026-11-17: IFC financing, IDA-PSW support and a MIGA guarantee back a Timor-Leste solar plant with battery storage; expected annual savings are 1.5%–2.0% of GDP.",
+          "2026-07-24: Groundbreaking occurred for a 72 MW solar plant with 36 MWh battery storage and SCADA grid integration at Laleia."
+        ],
+        "weakening_evidence": [
+          "Groundbreaking does not prove completion, grid acceptance or operating savings.",
+          "The financing announcement does not publish the full PPA or guarantee terms."
+        ],
+        "break_conditions": [
+          "The announced mechanism does not become executable finance, regulation, procurement or operating capacity.",
+          "Named commitments are cancelled, materially reduced or remain unused beyond their stated horizon."
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Construction milestones and EPC performance",
+          "PPA tariff and currency structure",
+          "Grid integration and commissioning evidence"
+        ],
+        "new_links": [
+          "solar generation",
+          "battery storage",
+          "grid controls",
+          "project finance"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "pakistan-federal-pension-conversion-2026",
+      "theme": "Public pension system conversion",
+      "location": "Pakistan",
+      "status": "CONFIRMED",
+      "new_to_radar": true,
+      "why_surfaced": "ADB approved a US$500 million results-based loan tied to institutionalising a defined-contribution system.",
+      "causal_chain": {
+        "world_change": "Pakistan is moving new federal civil employees from an unfunded defined-benefit model toward defined contributions and digital pension management.",
+        "pressure": "Federal pension spending has risen nearly fivefold since FY2016 and exceeds PKR1 trillion annually.",
+        "bottleneck_or_scarcity": "Reliable contribution administration, oversight, digital records and beneficiary literacy.",
+        "formation": "A results-based pension-administration and fund-management market backed by fiscal reform finance.",
+        "industries": [
+          "pension administration",
+          "asset management",
+          "financial technology",
+          "public finance"
+        ],
+        "connected_companies_and_tickers": [
+          "Licensed Pakistani pension fund managers — allocation not identified"
+        ],
+        "consequences": "Execution could create sustained institutional savings flows, but transition costs and governance determine fiscal relief."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-17",
+          "source": "Asian Development Bank",
+          "language": "English",
+          "fact": "ADB approved a US$500 million results-based loan for the first phase of Pakistan's Pension Reform Implementation Plan.",
+          "url": "https://www.adb.org/countries/pakistan/main"
+        },
+        {
+          "date": "2026-11-17",
+          "source": "Radio Pakistan",
+          "language": "English",
+          "fact": "Pakistan's state broadcaster confirmed the approval and the defined-contribution transition for federal civil employees appointed from July 2024.",
+          "url": "https://radio.gov.pk/17-11-2026/adb-approves-500m-loan-for-pakistans-pension-reforms"
+        }
+      ],
+      "contradictions": [
+        "A new defined-contribution scheme does not immediately remove legacy liabilities.",
+        "Fund-manager performance, fees and contribution compliance are not yet evidenced."
+      ],
+      "missing_evidence": [
+        "Disbursement-linked indicators",
+        "Contribution and asset-allocation rules",
+        "Legacy-liability transition path"
+      ],
+      "what_to_check_next": "Track DLI achievement, fund flows and audited pension-system reporting.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Which managers receive flows and at what fees?",
+          "How large are transition costs before fiscal relief appears?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "CONFIRMED",
+        "what_changed": "The current blank-table scan independently surfaced this mechanism from fresh official evidence.",
+        "why_state_changed": "The signal was not promoted in the preceding dated scan.",
+        "strengthening_evidence": [
+          "2026-11-17: ADB approved a US$500 million results-based loan for the first phase of Pakistan's Pension Reform Implementation Plan.",
+          "2026-11-17: Pakistan's state broadcaster confirmed the approval and the defined-contribution transition for federal civil employees appointed from July 2024."
+        ],
+        "weakening_evidence": [
+          "A new defined-contribution scheme does not immediately remove legacy liabilities.",
+          "Fund-manager performance, fees and contribution compliance are not yet evidenced."
+        ],
+        "break_conditions": [
+          "The announced mechanism does not become executable finance, regulation, procurement or operating capacity.",
+          "Named commitments are cancelled, materially reduced or remain unused beyond their stated horizon."
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Disbursement-linked indicators",
+          "Contribution and asset-allocation rules",
+          "Legacy-liability transition path"
+        ],
+        "new_links": [
+          "pension administration",
+          "asset management",
+          "financial technology",
+          "public finance"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "nigeria-sterling-multi-window-finance-2026",
+      "theme": "Multi-window productive finance",
+      "location": "Nigeria",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "AfDB approved a package combining long-term credit, sustainable lending, concessional agricultural finance and trade guarantees through one bank.",
+      "causal_chain": {
+        "world_change": "Development finance is layering multiple risk and tenor instruments through domestic banks rather than using a single generic credit line.",
+        "pressure": "Nigerian SMEs and displaced farming communities face expensive short-term capital, trade constraints and climate insecurity.",
+        "bottleneck_or_scarcity": "Domestic underwriting and last-mile distribution to productive firms and vulnerable farmers.",
+        "formation": "A multi-window bank-intermediated finance platform spanning SMEs, green projects, trade and microlending.",
+        "industries": [
+          "banking",
+          "SME finance",
+          "agriculture",
+          "trade finance",
+          "renewable energy"
+        ],
+        "connected_companies_and_tickers": [
+          "Sterling Financial Holdings (NGX: STERLINGNG)"
+        ],
+        "consequences": "The package could support 200 businesses, 5,000 farmers and up to US$150 million of trade, but remains an approval until signing and disbursement."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-17",
+          "source": "African Development Bank",
+          "language": "English",
+          "fact": "AfDB approved US$102 million comprising a US$50 million line, US$20 million sustainable loan, US$2 million concessional loan and US$30 million trade guarantee.",
+          "url": "https://www.afdb.org/en/news-and-events/press-releases/nigeria-afdb-provides-us102-million-through-98641"
+        },
+        {
+          "date": "2026-11-17",
+          "source": "Punch Nigeria",
+          "language": "English",
+          "fact": "Nigerian reporting independently confirmed the package structure and intended support for SMEs and farmers.",
+          "url": "https://punchng.com/afdb-approves-102m-financing-for-nigerian-smes-farmers/"
+        }
+      ],
+      "contradictions": [
+        "Board approval is not signing or disbursement.",
+        "Outcome targets depend on Sterling's origination and monitoring."
+      ],
+      "missing_evidence": [
+        "Signed facility documents",
+        "Pricing and currency terms",
+        "Named sub-borrowers and realised lending"
+      ],
+      "what_to_check_next": "Track signing, first disbursement and portfolio reporting.",
+      "valuation_entry_research": {
+        "listed_exposure": [
+          "NGX:STERLINGNG"
+        ],
+        "questions": [
+          "Does the blended package lower borrower pricing?",
+          "Which window produces measurable additional lending?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "FORMING",
+        "what_changed": "The current blank-table scan independently surfaced this mechanism from fresh official evidence.",
+        "why_state_changed": "The signal was not promoted in the preceding dated scan.",
+        "strengthening_evidence": [
+          "2026-11-17: AfDB approved US$102 million comprising a US$50 million line, US$20 million sustainable loan, US$2 million concessional loan and US$30 million trade guarantee.",
+          "2026-11-17: Nigerian reporting independently confirmed the package structure and intended support for SMEs and farmers."
+        ],
+        "weakening_evidence": [
+          "Board approval is not signing or disbursement.",
+          "Outcome targets depend on Sterling's origination and monitoring."
+        ],
+        "break_conditions": [
+          "The announced mechanism does not become executable finance, regulation, procurement or operating capacity.",
+          "Named commitments are cancelled, materially reduced or remain unused beyond their stated horizon."
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Signed facility documents",
+          "Pricing and currency terms",
+          "Named sub-borrowers and realised lending"
+        ],
+        "new_links": [
+          "banking",
+          "SME finance",
+          "agriculture",
+          "trade finance",
+          "renewable energy"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "wbg-stablecoin-development-settlement-2026",
+      "theme": "Regulated stablecoin development-finance rails",
+      "location": "Global emerging markets",
+      "status": "INVESTIGATE",
+      "new_to_radar": true,
+      "why_surfaced": "The World Bank Group began exploring an intermediated USDC settlement model with Citi and Circle on top of existing correspondent-bank rails.",
+      "causal_chain": {
+        "world_change": "A major development institution is testing regulated stablecoins for disbursement and settlement rather than only private-market payments.",
+        "pressure": "Cross-border development payments can be slow, costly and hard to trace.",
+        "bottleneck_or_scarcity": "Regulatory permission, interoperability, treasury controls, redemption liquidity and borrower-country acceptance.",
+        "formation": "A potential 24/7 regulated settlement layer for development-finance flows.",
+        "industries": [
+          "payments",
+          "stablecoins",
+          "correspondent banking",
+          "development finance"
+        ],
+        "connected_companies_and_tickers": [
+          "Citigroup (NYSE: C)",
+          "Circle Internet Group (NYSE: CRCL)"
+        ],
+        "consequences": "If pilots proceed, payment infrastructure rather than credit capacity could become a measurable source of development efficiency."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-17",
+          "source": "World Bank Group",
+          "language": "English",
+          "fact": "WBG committed to explore regulated stablecoin infrastructure with Citi and Circle, focusing initially on an intermediated interoperable USDC model.",
+          "url": "https://www.worldbank.org/en/news/press-release/2026/11/17/world-bank-group-explores-regulated-stablecoins-to-modernize-payments-redirect-res"
+        },
+        {
+          "date": "2026-11-17",
+          "source": "World Bank Group",
+          "language": "English",
+          "fact": "More than 350 projects across 96 countries already use FundsChain digital ledgers, providing a potential traceability base.",
+          "url": "https://www.worldbank.org/en/news/press-release/2026/11/17/world-bank-group-explores-regulated-stablecoins-to-modernize-payments-redirect-res"
+        }
+      ],
+      "contradictions": [
+        "This is an exploration, not an approved pilot or production system.",
+        "Borrower-country digital-asset rules may exclude many jurisdictions."
+      ],
+      "missing_evidence": [
+        "Pilot countries and transaction volumes",
+        "Legal and treasury-control design",
+        "Measured cost and settlement-time improvements"
+      ],
+      "what_to_check_next": "Hold at INVESTIGATE until a named pilot executes real settlement.",
+      "valuation_entry_research": {
+        "listed_exposure": [
+          "NYSE:C",
+          "NYSE:CRCL"
+        ],
+        "questions": [
+          "Which countries permit the model?",
+          "Does it reduce end-to-end cost after compliance and off-ramp expenses?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "INVESTIGATE",
+        "what_changed": "The current blank-table scan independently surfaced this mechanism from fresh official evidence.",
+        "why_state_changed": "The signal was not promoted in the preceding dated scan.",
+        "strengthening_evidence": [
+          "2026-11-17: WBG committed to explore regulated stablecoin infrastructure with Citi and Circle, focusing initially on an intermediated interoperable USDC model.",
+          "2026-11-17: More than 350 projects across 96 countries already use FundsChain digital ledgers, providing a potential traceability base."
+        ],
+        "weakening_evidence": [
+          "This is an exploration, not an approved pilot or production system.",
+          "Borrower-country digital-asset rules may exclude many jurisdictions."
+        ],
+        "break_conditions": [
+          "The announced mechanism does not become executable finance, regulation, procurement or operating capacity.",
+          "Named commitments are cancelled, materially reduced or remain unused beyond their stated horizon."
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Pilot countries and transaction volumes",
+          "Legal and treasury-control design",
+          "Measured cost and settlement-time improvements"
+        ],
+        "new_links": [
+          "payments",
+          "stablecoins",
+          "correspondent banking",
+          "development finance"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "turkiye-industrial-decarbonisation-platform-2026",
+      "theme": "Sector-specific industrial transition finance",
+      "location": "Türkiye",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "Türkiye and the World Bank are assembling finance and preparation support around hard-to-abate export industries.",
+      "causal_chain": {
+        "world_change": "Industrial climate finance is moving from generic green loans into sector-specific transformation plans for steel, cement, aluminium, chemicals and ceramics.",
+        "pressure": "Carbon-intensive exporters face technology costs and tightening market-access requirements.",
+        "bottleneck_or_scarcity": "Bankable plant-level transition plans, long-tenor capital and buyer-aligned standards.",
+        "formation": "A national investment platform coupling technical preparation with public and private finance for industrial decarbonisation.",
+        "industries": [
+          "steel",
+          "cement",
+          "aluminium",
+          "chemicals",
+          "ceramics",
+          "industrial equipment"
+        ],
+        "connected_companies_and_tickers": [
+          "Borsa Istanbul manufacturers — contextual until allocations are named"
+        ],
+        "consequences": "Prepared projects could attract private capital, but the platform must convert plans into plant-level investment decisions."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-17",
+          "source": "World Bank Group",
+          "language": "English",
+          "fact": "WBG described long-term finance for Turkish manufacturers to adopt greener and more digital technologies and prepare transformation plans.",
+          "url": "https://www.worldbank.org/en/news/press-release/2026/11/17/world-bank-group-puts-jobs-at-the-center-of-climate-investment-at-cop31"
+        },
+        {
+          "date": "2026-11-12",
+          "source": "Anadolu Agency",
+          "language": "Turkish",
+          "fact": "Türkiye launched an industrial decarbonisation investment platform focused on sectors representing about 37% of emissions and 28% of exports.",
+          "url": "https://www.anadoluajansi.gov.tr/tr/ekonomi/turkiye-sanayi-karbonsuzlasma-yatirim-platformu-cop31de-tanitildi/4122233"
+        }
+      ],
+      "contradictions": [
+        "The platform announcement does not identify approved plant investments.",
+        "Mobilisation claims may include existing finance rather than fully additional capital."
+      ],
+      "missing_evidence": [
+        "Named plants and technologies",
+        "Capital-stack and subsidy terms",
+        "Final investment decisions and emissions baselines"
+      ],
+      "what_to_check_next": "Track the first financed plant conversions and independent emissions measurement.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Which sectors receive the first capital?",
+          "Are projects competitive without concessional support?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "FORMING",
+        "what_changed": "The current blank-table scan independently surfaced this mechanism from fresh official evidence.",
+        "why_state_changed": "The signal was not promoted in the preceding dated scan.",
+        "strengthening_evidence": [
+          "2026-11-17: WBG described long-term finance for Turkish manufacturers to adopt greener and more digital technologies and prepare transformation plans.",
+          "2026-11-12: Türkiye launched an industrial decarbonisation investment platform focused on sectors representing about 37% of emissions and 28% of exports."
+        ],
+        "weakening_evidence": [
+          "The platform announcement does not identify approved plant investments.",
+          "Mobilisation claims may include existing finance rather than fully additional capital."
+        ],
+        "break_conditions": [
+          "The announced mechanism does not become executable finance, regulation, procurement or operating capacity.",
+          "Named commitments are cancelled, materially reduced or remain unused beyond their stated horizon."
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Named plants and technologies",
+          "Capital-stack and subsidy terms",
+          "Final investment decisions and emissions baselines"
+        ],
+        "new_links": [
+          "steel",
+          "cement",
+          "aluminium",
+          "chemicals",
+          "ceramics",
+          "industrial equipment"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "global-textile-clean-production-fund-2026",
+      "theme": "Buyer-linked supply-chain transition finance",
+      "location": "Emerging-market textile hubs",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "A new blended fund links development finance, concessional capital, technical assistance and global brands for supplier upgrades.",
+      "causal_chain": {
+        "world_change": "Global buyers are beginning to co-shape finance for decarbonising fragmented textile, apparel and footwear suppliers.",
+        "pressure": "SME suppliers face energy, water and pollution standards they cannot finance cheaply on their own.",
+        "bottleneck_or_scarcity": "Aggregation, technical assistance and buyer-backed demand signals that make small factory projects bankable.",
+        "formation": "A blended finance-and-buyer platform for cleaner production across emerging-market supply chains.",
+        "industries": [
+          "textiles",
+          "apparel",
+          "footwear",
+          "energy efficiency",
+          "water technology"
+        ],
+        "connected_companies_and_tickers": [
+          "Global brands not yet individually disclosed"
+        ],
+        "consequences": "The mechanism could convert supply-chain compliance pressure into investable factory retrofits if brands commit real capital and offtake support."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-17",
+          "source": "World Bank Group",
+          "language": "English",
+          "fact": "WBG announced a blended-finance-supported fund combining IFC finance, GEF concessional resources, technical assistance and global-brand participation.",
+          "url": "https://www.worldbank.org/en/news/press-release/2026/11/17/world-bank-group-puts-jobs-at-the-center-of-climate-investment-at-cop31"
+        },
+        {
+          "date": "2026-11-17",
+          "source": "World Bank Group",
+          "language": "English",
+          "fact": "The fund targets energy efficiency, renewables, water savings, circularity and pollution reduction among mostly SME suppliers.",
+          "url": "https://www.worldbank.org/en/news/press-release/2026/11/17/world-bank-group-puts-jobs-at-the-center-of-climate-investment-at-cop31"
+        }
+      ],
+      "contradictions": [
+        "Fund size, participating brands and investee countries were not disclosed.",
+        "Supplier economics and buyer commitments are not yet evidenced."
+      ],
+      "missing_evidence": [
+        "Fund manager and legal close",
+        "Participating brands and target countries",
+        "First supplier investments and pricing"
+      ],
+      "what_to_check_next": "Track legal close, named buyers and first factory retrofits.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Do brands commit capital or only technical participation?",
+          "Can small suppliers access terms that preserve competitiveness?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "FORMING",
+        "what_changed": "The current blank-table scan independently surfaced this mechanism from fresh official evidence.",
+        "why_state_changed": "The signal was not promoted in the preceding dated scan.",
+        "strengthening_evidence": [
+          "2026-11-17: WBG announced a blended-finance-supported fund combining IFC finance, GEF concessional resources, technical assistance and global-brand participation.",
+          "2026-11-17: The fund targets energy efficiency, renewables, water savings, circularity and pollution reduction among mostly SME suppliers."
+        ],
+        "weakening_evidence": [
+          "Fund size, participating brands and investee countries were not disclosed.",
+          "Supplier economics and buyer commitments are not yet evidenced."
+        ],
+        "break_conditions": [
+          "The announced mechanism does not become executable finance, regulation, procurement or operating capacity.",
+          "Named commitments are cancelled, materially reduced or remain unused beyond their stated horizon."
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Fund manager and legal close",
+          "Participating brands and target countries",
+          "First supplier investments and pricing"
+        ],
+        "new_links": [
+          "textiles",
+          "apparel",
+          "footwear",
+          "energy efficiency",
+          "water technology"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "adb-nov17-unresolved-policy-programs-2026",
+      "theme": "Unresolved policy-finance approvals",
+      "location": "Asia",
+      "status": "UNKNOWN",
+      "new_to_radar": true,
+      "why_surfaced": "ADB's 17 November board calendar listed three policy/results-based programs, but the scan resolved only Pakistan's pension outcome.",
+      "causal_chain": {
+        "world_change": "Several fiscal and market-reform programs were scheduled for board consideration simultaneously.",
+        "pressure": "Governments face fiscal, market and pension-system constraints requiring policy finance.",
+        "bottleneck_or_scarcity": "Published approval outcomes, country identification and programme documents.",
+        "formation": "Possible new policy-finance channels across Asia, not yet sufficiently identified.",
+        "industries": [
+          "public finance",
+          "financial markets",
+          "pensions"
+        ],
+        "connected_companies_and_tickers": [],
+        "consequences": "Prematurely treating a board calendar as approval would contaminate the downstream evidence chain."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-17",
+          "source": "Asian Development Bank",
+          "language": "English",
+          "fact": "ADB's board calendar listed fiscal-resilience, robust-markets and pension programmes for 17 November.",
+          "url": "https://www.adb.org/who-we-are/organization/board-calendar"
+        },
+        {
+          "date": "2026-11-17",
+          "source": "Asian Development Bank",
+          "language": "English",
+          "fact": "Pakistan's pension programme was separately reported approved, while the scan found no equivalent outcome for the other two calendar entries.",
+          "url": "https://www.adb.org/countries/pakistan/main"
+        }
+      ],
+      "contradictions": [
+        "A scheduled board discussion is not an approval.",
+        "Country and final financing terms for two items were not resolved from available evidence."
+      ],
+      "missing_evidence": [
+        "Board decisions for the two non-Pakistan programs",
+        "Country and amount",
+        "Final project documents"
+      ],
+      "what_to_check_next": "Check ADB approved-project records and country releases before promotion.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Were the programs approved, deferred or changed?",
+          "What countries and amounts are involved?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "UNKNOWN",
+        "what_changed": "The current blank-table scan independently surfaced this mechanism from fresh official evidence.",
+        "why_state_changed": "The signal was not promoted in the preceding dated scan.",
+        "strengthening_evidence": [
+          "2026-11-17: ADB's board calendar listed fiscal-resilience, robust-markets and pension programmes for 17 November.",
+          "2026-11-17: Pakistan's pension programme was separately reported approved, while the scan found no equivalent outcome for the other two calendar entries."
+        ],
+        "weakening_evidence": [
+          "A scheduled board discussion is not an approval.",
+          "Country and final financing terms for two items were not resolved from available evidence."
+        ],
+        "break_conditions": [
+          "The announced mechanism does not become executable finance, regulation, procurement or operating capacity.",
+          "Named commitments are cancelled, materially reduced or remain unused beyond their stated horizon."
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Board decisions for the two non-Pakistan programs",
+          "Country and amount",
+          "Final project documents"
+        ],
+        "new_links": [
+          "public finance",
+          "financial markets",
+          "pensions"
+        ],
+        "removed_links": []
+      }
+    }
+  ],
+  "what_is_forming": [
+    "Revolving agrifood transformation finance",
+    "Small-island solar and storage transition",
+    "Public pension system conversion",
+    "Multi-window productive finance",
+    "Sector-specific industrial transition finance",
+    "Buyer-linked supply-chain transition finance"
+  ],
+  "current_scene": [
+    {
+      "player": "TKDK / World Bank",
+      "location": "Türkiye",
+      "role": "Agrifood finance platform",
+      "ticker": null,
+      "why_now": "A signed first phase introduces repayment recycling across farm-to-market value chains."
+    },
+    {
+      "player": "Manatuto Renewables / World Bank Group",
+      "location": "Timor-Leste",
+      "role": "Solar-plus-storage project and risk-mitigation stack",
+      "ticker": null,
+      "why_now": "Construction is under way and the financing architecture is now public."
+    },
+    {
+      "player": "Government of Pakistan / ADB",
+      "location": "Pakistan",
+      "role": "Pension-system reformer and results-based financier",
+      "ticker": null,
+      "why_now": "US$500 million is tied to institutionalising defined contributions and digital administration."
+    },
+    {
+      "player": "Sterling Financial Holdings",
+      "location": "Nigeria",
+      "role": "Domestic finance intermediary",
+      "ticker": "NGX:STERLINGNG",
+      "why_now": "A multi-window AfDB package targets SMEs, farmers, green projects and trade."
+    },
+    {
+      "player": "Citi / Circle / World Bank Group",
+      "location": "Global",
+      "role": "Prospective development-payment rail",
+      "ticker": "NYSE:C / NYSE:CRCL",
+      "why_now": "An interoperable regulated-USDC settlement model is being explored."
+    }
+  ],
+  "previous_scan_date": "2026-11-17",
+  "absent_from_current_scan": [
+    "ifc-afis-finance-stack-2026",
+    "africa-ramp-receivables-warehouse-2026",
+    "south-africa-open-infrastructure-reform-2026",
+    "brazil-ampliar-airport-bundling-2026",
+    "turkiye-climate-policy-finance-2026",
+    "transnordestina-budget-credit-2026",
+    "timor-leste-infrastructure-approval-mismatch-2026",
+    "ifc-trade-synthetic-securitisation-2026"
+  ],
+  "publication_verified_at": "2026-11-18T09:32:16+11:00"
+}
+
