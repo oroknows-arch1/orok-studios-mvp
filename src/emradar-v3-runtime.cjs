@@ -37,7 +37,7 @@ async function refreshPublishedScans({fetcher=fetch}={}){
  archiveUrl:SCAN_ORIGIN+'/data/checkpoints/discovery-'+document.snapshot_date+'.json'}];
 }
 async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={}){
- const {publicationGatesPass}=await import('../vendor/emradar-v3/src/scan-intake.js');
+ const {publicationRecordValid,releaseAttestationValid}=await import('../vendor/emradar-v3/src/scan-intake.js');
  if(indexUrl!==SCAN_INDEX_URL)throw Error('UNTRUSTED_SCAN_INDEX');
  const getJson=async url=>{
   const parsed=new URL(url);
@@ -68,18 +68,9 @@ async function enumeratePublishedScans({fetcher=fetch,indexUrl=SCAN_INDEX_URL}={
   const archiveUrl=SCAN_ORIGIN+'/'+candidate.path;
   const publicationRecord=await getJson(`${SCAN_ORIGIN}/verification/publication-${date}.json`);
   const releaseAttestation=await getJson(`${SCAN_ORIGIN}/verification/downstream-release-attestation-${date}.json`);
-  let expectedSha256=publicationRecord?.public_verification?.artifact_sha256;
-  const authorized=publicationRecord?.snapshot_date===date&&
-   publicationRecord?.public_verification?.verification_contract==='live-reader-exact-identity-v2'&&
-   publicationRecord?.public_verification?.archive_data_url===archiveUrl&&
-   publicationGatesPass(publicationRecord)&&
-   publicationRecord?.downstream_release_allowed===true&&
-   releaseAttestation?.snapshot_date===date&&releaseAttestation?.source_path===candidate.path&&
-   releaseAttestation?.source_sha256===expectedSha256&&releaseAttestation?.publication_state==='PUBLISHED'&&
-   releaseAttestation?.downstream_release_allowed===true&&releaseAttestation?.native_gates?.publication==='PASS'&&
-   releaseAttestation?.attested_by==='AUTHORIZED_SOURCE_RELEASE_REVIEW'&&
-   releaseAttestation?.campaign_authority?.required_stop==='PUBLICATION_REVIEW'&&
-   releaseAttestation?.campaign_authority?.external_publication_allowed===false&&
+  let expectedSha256=publicationRecord?.public_verification?.artifact_sha256??publicationRecord?.source_sha256;
+  const authorized=publicationRecordValid(publicationRecord,{snapshotDate:date,expectedSha256,archiveUrl,releaseAttestation})&&
+   releaseAttestationValid(releaseAttestation,{snapshotDate:date,expectedSha256,modern:!publicationRecord?.public_verification})&&
    /^[a-f0-9]{64}$/.test(expectedSha256||'');
   if(!publicationRecord&&releaseAttestation){
    const input={snapshotDate:date,expectedSha256:releaseAttestation.source_sha256,liveUrl:archiveUrl,archiveUrl,releaseAttestation};

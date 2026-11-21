@@ -100,7 +100,7 @@ test('published archive index enumerates attestable scans in chronological order
  const docs=new Map();
  for(const date of dates){
   const digest=require('node:crypto').createHash('sha256').update(date).digest('hex'),archiveUrl=`https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-${date}.json`;
-  docs.set(`https://emerging-markets-radar.onrender.com/verification/publication-${date}.json`,{snapshot_date:date,public_verification:{artifact_sha256:digest,verification_contract:'live-reader-exact-identity-v2',archive_data_url:archiveUrl},gates:{public_snapshot_verification:'PASS'},downstream_release_allowed:true});
+  docs.set(`https://emerging-markets-radar.onrender.com/verification/publication-${date}.json`,{snapshot_date:date,publication_state:'PUBLISHED',public_verification:{artifact_sha256:digest,verification_contract:'live-reader-exact-identity-v2',archive_data_url:archiveUrl},gates:{public_snapshot_verification:'PASS'},downstream_release_allowed:true});
   docs.set(`https://emerging-markets-radar.onrender.com/verification/downstream-release-attestation-${date}.json`,{snapshot_date:date,source_path:`data/checkpoints/discovery-${date}.json`,source_sha256:digest,publication_state:'PUBLISHED',downstream_release_allowed:true,native_gates:{publication:'PASS'},attested_by:'AUTHORIZED_SOURCE_RELEASE_REVIEW',campaign_authority:{required_stop:'PUBLICATION_REVIEW',external_publication_allowed:false}});
  }
  const fetcher=async url=>docs.has(url)||url.endsWith('archive-index.json')?({ok:true,status:200,arrayBuffer:async()=>Buffer.from(JSON.stringify(url.endsWith('archive-index.json')?index:docs.get(url)))}):({ok:false,status:404});

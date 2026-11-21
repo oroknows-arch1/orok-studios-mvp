@@ -37,6 +37,7 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
  if(typeof openai?.responses?.create!=='function'||typeof directory?.upsert!=='function'||typeof contactReader!=='function')throw Error('AUTONOMOUS_DISCOVERY_DEPENDENCIES_REQUIRED');
  return async({document,outlets=[],candidateHints=[],formationIds:requestedFormations,maxRunMs:runBudget=maxRunMs})=>{
   const started=Date.now();
+  let fallbackSearches=0;
   const pages=new Map();const read=url=>{if(!pages.has(url.href))pages.set(url.href,contactReader(url,resolver));return pages.get(url.href);};
   const research=createEditorialContactResearch({read});
   const history=typeof directory.researchHistory==='function'?await directory.researchHistory(digest(JSON.stringify((document?.evidence??[]).filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url).map(e=>[e.id,e.fact,e.source_url])))):[];
@@ -97,7 +98,8 @@ export function createAutonomousOutletDiscovery({openai,directory,resolver=looku
      journal.pages.push(...result.pages);journal.failures.push(...result.failures);journal.contact_observations=(result.contacts??[]).slice(0,50).map(({email,purpose,eligible,rejection_reason,source_url})=>({email,purpose,eligible,rejection_reason,source_url}));
      let alternatives=[item.directory_source_url,item.publisher_source_url].filter(Boolean);
      if(!result.primary||proofFailure){
-      try{
+      if(fallbackSearches<2)try{
+       fallbackSearches++;
        const fallback=await openai.responses.create({model,tools:[{type:'web_search',search_context_size:'low'}],include:['web_search_call.action.sources'],tool_choice:'required',max_tool_calls:2,input:'Research public editorial contacts for '+base.name+' (official website '+website.origin+'). Search Contact Us, Editorial, Newsroom, Contributors, About, Submissions and accessible official publisher pages or public press/editorial/association directory entries. Find indexed source URLs that can be independently retrieved; never use a search snippet as proof of an email. For a directory/publisher page, require this exact publication name, its official website link and a published editor or editorial desk. Do not return email addresses, paid lead lists or inferred patterns. Return JSON {"urls":["https://..."]}, at most 6 different source URLs. Do not retry the blocked URLs: '+JSON.stringify(journal.failures.map(x=>x.url)),max_output_tokens:1600},{maxRetries:0,timeout:60000});
        let urls=[];try{urls=JSON.parse(plainText(fallback)).urls??[];}catch{}
        alternatives.push(...urls,...sourceUrls(fallback));

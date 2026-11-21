@@ -1,0 +1,829 @@
+{
+  "version": 52,
+  "snapshot_date": "2026-11-21",
+  "started_at": "2026-11-21T09:11:39+11:00",
+  "completed_at": "2026-11-21T09:16:00+11:00",
+  "timezone": "Australia/Sydney",
+  "publication_state": "PUBLISHED",
+  "contract": "causal-chain-evolution-v1",
+  "rule": "Fresh global blank-table discovery; every status re-earned from current-run evidence.",
+  "run_mode": "fresh_global_blank_table",
+  "scope_note": "Fresh 21 November Sydney scan. The candidate table began blank; the 20 November artifact was consulted only after today's candidates existed, solely for chain evolution and absence reporting.",
+  "scan_report": "The 21 November scan finds policy and project pipelines crossing into harder execution states, but only where the operating constraint is addressed. **CONFIRMED:** Colombia's [ANI](https://www.ani.gov.co/ca/w/accesos-norte-ii-inicio-la-obra-que-va-a-cambiar-la-entrada-a-bogota) records physical works starting on the long-delayed Accesos Norte II concession, including drainage and ecological adaptations; and the EU–Indonesia framework moved into signed CEPA and investment-protection agreements ahead of Indonesia's 2027 preference expiry. **FORMING:** Nigeria opened a 40-block upstream licensing portal; PPC paired Zimbabwe cement expansion with solar progress; Uzbekistan linked a 500 MW solar JDA to transformer localization; and Timor-Leste authorised grid procurement while opening IDA road-finance negotiation. **INVESTIGATE:** Almaty is reviewing water-treatment and fibre-cable factories, but sponsors, capacity and approvals remain undisclosed. The common mechanism is conversion: stalled concessions, tariff negotiations, acreage, plant concepts and public infrastructure are becoming works, signed rules, bid portals or procurement authority. The unresolved question is which conversions reach binding finance, awards and operating output.",
+  "scan_statistics": {
+    "candidates_reviewed": 30,
+    "displayed": 7,
+    "confirmed": 2,
+    "forming": 4,
+    "investigate": 1,
+    "unknown": 0,
+    "discarded_or_not_promoted": 23,
+    "regions_represented": 7,
+    "primary_or_official_sources": 10,
+    "local_language_sources": 4
+  },
+  "candidate_table": [
+    {
+      "candidate": "Colombia Accesos Norte II works",
+      "classification": "CONFIRMED",
+      "promoted": true
+    },
+    {
+      "candidate": "EU–Indonesia CEPA signature",
+      "classification": "CONFIRMED",
+      "promoted": true
+    },
+    {
+      "candidate": "Nigeria upstream licensing",
+      "classification": "FORMING",
+      "promoted": true
+    },
+    {
+      "candidate": "PPC Zimbabwe cement-solar",
+      "classification": "FORMING",
+      "promoted": true
+    },
+    {
+      "candidate": "Uzbekistan solar-transformer",
+      "classification": "FORMING",
+      "promoted": true
+    },
+    {
+      "candidate": "Timor-Leste grid-roads",
+      "classification": "FORMING",
+      "promoted": true
+    },
+    {
+      "candidate": "Almaty water-fibre factories",
+      "classification": "INVESTIGATE",
+      "promoted": true
+    },
+    {
+      "candidate": "Korea–MERCOSUR talks",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Colombia airport expansion",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Colombia Addi credit",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Kazakhstan oilfield equipment",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "West Java investment target",
+      "classification": "UNKNOWN",
+      "promoted": false
+    },
+    {
+      "candidate": "Batang semiconductor partnership",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Anambra skills cohort",
+      "classification": "DISCARD",
+      "promoted": false
+    },
+    {
+      "candidate": "Kyrgyz battery expansion",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "Colombia PPI hearings",
+      "classification": "DISCARD",
+      "promoted": false
+    },
+    {
+      "candidate": "APEC FTAAP agenda",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Ethiopia WTO accession talks",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Barron River bridge award",
+      "classification": "CONFIRMED",
+      "promoted": false
+    },
+    {
+      "candidate": "Wyong highway award",
+      "classification": "CONFIRMED",
+      "promoted": false
+    },
+    {
+      "candidate": "Queensland venue design",
+      "classification": "FORMING",
+      "promoted": false
+    },
+    {
+      "candidate": "JBIC US gas finance",
+      "classification": "DISCARD",
+      "promoted": false
+    },
+    {
+      "candidate": "Kazakhstan hydro auction",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Philippines small-grid rule",
+      "classification": "UNKNOWN",
+      "promoted": false
+    },
+    {
+      "candidate": "Colombia solar licence",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Uzbekistan robotics programme",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Korea-Africa resources",
+      "classification": "INVESTIGATE",
+      "promoted": false
+    },
+    {
+      "candidate": "Korea FDI incentives",
+      "classification": "DISCARD",
+      "promoted": false
+    },
+    {
+      "candidate": "Addis corridor opening",
+      "classification": "CONFIRMED",
+      "promoted": false
+    },
+    {
+      "candidate": "Nigeria portal countdown anomaly",
+      "classification": "DISCARD",
+      "promoted": false
+    }
+  ],
+  "records": [
+    {
+      "id": "colombia-accesos-norte-ii-construction-2026",
+      "theme": "Climate-adapted urban access corridor entering construction",
+      "location": "Colombia",
+      "status": "CONFIRMED",
+      "new_to_radar": true,
+      "why_surfaced": "After four years of delay, construction formally began on the 17.96 km Accesos Norte II concession.",
+      "causal_chain": {
+        "world_change": "A stalled metropolitan transport concession has crossed from awarded contract into physical execution.",
+        "pressure": "Bogotá's northern growth corridor faces congestion, flood exposure and weak public-transport capacity.",
+        "bottleneck_or_scarcity": "Environmental clearance, hydraulic works, right-of-way coordination and long-duration construction delivery.",
+        "formation": "A COP1.9 trillion urban-access programme combining road expansion, TransMilenio lanes, cycling, drainage and wildlife crossings.",
+        "industries": [
+          "toll roads",
+          "civil engineering",
+          "public transit",
+          "urban drainage"
+        ],
+        "connected_companies_and_tickers": [
+          "Ruta Bogotá Norte S.A.S. (private)"
+        ],
+        "consequences": "The execution market is now real, but 66 months of delivery and wetland-adjacent works preserve schedule and environmental risk."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-20",
+          "source": "Agencia Nacional de Infraestructura",
+          "language": "Spanish",
+          "fact": "ANI records the official start of works, 17.96 km scope, COP1.9 trillion construction investment, 66-month duration and environmental adaptations; faithful English summary by EMRADAR.",
+          "url": "https://www.ani.gov.co/ca/w/accesos-norte-ii-inicio-la-obra-que-va-a-cambiar-la-entrada-a-bogota"
+        }
+      ],
+      "contradictions": [
+        "The concession was signed in 2022 but remained blocked for four years.",
+        "Employment and beneficiary numbers are official projections."
+      ],
+      "missing_evidence": [
+        "Monthly physical progress",
+        "Land and utility relocation status",
+        "Independent wetland monitoring"
+      ],
+      "what_to_check_next": "Track certified progress, hydraulic works and schedule variance.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Which contractors and materials suppliers capture the spend?",
+          "How are inflation and delay risks allocated?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "CONFIRMED",
+        "what_changed": "Fresh current-run evidence established the candidate independently of prior Radar themes.",
+        "why_state_changed": "The signal was absent from the preceding dated scan.",
+        "strengthening_evidence": [
+          "Official works commencement",
+          "Environmental approval",
+          "Defined budget"
+        ],
+        "weakening_evidence": [
+          "Long prior delay"
+        ],
+        "break_conditions": [
+          "Construction stalls again or environmental conditions are breached"
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Monthly physical progress",
+          "Land and utility relocation status",
+          "Independent wetland monitoring"
+        ],
+        "new_links": [
+          "concession execution",
+          "bus priority",
+          "wetland hydraulics"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "eu-indonesia-cepa-signature-2026",
+      "theme": "Tariff transition reshaping EU–Indonesia supply chains",
+      "location": "Indonesia / European Union",
+      "status": "CONFIRMED",
+      "new_to_radar": true,
+      "why_surfaced": "The EU and Indonesia signed CEPA and an investment-protection agreement immediately ahead of Indonesia's 2027 GSP graduation.",
+      "causal_chain": {
+        "world_change": "A decade-long trade negotiation has become a signed market-access framework.",
+        "pressure": "Indonesia's GSP preferences end on 1 January 2027 while both sides seek diversified supply chains.",
+        "bottleneck_or_scarcity": "Ratification, rules-of-origin compliance, customs implementation and sustainability obligations.",
+        "formation": "A tariff and investment corridor covering agri-food, pharmaceuticals, advanced manufacturing, digital trade, energy and critical materials.",
+        "industries": [
+          "trade logistics",
+          "agri-food",
+          "pharmaceuticals",
+          "advanced manufacturing",
+          "digital trade",
+          "critical minerals"
+        ],
+        "connected_companies_and_tickers": [
+          "European and Indonesian exporters across covered sectors"
+        ],
+        "consequences": "The agreements can prevent a tariff cliff and redirect sourcing, but provisional application awaits internal procedures and European Parliament consent."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-20",
+          "source": "European Commission Audiovisual Service",
+          "language": "English",
+          "fact": "The Commission programme records signature of CEPA and the Investment Protection Agreement.",
+          "url": "https://audiovisual.ec.europa.eu/en/ebs/grid?date=20261121&ebs=yes&ebsplus=yes"
+        },
+        {
+          "date": "2026-11-18",
+          "source": "Council of the European Union",
+          "language": "English",
+          "fact": "The Council authorised signature and provisional application, estimating removal of tariffs on almost all goods and €600 million annual duty savings.",
+          "url": "https://www.consilium.europa.eu/en/press/press-releases/2026/11/18/eu-indonesia-council-greenlights-signature-of-landmark-trade-and-investment-agreements/pdf/"
+        }
+      ],
+      "contradictions": [
+        "Signature does not equal immediate provisional application.",
+        "European Parliament consent is still required for conclusion."
+      ],
+      "missing_evidence": [
+        "Provisional-application notices",
+        "Sector tariff schedules",
+        "Exporter rules-of-origin readiness"
+      ],
+      "what_to_check_next": "Track provisional application, ratification and first sector trade response.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Which listed exporters gain tariff advantage?",
+          "Where do rules of origin change sourcing economics?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "CONFIRMED",
+        "what_changed": "Fresh current-run evidence established the candidate independently of prior Radar themes.",
+        "why_state_changed": "The signal was absent from the preceding dated scan.",
+        "strengthening_evidence": [
+          "Signed agreements",
+          "Council authorisation",
+          "Defined GSP deadline"
+        ],
+        "weakening_evidence": [
+          "Ratification remains"
+        ],
+        "break_conditions": [
+          "Internal procedures or Parliament consent fail"
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Provisional-application notices",
+          "Sector tariff schedules",
+          "Exporter rules-of-origin readiness"
+        ],
+        "new_links": [
+          "GSP graduation",
+          "tariff removal",
+          "critical materials"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "nigeria-2026-upstream-licensing-round-2026",
+      "theme": "Competitive upstream acreage reopening",
+      "location": "Nigeria",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "Nigeria opened its 2026 licensing portal with 40 oil and gas blocks on offer.",
+      "causal_chain": {
+        "world_change": "Nigeria is returning acreage to competitive digital bidding.",
+        "pressure": "The state needs reserves, production investment and upstream revenue.",
+        "bottleneck_or_scarcity": "Bid terms, subsurface data, security, fiscal stability and finance.",
+        "formation": "A bid cycle that could create demand for seismic, drilling, subsea and development services.",
+        "industries": [
+          "oil exploration",
+          "seismic services",
+          "drilling",
+          "subsea equipment"
+        ],
+        "connected_companies_and_tickers": [
+          "Nigerian Upstream Petroleum Regulatory Commission"
+        ],
+        "consequences": "A live portal creates options, but no market is confirmed until qualified bids, awards and work programmes emerge."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-20",
+          "source": "NUPRC licensing portal",
+          "language": "English",
+          "fact": "The official portal reached its stated launch time and began availability.",
+          "url": "https://br2026.nuprc.gov.ng/"
+        },
+        {
+          "date": "2026-11-02",
+          "source": "NUPRC",
+          "language": "English",
+          "fact": "The regulator stated 40 oil and gas blocks would be offered.",
+          "url": "https://nuprc.gov.ng/media/news/6906946a59637194bc3ec337"
+        }
+      ],
+      "contradictions": [
+        "Portal availability is not evidence of competitive bids.",
+        "Block data and fiscal attractiveness remain untested."
+      ],
+      "missing_evidence": [
+        "Block list",
+        "Bid timetable",
+        "Qualified bidders"
+      ],
+      "what_to_check_next": "Verify portal contents, geology, bid rules and participation.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Which listed service companies have exposure?",
+          "Do terms clear hurdle rates?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "FORMING",
+        "what_changed": "Fresh current-run evidence established the candidate independently of prior Radar themes.",
+        "why_state_changed": "The signal was absent from the preceding dated scan.",
+        "strengthening_evidence": [
+          "Official launch",
+          "Regulator-confirmed scope"
+        ],
+        "weakening_evidence": [
+          "No bids or awards"
+        ],
+        "break_conditions": [
+          "Round is postponed or undersubscribed"
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Block list",
+          "Bid timetable",
+          "Qualified bidders"
+        ],
+        "new_links": [
+          "digital bidding",
+          "acreage allocation",
+          "oilfield services"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "ppc-zimbabwe-cement-solar-expansion-2026",
+      "theme": "Cement expansion paired with captive energy",
+      "location": "Zimbabwe / South Africa",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "PPC reports progress on a Zimbabwe solar project while advancing a new integrated cement plant with Sinoma engagement and financing evaluation.",
+      "causal_chain": {
+        "world_change": "Cement producers are pairing capacity expansion with energy-security investment.",
+        "pressure": "Construction demand and unreliable power constrain regional cement economics.",
+        "bottleneck_or_scarcity": "EPC terms, quarry resources, financing and dependable electricity.",
+        "formation": "A Zimbabwe programme combining cement capacity, mining inputs and solar power.",
+        "industries": [
+          "cement",
+          "mining",
+          "solar power",
+          "industrial EPC"
+        ],
+        "connected_companies_and_tickers": [
+          "PPC Ltd (JSE:PPC)",
+          "Sinoma International Engineering (SSE:600970)"
+        ],
+        "consequences": "The pairing could reduce energy risk and add capacity, but the plant remains proposed."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-20",
+          "source": "PPC SENS announcements",
+          "language": "English",
+          "fact": "PPC reports solar progress and engagement with Sinoma on EPC, mine prospecting and financing for a proposed Zimbabwe plant.",
+          "url": "https://www.ppc.africa/investors-relations/investor-information/sens-announcements/"
+        }
+      ],
+      "contradictions": [
+        "The plant has not reached FID.",
+        "Investor-site activity does not prove financing."
+      ],
+      "missing_evidence": [
+        "Capacity and capex",
+        "EPC signature",
+        "Financing close",
+        "Solar schedule"
+      ],
+      "what_to_check_next": "Track FID, EPC, quarry permits and financing.",
+      "valuation_entry_research": {
+        "listed_exposure": [
+          "JSE:PPC",
+          "SSE:600970"
+        ],
+        "questions": [
+          "How much capacity and margin uplift?",
+          "Does solar reduce production cost?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "FORMING",
+        "what_changed": "Fresh current-run evidence established the candidate independently of prior Radar themes.",
+        "why_state_changed": "The signal was absent from the preceding dated scan.",
+        "strengthening_evidence": [
+          "Listed-company disclosure",
+          "Named EPC engagement"
+        ],
+        "weakening_evidence": [
+          "Proposed status"
+        ],
+        "break_conditions": [
+          "PPC declines FID or financing fails"
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Capacity and capex",
+          "EPC signature",
+          "Financing close",
+          "Solar schedule"
+        ],
+        "new_links": [
+          "cement capacity",
+          "quarry development",
+          "captive solar"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "uzbekistan-fergana-solar-transformer-cluster-2026",
+      "theme": "Generation investment pulling electrical-equipment localization",
+      "location": "Uzbekistan",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "Uzbekistan signed a JDA for 500 MW of solar alongside conductor and high-voltage transformer manufacturing plans.",
+      "causal_chain": {
+        "world_change": "Renewable capacity is being negotiated with local grid-equipment manufacturing.",
+        "pressure": "Power-system expansion requires generation and transformers.",
+        "bottleneck_or_scarcity": "Bankable offtake, grid connection, factory commissioning and certification.",
+        "formation": "A linked solar-and-transformer cluster in Fergana and Tashkent regions.",
+        "industries": [
+          "solar",
+          "transformers",
+          "conductors",
+          "grid equipment"
+        ],
+        "connected_companies_and_tickers": [
+          "Voltamp Energy SAOG (MSX:VOES)",
+          "UET Construction",
+          "Texnokabel Group",
+          "Nura Group"
+        ],
+        "consequences": "Localization can reduce equipment dependence, but agreements remain before finance and delivery."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-17",
+          "source": "Government of Uzbekistan",
+          "language": "Russian",
+          "fact": "The release records a 500 MW solar JDA and agreements for conductors and a transformer factory; faithful English summary by EMRADAR.",
+          "url": "https://gov.uz/ru/news/view/248779"
+        }
+      ],
+      "contradictions": [
+        "A JDA is not financed construction.",
+        "Manufacturing agreements disclose no capacity date."
+      ],
+      "missing_evidence": [
+        "PPA",
+        "Financial close",
+        "Factory capacity",
+        "Equipment orders"
+      ],
+      "what_to_check_next": "Track PPA, finance, land and factory construction.",
+      "valuation_entry_research": {
+        "listed_exposure": [
+          "MSX:VOES"
+        ],
+        "questions": [
+          "What revenue could flow to Voltamp?",
+          "Will factories serve exports?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "FORMING",
+        "what_changed": "Fresh current-run evidence established the candidate independently of prior Radar themes.",
+        "why_state_changed": "The signal was absent from the preceding dated scan.",
+        "strengthening_evidence": [
+          "Government-recorded JDA",
+          "Named partners"
+        ],
+        "weakening_evidence": [
+          "No finance detail"
+        ],
+        "break_conditions": [
+          "PPA or approvals fail"
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "PPA",
+          "Financial close",
+          "Factory capacity",
+          "Equipment orders"
+        ],
+        "new_links": [
+          "solar project",
+          "transformer conductors",
+          "high-voltage factory"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "timor-leste-grid-roads-procurement-2026",
+      "theme": "Small-state infrastructure procurement moving into execution",
+      "location": "Timor-Leste",
+      "status": "FORMING",
+      "new_to_radar": true,
+      "why_surfaced": "The Council of Ministers authorised procurement for two substations and lines while authorising negotiation of IDA road financing.",
+      "causal_chain": {
+        "world_change": "Grid reinforcement and rural access are moving into procurement and financing steps.",
+        "pressure": "Weak electricity and road links limit services and market access.",
+        "bottleneck_or_scarcity": "Procurement capacity, debt negotiation, contractor delivery and maintenance.",
+        "formation": "A pipeline spanning substations, transmission, roads and bridges.",
+        "industries": [
+          "transmission",
+          "substations",
+          "roads",
+          "bridges"
+        ],
+        "connected_companies_and_tickers": [
+          "Government of Timor-Leste",
+          "World Bank IDA"
+        ],
+        "consequences": "Authorised tenders create contractor demand, but loan and awards remain incomplete."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-16",
+          "source": "Government of Timor-Leste",
+          "language": "English",
+          "fact": "The Council authorised two 150/20 kV substations and lines capped at US$41.33 million and negotiation of up to US$39 million IDA road finance.",
+          "url": "https://timor-leste.gov.tl/?lang=en&p=53926&print=1"
+        }
+      ],
+      "contradictions": [
+        "Procurement authority is not an award.",
+        "The IDA loan remains under negotiation."
+      ],
+      "missing_evidence": [
+        "Tender documents",
+        "Loan signature",
+        "Winning contractors"
+      ],
+      "what_to_check_next": "Track tenders, loan approval and notices to proceed.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Which EPC firms qualify?",
+          "Are packages large enough for listed contractors?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "FORMING",
+        "what_changed": "Fresh current-run evidence established the candidate independently of prior Radar themes.",
+        "why_state_changed": "The signal was absent from the preceding dated scan.",
+        "strengthening_evidence": [
+          "Cabinet authority",
+          "Defined scope"
+        ],
+        "weakening_evidence": [
+          "No awards"
+        ],
+        "break_conditions": [
+          "Tenders are cancelled or loan fails"
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Tender documents",
+          "Loan signature",
+          "Winning contractors"
+        ],
+        "new_links": [
+          "grid reinforcement",
+          "rural roads",
+          "multilateral finance"
+        ],
+        "removed_links": []
+      }
+    },
+    {
+      "id": "almaty-water-fibre-manufacturing-pipeline-2026",
+      "theme": "Urban industrial zones adding enabling-equipment capacity",
+      "location": "Kazakhstan",
+      "status": "INVESTIGATE",
+      "new_to_radar": true,
+      "why_surfaced": "Almaty reviewed 11 projects including water-treatment systems and fibre-optic cable factories.",
+      "causal_chain": {
+        "world_change": "Industrial-zone pipelines are shifting toward equipment supporting water and digital infrastructure.",
+        "pressure": "Urban growth needs local treatment systems and connectivity components.",
+        "bottleneck_or_scarcity": "Sites, utilities, finance, technology transfer and customers.",
+        "formation": "A possible enabling-equipment cluster inside Almaty's industrial zone.",
+        "industries": [
+          "water treatment",
+          "fibre cable",
+          "industrial parks"
+        ],
+        "connected_companies_and_tickers": [
+          "Almaty authorities and undisclosed sponsors"
+        ],
+        "consequences": "The pipeline is coherent, but review-stage projects do not establish committed factories."
+      },
+      "evidence": [
+        {
+          "date": "2026-11-19",
+          "source": "Government of Kazakhstan / Almaty",
+          "language": "Russian",
+          "fact": "The city reports review of 11 projects worth KZT142 billion including water-treatment and fibre-cable production; faithful English summary by EMRADAR.",
+          "url": "https://www.gov.kz/org/almaty/press/news/details/1332658?lang=ru"
+        }
+      ],
+      "contradictions": [
+        "Review does not equal approval.",
+        "Sponsors and capacity are undisclosed."
+      ],
+      "missing_evidence": [
+        "Named investors",
+        "Approvals",
+        "Capacity",
+        "Customers"
+      ],
+      "what_to_check_next": "Identify sponsors, land allocation and equipment orders.",
+      "valuation_entry_research": {
+        "listed_exposure": [],
+        "questions": [
+          "Are listed suppliers involved?",
+          "Will output replace imports?"
+        ],
+        "recommendation": null
+      },
+      "chain_evolution": {
+        "previous_scan_state": "ABSENT",
+        "current_scan_state": "INVESTIGATE",
+        "what_changed": "Fresh current-run evidence established the candidate independently of prior Radar themes.",
+        "why_state_changed": "The signal was absent from the preceding dated scan.",
+        "strengthening_evidence": [
+          "Official review",
+          "Defined products"
+        ],
+        "weakening_evidence": [
+          "Undisclosed sponsors"
+        ],
+        "break_conditions": [
+          "Projects fail approval"
+        ],
+        "actual_breaks": [],
+        "unresolved_evidence": [
+          "Named investors",
+          "Approvals",
+          "Capacity",
+          "Customers"
+        ],
+        "new_links": [
+          "industrial zone",
+          "water equipment",
+          "fibre cable"
+        ],
+        "removed_links": []
+      }
+    }
+  ],
+  "what_is_forming": [
+    "Climate-adapted urban access corridor entering construction",
+    "Tariff transition reshaping EU–Indonesia supply chains",
+    "Competitive upstream acreage reopening",
+    "Cement expansion paired with captive energy",
+    "Generation investment pulling electrical-equipment localization",
+    "Small-state infrastructure procurement moving into execution"
+  ],
+  "current_scene": [
+    {
+      "player": "Ruta Bogotá Norte S.A.S. (private)",
+      "location": "Colombia",
+      "role": "Climate-adapted urban access corridor entering construction",
+      "ticker": null,
+      "why_now": "After four years of delay, construction formally began on the 17.96 km Accesos Norte II concession."
+    },
+    {
+      "player": "European and Indonesian exporters across covered sectors",
+      "location": "Indonesia / European Union",
+      "role": "Tariff transition reshaping EU–Indonesia supply chains",
+      "ticker": null,
+      "why_now": "The EU and Indonesia signed CEPA and an investment-protection agreement immediately ahead of Indonesia's 2027 GSP graduation."
+    },
+    {
+      "player": "Nigerian Upstream Petroleum Regulatory Commission",
+      "location": "Nigeria",
+      "role": "Competitive upstream acreage reopening",
+      "ticker": null,
+      "why_now": "Nigeria opened its 2026 licensing portal with 40 oil and gas blocks on offer."
+    },
+    {
+      "player": "PPC Ltd (JSE:PPC) / Sinoma International Engineering (SSE:600970)",
+      "location": "Zimbabwe / South Africa",
+      "role": "Cement expansion paired with captive energy",
+      "ticker": "JSE:PPC / SSE:600970",
+      "why_now": "PPC reports progress on a Zimbabwe solar project while advancing a new integrated cement plant with Sinoma engagement and financing evaluation."
+    },
+    {
+      "player": "Voltamp Energy SAOG (MSX:VOES) / UET Construction / Texnokabel Group / Nura Group",
+      "location": "Uzbekistan",
+      "role": "Generation investment pulling electrical-equipment localization",
+      "ticker": "MSX:VOES",
+      "why_now": "Uzbekistan signed a JDA for 500 MW of solar alongside conductor and high-voltage transformer manufacturing plans."
+    },
+    {
+      "player": "Government of Timor-Leste / World Bank IDA",
+      "location": "Timor-Leste",
+      "role": "Small-state infrastructure procurement moving into execution",
+      "ticker": null,
+      "why_now": "The Council of Ministers authorised procurement for two substations and lines while authorising negotiation of IDA road financing."
+    }
+  ],
+  "previous_scan_date": "2026-11-20",
+  "absent_from_current_scan": [
+    "india-fdre-solar-storage-commissioning-2026",
+    "uganda-heavy-truck-assembly-commissioning-2026",
+    "jordan-water-digital-infrastructure-finance-2026",
+    "egypt-amunet2-wind-localization-2026",
+    "kyrgyz-battery-recycling-expansion-2026",
+    "sierra-leone-agriconnect-compact-2026",
+    "kenya-scaleup-capital-platforms-2026",
+    "laos-vilatsaphone-wind-pda-2026"
+  ],
+  "publication_verified_at": "2026-11-21T09:17:30+11:00"
+}

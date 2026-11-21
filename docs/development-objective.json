@@ -881,5 +881,21 @@
       "2026-11-20"
     ],
     "next_action": "Deploy through existing controls; recover releases and record provider receipts and ledgers."
+  },
+  "november_21_signed_release_recovery": {
+    "status": "REPAIR_BRANCH_TESTING_PRODUCTION_UNCHANGED",
+    "scanner_release_sha256": "709ce5ead1e5b34a190db9a31835ab58d9c0a2fa1a5bcd90c19489171759cff5",
+    "root_cause": "Marketing required legacy public_verification fields absent from the valid five-gate scanner publication record.",
+    "repair_branch": "fix/nov21-five-gate-intake",
+    "authoritative_source_commit": "572f357c689b91ce69b4f27bc5ad5f2cf6263296",
+    "cost_control": "Two durably reserved outlet-discovery passes per formation and at most two contact fallback searches per pass; budget holds remain incomplete.",
+    "campaign_19": "v3-0b1fc19030a18405e20e2092b9698cdd",
+    "campaign_20": "v3-109516676ccd7103998c4e5e185e892f",
+    "campaign_21": null,
+    "production_deployed": false,
+    "publisher_emails_sent_by_repair": 0,
+    "x_posts_published_by_repair": 0,
+    "consecutive_scheduled_runs": 0,
+    "remaining": "CI must pass after pin update. Deployment auto-triggers hourly intake and may incur paid claim investigations; recovery spending is prohibited without separate authorization. Preserve original reviews and obtain an exact budget-bound approval before activating 21 November research."
   }
 }

@@ -14,6 +14,18 @@ function harness(candidates,html='Contact our editorial newsroom at editor@journ
  const resolver=async()=>[{address:'8.8.8.8'}];
  return {saved,openai,fetcher,resolver,contactReader:async()=>html,directory:{upsert:async r=>{const index=saved.findIndex(item=>item.id===r.id);if(index===-1)saved.push(r);else saved[index]=r;}}};
 }
+test('outlet contact fallback search is capped within one formation pass',async()=>{
+ const candidates=Array.from({length:5},(_,i)=>({name:'Journal '+i,website:'https://journal'+i+'.example',contact_url:'https://journal'+i+'.example/contact',email:'',evidence_ids:['e1']}));
+ const h=harness(candidates,'News and analysis. General contact information is unavailable.');
+ let calls=0;
+ h.openai.responses.create=async()=>{
+  calls++;
+  return {output:[{content:[{type:'output_text',text:calls===1?JSON.stringify({candidates:candidates.map(item=>({publication_type:'trade_publication',publication_proof_url:item.website+'/news',formation_ids:['r1'],industries:['Copper mining'],ecosystem_formation_ids:['r1'],relationship_reason:'Covers copper mining.',category:'mining journal',...item}))}):'{"urls":[]}'}]}]};
+ };
+ const {createAutonomousOutletDiscovery}=await load();
+ await createAutonomousOutletDiscovery(h)({document});
+ assert.equal(calls,3); // Initial discovery plus at most two contact fallback searches.
+});
 test('evidence-backed publication contact is persisted and linked',async()=>{
  const h=harness([{name:'Journal',category:'mining journal',website:'https://journal.example',contact_url:'https://journal.example/editorial',email:'editor@journal.example',evidence_ids:['e1']}]);
  const {createAutonomousOutletDiscovery}=await load();

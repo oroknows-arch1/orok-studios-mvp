@@ -121,7 +121,7 @@ test('actual intake and preparation validate scan SHA, gate before router/writer
  const origin='https://emerging-markets-radar.onrender.com';
  const archiveUrl=origin+'/data/checkpoints/discovery-'+snapshotDate+'.json';
  const input={snapshotDate,expectedSha256,archiveUrl,
-  publicationRecord:{snapshot_date:snapshotDate,public_verification:{artifact_sha256:expectedSha256,verification_contract:'live-reader-exact-identity-v2',archive_data_url:archiveUrl},gates:{public_snapshot_verification:'PASS'},downstream_release_allowed:true},
+  publicationRecord:{snapshot_date:snapshotDate,publication_state:'PUBLISHED',public_verification:{artifact_sha256:expectedSha256,verification_contract:'live-reader-exact-identity-v2',archive_data_url:archiveUrl},gates:{public_snapshot_verification:'PASS'},downstream_release_allowed:true},
   releaseAttestation:{snapshot_date:snapshotDate,source_sha256:expectedSha256,publication_state:'PUBLISHED',downstream_release_allowed:true,native_gates:{publication:'PASS'},attested_by:'AUTHORIZED_SOURCE_RELEASE_REVIEW',campaign_authority:{required_stop:'PUBLICATION_REVIEW',external_publication_allowed:false},source_path:'data/checkpoints/discovery-'+snapshotDate+'.json'}};
  const stages=[];
  const prepare=createPreparationRun({store,fetcher:async()=>({ok:true,arrayBuffer:async()=>bytes}),
