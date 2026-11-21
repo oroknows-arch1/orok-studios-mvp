@@ -18,7 +18,7 @@ summary{cursor:pointer;padding:12px 0;overflow-wrap:anywhere}article a{display:i
 <p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><button id="connect-x" type="button" disabled>Connect X</button><button id="check-x" type="button" disabled>Check X connection</button><main id="entries"></main>
 <script>
 'use strict';
-let campaign,invitationToken;
+let campaign,invitationToken,investigationOnly=false;
 const status=document.getElementById('status'),main=document.getElementById('entries');
 const csrf=()=>decodeURIComponent((document.cookie.split('; ').find(x=>x.startsWith('emradar_v3_csrf='))||'').split('=').slice(1).join('='));
 const api=async(path,payload)=>{
@@ -85,7 +85,10 @@ function openEditor({heading,initial,multiline=true,save}){
 }
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
+ investigationOnly=view.investigation_only===true;
  main.replaceChildren();
+ document.querySelector('header h1').textContent=investigationOnly?'EMRADAR · Investigation Review':'EMRADAR · Publication Review';
+ document.querySelector('header p').textContent=investigationOnly?'All held discoveries are available for manual investigation. No claims or assets are approved for distribution.':'Approval saves your decision. Use the separate release control to distribute approved content.';
  const automatic=view.automaticVerification;
  if(automatic){const summary=document.createElement('article');summary.append(text('h2','Automatic proposal verification'),text('p',automatic.status+' · '+automatic.verified+' verified · '+automatic.investigation_required+' requiring investigation · '+automatic.investigations_used+' of '+automatic.max_investigations+' investigation calls used · '+automatic.reused_successes+' successful results reused'));main.append(summary);}
  const investigation=view.investigation??[];
@@ -263,7 +266,7 @@ async function refresh(){
    if(target){const link=document.createElement('a');link.href='#'+encodeURIComponent(target);link.textContent='Back to current proposal and review controls';main.append(link);}
   }else main.append(card);
  }
- status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
+ status.textContent=(investigationOnly?'Investigation only — no proposals are approved for distribution. ':view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
 }
 (async()=>{
  try{
@@ -293,12 +296,13 @@ async function refresh(){
    catch{status.textContent='X connection could not be verified. Use Connect X if reconnection is needed.';}
    finally{checkX.disabled=false;}
   });
-  const discover=document.getElementById('discover');discover.disabled=false;
+  const discover=document.getElementById('discover');discover.disabled=investigationOnly;
   discover.addEventListener('click',async()=>{
+   if(investigationOnly)return;
    discover.disabled=true;status.textContent='Discovering evidence-matched destinations and preparing review drafts…';
    try{const result=await api('discover',{campaignId:campaign});await refresh();status.textContent+=' Discovery: '+(result.editorial_drafts??0)+' new drafts.';}
    catch(e){status.textContent='Discovery could not complete: '+e.message;}
-   finally{discover.disabled=false;}
+   finally{discover.disabled=investigationOnly;}
   });
  }catch(e){
   status.textContent='Your saved sign-in has expired or is unavailable on this device. Your approvals are preserved.';
