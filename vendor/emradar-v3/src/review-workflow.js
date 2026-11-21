@@ -6,6 +6,14 @@ import {issueReviewAccess,consumeReviewAccess} from './review-access.js';
 import {createOwnerSession,validateOwnerSession,OWNER_SESSION_TTL_MS} from './owner-sessions.js';
 import {validateNotificationReceipt} from './owner-notification.js';
 
+// An owner investigation is not an actionable publication review.
+// It may expose a held, signed scan to its owner but cannot authorize release.
+const isOwnerInvestigation=campaign=>campaign?.phase==='SCAN_VERIFIED'&&
+ typeof campaign?.scan?.artifact_sha256==='string'&&/^[a-f0-9]{64}$/.test(campaign.scan.artifact_sha256)&&
+ [campaign?.preparation_input?.document?.claim_audit,campaign?.claim_gate_previous?.document?.claim_audit]
+  .some(audit=>Array.isArray(audit)&&audit.length>0);
+const canOpenOwnerReview=campaign=>isReviewPhase(campaign?.phase)||isOwnerInvestigation(campaign);
+
 export class ReviewWorkflow {
  constructor({store,adapter,notify,baseUrl,verifyRecipient,verifier=null,clock=()=>Date.now()}) {
   if(!store?.adapter || !adapter?.read || !adapter?.compareAndSwap || typeof notify!=='function') throw Error('REVIEW_DEPENDENCIES_REQUIRED');
@@ -23,7 +31,7 @@ export class ReviewWorkflow {
  }
  async issue(campaignId,{revisionId=null}={}) {
   const campaign=(await this.store.adapter.read(campaignId))?.value;
-  if(!campaign || !isReviewPhase(campaign.phase)) throw Error('CAMPAIGN_NOT_READY');
+  if(!canOpenOwnerReview(campaign)) throw Error('CAMPAIGN_NOT_READY');
   const key='review:'+campaignId;
   const now=this.clock();
   const existing=(await this.adapter.read(key))?.value;
@@ -71,7 +79,7 @@ export class ReviewWorkflow {
  }
  async requestAccess(campaignId,{token,sessionId,sessionSecret}={}){
   const campaign=(await this.store.adapter.read(campaignId))?.value;
-  if(!isReviewPhase(campaign?.phase))throw Error('REVIEW_NOT_OPEN');
+  if(!canOpenOwnerReview(campaign))throw Error('REVIEW_NOT_OPEN');
   const current=(await this.adapter.read('review:'+campaignId))?.value;
   const equalHash=(expected,secret)=>{if(typeof expected!=='string'||typeof secret!=='string')return false;const a=Buffer.from(expected,'hex'),b=createHash('sha256').update(secret).digest();return a.length===b.length&&timingSafeEqual(a,b);};
   const session=current?.owner_session;
@@ -102,8 +110,9 @@ export class ReviewWorkflow {
  }
  async view(campaignId,sessionId,secret) {
   await this.authenticate(campaignId,sessionId,secret);
-  const campaign=typeof this.store.ensureEmailGroups==='function'?await this.store.ensureEmailGroups(campaignId):(await this.adapter.read(campaignId))?.value;
-  if(!campaign || !isReviewPhase(campaign.phase)) throw Error('REVIEW_NOT_OPEN');
+  const original=(await this.adapter.read(campaignId))?.value;
+  if(!canOpenOwnerReview(original))throw Error('REVIEW_NOT_OPEN');
+  const campaign=isOwnerInvestigation(original)?original:typeof this.store.ensureEmailGroups==='function'?await this.store.ensureEmailGroups(campaignId):original;
   const memberGroups=new Map(Object.values(campaign.email_groups??{}).flatMap(group=>group.destination_ids.map(destinationId=>[destinationId,group.id])));
   const describe=(entry,{historical=false,label='',decision=null}={})=>{
    const {asset,fingerprint}=entry;
@@ -124,7 +133,7 @@ export class ReviewWorkflow {
   for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:entry.hold_reason?'Held for claim evidence review':'Previous draft'}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
-  const described=Object.values(campaign.assets).map(entry=>describe(entry));
+  const described=Object.values(campaign.assets??{}).map(entry=>describe(entry));
   const actionable=described.filter(entry=>entry.asset.review_status!=='NEEDS_REVISION'&&entry.recipient_ready!==false);
   const actionableIds=new Set(actionable.map(entry=>entry.asset.destination_id));
   const groups=Object.values(campaign.email_groups??{}).map(group=>({...group,destination_ids:group.destination_ids.filter(id=>actionableIds.has(id)),approval:campaign.group_approvals?.[group.id]??null})).filter(group=>group.destination_ids.length);
@@ -144,7 +153,7 @@ export class ReviewWorkflow {
   }
   const admitted=new Set(campaign.preparation_input?.document?.records?.map(record=>record.id)??[]);
   const investigation=[...investigationById.values()].map(item=>({...item,admitted:admitted.has(item.id)}));
-  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:actionable,internal_incomplete_count:described.length-actionable.length,history,groups,investigation};
+  return {campaignId,phase:campaign.phase,investigation_only:isOwnerInvestigation(campaign),completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:actionable,internal_incomplete_count:described.length-actionable.length,history,groups,investigation};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
