@@ -104,7 +104,10 @@ async function refresh(){
    const label=item.id.replace(/-20[0-9]{2}(?:-[0-9]+)?$/,'').replace(/-/g,' ');
    const detail=item.admitted?'Admitted for proposal preparation':
     'Held for investigation ('+item.status+')';
-   list.append(text('li',label+' — '+detail+' · '+item.supported_claims+' supported claim(s), '+item.unresolved_claims+' unresolved'));
+   const line=document.createElement('li');
+   line.append(text('strong',item.scanner_theme||label),text('p',detail+' · '+item.supported_claims+' supported claim(s), '+item.unresolved_claims+' unresolved'));
+   if(item.scanner_rationale)line.append(text('p','Scanner hypothesis (not independently verified): '+item.scanner_rationale));
+   list.append(line);
   }
   pending.append(list);register.append(pending);main.append(register);
  }
