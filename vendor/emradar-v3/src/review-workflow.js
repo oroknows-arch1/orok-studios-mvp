@@ -152,7 +152,18 @@ export class ReviewWorkflow {
    });
   }
   const admitted=new Set(campaign.preparation_input?.document?.records?.map(record=>record.id)??[]);
-  const investigation=[...investigationById.values()].map(item=>({...item,admitted:admitted.has(item.id)}));
+  const scanRecords=Array.isArray(campaign.owner_investigation_records)?campaign.owner_investigation_records:[];
+  for(const source of scanRecords){
+   if(typeof source?.id!=='string'||!source.id||investigationById.has(source.id))continue;
+   investigationById.set(source.id,{id:source.id,status:'NOT_CHECKED',supported_claims:0,unresolved_claims:0});
+  }
+  const sourceById=new Map(scanRecords.map(item=>[item.id,item]));
+  const investigation=[...investigationById.values()].map(item=>({
+   ...item,admitted:admitted.has(item.id),
+   scanner_theme:sourceById.get(item.id)?.theme??'',
+   scanner_rationale:sourceById.get(item.id)?.why_surfaced??'',
+   scanner_status:sourceById.get(item.id)?.scanner_status??'UNKNOWN'
+  }));
   return {campaignId,phase:campaign.phase,investigation_only:isOwnerInvestigation(campaign),completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:actionable,internal_incomplete_count:described.length-actionable.length,history,groups,investigation};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
