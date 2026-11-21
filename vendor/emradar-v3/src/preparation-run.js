@@ -48,7 +48,7 @@ export function createPreparationRun({store,verifyClaims,discover,write,renderVi
      current.claim_gate_history=[...(current.claim_gate_history??[]),{attempt:current.claim_gate_attempt,document:current.preparation_input.document}].slice(-3);
      current.claim_gate_previous={attempt:current.claim_gate_attempt,document:current.preparation_input.document};
      const previousRevision=current.claim_gate_attempt?.policy_revision;
-     const policyRevision=previousRevision==='partial-claim-v5'?'passage-selection-v6':previousRevision==='exact-figure-v4'?'partial-claim-v5':previousRevision==='credit-restored-v3'?'exact-figure-v4':previousRevision==='provider-diagnostics-v2'?'credit-restored-v3':'provider-diagnostics-v2';
+     const policyRevision=previousRevision==='passage-selection-v6'?'question-completion-v7':previousRevision==='partial-claim-v5'?'passage-selection-v6':previousRevision==='exact-figure-v4'?'partial-claim-v5':previousRevision==='credit-restored-v3'?'exact-figure-v4':previousRevision==='provider-diagnostics-v2'?'credit-restored-v3':'provider-diagnostics-v2';
      current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision,policy_revision:policyRevision,recovery_record_ids:recoverRecordIds};
     }else if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision};
     return current;
