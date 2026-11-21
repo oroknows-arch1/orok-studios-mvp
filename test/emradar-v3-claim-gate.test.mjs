@@ -324,3 +324,25 @@ test('independent wording check retains downloaded article identity with the sea
  assert.equal(await api.verifyDraft({draft:{subject:'Port',body:'Unsupported expansion'},evidence:[{id:'port:0',fact,source:'Port authority release',source_url:primary,excerpt,page_sha256:page.sha256}]}),false);
  assert.equal(inspected,true);
 });
+
+
+test('production assessor may retain a literal narrower fact with a testable unresolved question',async()=>{
+ const bundled='The port authority opened its first electric cargo berth, all vessels converted, and every terminal closed.';
+ const narrower='The port authority opened its first electric cargo berth';
+ const document=normalizePublishedEvidence({records:[record('port',[source(primary,bundled)])]});
+ let checks=0;
+ const provider=createClaimEvidenceProvider({openai:{responses:{create:async()=>assert.fail('existing source should avoid web search')}},maxInvestigations:1,maxToolCalls:3,
+  readPage:async()=>page,
+  complete:async(prompt,input)=>{
+   if(input.claims){assert.match(prompt,/verified_fact/);return {supported:[{id:input.claims[0].id,status:'SUPPORTED',url:input.pages[0].url,excerpt,verified_fact:narrower}],
+    story:{significant:true,claim_ids:[input.claims[0].id],headline:'One electric cargo berth opens',
+     finding:'Ships must reserve the only available shore-power connection before arrival.',industries:['ports'],relationships:[],
+     investigative_question:'Will berth reservations constrain arriving cargo vessels?',
+     scenarios:[{status:'UNRESOLVED_QUESTION',proposition:'Reservations may exceed available connections',evidence_ids:[input.claims[0].id],missing_evidence:['Daily reservations and arrivals']}]}};}
+   checks++;assert.match(prompt,/original_fact/);assert.equal(input.evidence[0].fact,narrower);assert.equal(input.evidence[0].original_fact,bundled);return {supported:true};
+  }});
+ const result=await provider({scan:fakeScan,document});
+ assert.equal(checks,1);assert.equal(result.claim_audit[0].claims[0].status,'PARTIAL_SUPPORTED');
+ assert.equal(result.records.length,1);assert.equal(result.evidence[0].partial,true);
+ assert.doesNotMatch(JSON.stringify(result.records),/every terminal closed|all vessels converted/i);
+});
