@@ -46,7 +46,7 @@ export function createPreparationRun({store,verifyClaims,discover,write,renderVi
    state=await store.mutate(campaignId,current=>{
     if(recoverRecordIds?.length&&JSON.stringify(recoveryIds(current))===JSON.stringify(recoverRecordIds)){
      current.claim_gate_previous={attempt:current.claim_gate_attempt,document:current.preparation_input.document};
-     current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision,recovery_record_ids:recoverRecordIds};
+     current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision,policy_revision:'investigative-question-v1',recovery_record_ids:recoverRecordIds};
     }else if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision};
     return current;
    });
