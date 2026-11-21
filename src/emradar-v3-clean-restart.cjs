@@ -12,7 +12,8 @@ function recoverableSourceRecords(state){
  const creditRecovery=revision==='provider-diagnostics-v2'&&exactCampaign;
  const figureRecovery=revision==='credit-restored-v3'&&exactCampaign;
  const partialRecovery=revision==='exact-figure-v4'&&exactCampaign;
- if(revision==='partial-claim-v5'||(state.claim_gate_previous&&revision!=='investigative-question-v1'&&!creditRecovery&&!figureRecovery&&!partialRecovery))return null;
+ const passageRecovery=revision==='partial-claim-v5'&&exactCampaign;
+ if(revision==='passage-selection-v6'||(state.claim_gate_previous&&revision!=='investigative-question-v1'&&!creditRecovery&&!figureRecovery&&!partialRecovery&&!passageRecovery))return null;
  const document=state.preparation_input?.document;
  if(document?.evidence?.length!==0)return null;
  if(creditRecovery)return (document.claim_audit??[]).filter(item=>item.status==='EVIDENCE_CHECK_FAILED'&&
@@ -22,6 +23,7 @@ function recoverableSourceRecords(state){
    item.status==='NO_SUPPORTED_SIGNIFICANT_ANGLE').map(item=>item.record_id);
   return eligible.length?eligible:null;
  }
+ if(passageRecovery)return (document.claim_audit??[]).some(item=>item.record_id==='colombia-accesos-norte-ii-construction-2026'&&item.assessment?.rejection?.excerpt_invalid>0)?['colombia-accesos-norte-ii-construction-2026']:null;
  if(partialRecovery)return ['colombia-accesos-norte-ii-construction-2026',
   'nigeria-2026-upstream-licensing-round-2026','almaty-water-fibre-manufacturing-pipeline-2026'];
  const statuses=revision==='investigative-question-v1'?['EVIDENCE_CHECK_FAILED']:
