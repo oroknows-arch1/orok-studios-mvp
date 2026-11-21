@@ -129,7 +129,7 @@ test('exact figure correction rechecks only the Colombian source once',()=>{
    {record_id:'colombia-accesos-norte-ii-construction-2026',status:'NO_SUPPORTED_SIGNIFICANT_ANGLE'},
    {record_id:'nigeria-2026-upstream-licensing-round-2026',status:'NO_SUPPORTED_SIGNIFICANT_ANGLE'}]}}};
  assert.deepEqual(recoverableSourceRecords(state),['colombia-accesos-norte-ii-construction-2026']);
- assert.equal(recoverableSourceRecords({...state,claim_gate_attempt:{status:'NO_VERIFIED_ANGLE',policy_revision:'exact-figure-v4'}}),null);
+ assert.equal(recoverableSourceRecords({...state,claim_gate_attempt:{status:'NO_VERIFIED_ANGLE',policy_revision:'partial-claim-v5'}}),null);
  assert.equal(recoverableSourceRecords({...state,scan:{artifact_sha256:'a'.repeat(64)}}),null);
 });
 
