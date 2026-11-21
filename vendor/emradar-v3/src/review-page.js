@@ -107,9 +107,40 @@ async function refresh(){
    const line=document.createElement('li');
    line.append(text('strong',item.scanner_theme||label),text('p',detail+' · '+item.supported_claims+' supported claim(s), '+item.unresolved_claims+' unresolved'));
    if(item.scanner_rationale)line.append(text('p','Scanner hypothesis (not independently verified): '+item.scanner_rationale));
+   const triage=item.owner_triage;
+   if(triage)line.append(text('p','Owner research decision: '+triage.decision+(triage.note?' · '+triage.note:'')));
+   const actions=document.createElement('div');actions.className='actions';
+   for(const choice of ['PRIORITIZE','DEFER','EXCLUDE']){
+    const control=text('button',choice==='PRIORITIZE'?'Investigate':choice==='DEFER'?'Later':'Exclude from research');
+    control.type='button';
+    if(triage?.decision===choice)control.disabled=true;
+    control.addEventListener('click',async()=>{
+     const note=prompt('Research notes or questions (optional):',triage?.note??'');
+     if(note===null)return;
+     control.disabled=true;
+     try{await api('investigation-triage',{campaignId:campaign,recordId:item.id,decision:choice,note});await refresh();status.textContent='Research decision saved. No publication permission was granted.';}
+     catch(error){status.textContent='Research decision was not saved: '+error.message;control.disabled=false;}
+    });
+    actions.append(control);
+   }
+   line.append(actions);
    list.append(line);
   }
-  pending.append(list);register.append(pending);main.append(register);
+  pending.append(list);register.append(pending);
+  const copyX=text('button','Copy X audience research brief');copyX.type='button';
+  copyX.addEventListener('click',async()=>{
+   const chosen=investigation.filter(item=>item.owner_triage?.decision!=='EXCLUDE'&&item.owner_triage?.decision!=='DEFER');
+   if(!chosen.length){status.textContent='No discoveries selected for X audience research.';return;}
+   const brief=[
+    'EMRADAR X AUDIENCE RESEARCH — INVESTIGATION ONLY',
+    'These scanner hypotheses are NOT independently verified. Confirm factual statements from attributable primary passages before drafting any publishable claim.',
+    'Find 20–30 genuine current X conversations across affected communities, firms, institutions and local languages. Return only exact x.com/account/status/id links, authors, dates, context and 8 evidence-grounded reply opportunities. Never invent links, facts or quotes. No posting.',
+    ...chosen.map((item,index)=>(index+1)+'. '+(item.scanner_theme||item.id)+' — '+(item.scanner_rationale||'')+' | Gate: '+item.status+' | Owner note: '+(item.owner_triage?.note||'none'))
+   ].join('\\n\\n');
+   try{await navigator.clipboard.writeText(brief);status.textContent='X research brief copied. Verification and posting remain separate.';}
+   catch{openEditor({heading:'Copy X research brief',initial:brief,save:async()=>{}});status.textContent='Copy the research brief from the editor. Nothing was published.';}
+  });
+  register.append(copyX);main.append(register);
  }
  const counts={approved:0,rejected:0,undecided:0};
  for(const entry of view.entries){
