@@ -1,5 +1,4 @@
 'use strict';
-const {checkedAsset,checkedState}=require('./fixtures/v3-claim-fixtures.cjs');
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
@@ -9,14 +8,12 @@ const canonical=x=>Array.isArray(x)?x.map(canonical):x&&typeof x==='object'?Obje
 const hash=x=>crypto.createHash('sha256').update(JSON.stringify(canonical(x))).digest('hex');
 test('paid API V3 verifier reads persisted approval and claimed delivery, never trusts request alone',async()=>{
  const destination=verified('journal');
- const fixture=checkedState({});
  const asset={campaign_id:'v3-campaign',destination_id:'journal',kind:'EMAIL',to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1'],body:'evidence'};
- checkedAsset(asset,fixture.preparation_input.document);
  const evidence=[{id:'e1',fact:'Supported evidence',source_url:'https://example.org/e1',sha256:'a'.repeat(64)}];
  const verification={id:'verify-1',status:'VERIFIED',deliverable:true,asset_sha256:hash(asset),campaign_id:asset.campaign_id,destination_id:asset.destination_id,recipient:asset.to,destination_sha256:hash(destination),evidence_sha256:hash(evidence.map(item=>({id:item.id,sha256:item.sha256,fact:item.fact,source_url:item.source_url,updated_at:null}))),revision_id:null,verified_at:new Date().toISOString(),expires_at:new Date(Date.now()+86400000).toISOString(),claims:[{id:'c1',material:true,status:'VERIFIED'}],contradictions:[]};
  const approval={campaign_id:asset.campaign_id,destination_id:asset.destination_id,authority:'OWNER',decision:'APPROVE',asset_sha256:hash(asset)};
  const key=hash([asset.campaign_id,asset.destination_id,approval.asset_sha256]);
- const state={...fixture,phase:'PUBLICATION_REVIEW',destinations:[destination],assets:{journal:{asset,fingerprint:hash(asset)}},proposal_verifications:{journal:[verification]},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
+ const state={phase:'PUBLICATION_REVIEW',destinations:[destination],preparation_input:{document:{evidence}},assets:{journal:{asset,fingerprint:hash(asset)}},proposal_verifications:{journal:[verification]},decisions:{journal:approval},deliveries:{journal:{status:'ATTEMPTING',idempotency_key:key}}};
  const reads=[];
  const verify=createV3ApprovalVerifier({pool:{query:async(sql,args)=>{if(sql.startsWith('SELECT record'))return {rows:[{record:destination}]};reads.push(args);return {rows:[{payload:state}]};}}});
  const request={asset,approval,idempotency_key:key,campaign_id:asset.campaign_id,destination_id:asset.destination_id};

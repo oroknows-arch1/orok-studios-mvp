@@ -1,5 +1,3 @@
-import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
-const {checkedDocument,checkedProviders}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createOpenAiPreparationProviders} from '../vendor/emradar-v3/src/openai-preparation-providers.js';
@@ -30,7 +28,7 @@ test('October 18 Kenya paraphrase is rejected until the pitch states a supported
  const old={subject:'Kenya’s Ebola response beyond the case count',body:'Africa CDC reported seven cases. Those figures offer a way to examine tracing alongside health-worker cases. There is no evidence of community transmission.',limitations:'There is no evidence of community transmission.' ,story_evidence_ids:kenyaIds};
  const finding='The response is constrained not by case detection alone but by whether frontline protection can hold while tracing remains high.';
  const corrected={subject:'Kenya’s Ebola response: the frontline protection test',body:`I’m Sean Walker, working on EMRADAR.\n\nOur scan identified the frontline protection question in Kenya. ${finding} Three of four new cases were health workers even though all four were known, quarantined contacts. High tracing coverage therefore measures reach, not whether exposure inside care settings is controlled. The exposure route and PPE sufficiency remain unverified. We are developing an article on what tracing can establish about frontline protection. Would an evidence-backed article examining that operational gap interest Africa Confidential? If useful, I can send a concise draft with sources for review.`,analytical_finding:finding,limitations:'The exposure route and PPE sufficiency remain unverified.',story_evidence_ids:kenyaIds};
- const provider=checkedProviders(createOpenAiPreparationProviders,{openai:clientFor([old,corrected])});
+ const provider=createOpenAiPreparationProviders({openai:clientFor([old,corrected])});
  const asset=await provider.write({campaignId:'oct18',destination,document});
  assert.match(asset.body,/frontline protection can hold/);assert.match(asset.body,/measures reach, not whether exposure/);assert.deepEqual(asset.evidence_ids,kenyaIds);
 });
@@ -40,7 +38,7 @@ test('the writer makes at most one bounded repair and still fails closed',async(
  const invalid={subject:'Counts',body:'Three of four cases were health workers.',limitations:'The route is unknown.',story_evidence_ids:kenyaIds};
  let calls=0;
  const openai={chat:{completions:{create:async()=>{calls++;return {choices:[{message:{content:JSON.stringify(invalid)}}]};}}},images:{generate:async()=>{throw Error('NOT_USED');}}};
- const provider=checkedProviders(createOpenAiPreparationProviders,{openai});
+ const provider=createOpenAiPreparationProviders({openai});
  await assert.rejects(provider.write({campaignId:'oct18',destination,document}),/V3_(?:EDITORIAL_UNCERTAINTY|ANALYTICAL_FINDING)_REQUIRED/);
  assert.equal(calls,2);
 });
@@ -49,7 +47,7 @@ test('rejected drafts can be captured diagnostically without becoming campaign a
  const destination={...verified('africa-confidential',evidence.filter(e=>kenyaIds.includes(e.id))),name:'Africa Confidential',evidence:{ids:kenyaIds}};
  const invalid={subject:'Counts',body:'Three of four cases were health workers.',limitations:'The route is unknown.',story_evidence_ids:kenyaIds};
  const captured=[];
- const provider=checkedProviders(createOpenAiPreparationProviders,{openai:clientFor([invalid,invalid]),onWriterDraft:async value=>captured.push(structuredClone(value))});
+ const provider=createOpenAiPreparationProviders({openai:clientFor([invalid,invalid]),onWriterDraft:async value=>captured.push(structuredClone(value))});
  await assert.rejects(provider.write({campaignId:'oct18',destination,document}),/V3_(?:EDITORIAL_UNCERTAINTY|ANALYTICAL_FINDING)_REQUIRED/);
  assert.deepEqual(captured.map(item=>item.attempt),[1,2]);
  assert.equal(captured[1].draft.body,invalid.body);
@@ -65,7 +63,7 @@ test('validator accepts natural inflections observed in real provider mechanisms
 test('October 18 Bangladesh X uses one formation and adds analysis instead of repeating counts',async()=>{
  const finding='The outbreak is not only a vaccination-volume problem; the nationwide review shows that financing, cold chain and data are now part of the failure boundary.';
  const limitation='The review has started, but its findings and completed repairs are not yet available.';
- const provider=checkedProviders(createOpenAiPreparationProviders,{openai:clientFor([{subject:'Bangladesh measles: beyond emergency doses',body:`${finding} A campaign is targeting 3.4 million missed children while WHO reviews the system across all eight divisions. ${limitation}`,analytical_finding:finding,limitations:limitation,story_evidence_ids:bangladeshIds}])});
+ const provider=createOpenAiPreparationProviders({openai:clientFor([{subject:'Bangladesh measles: beyond emergency doses',body:`${finding} A campaign is targeting 3.4 million missed children while WHO reviews the system across all eight divisions. ${limitation}`,analytical_finding:finding,limitations:limitation,story_evidence_ids:bangladeshIds}])});
  const asset=await provider.write({campaignId:'oct18',destination:{id:'x',evidence:{ids:[...bangladeshIds,...kenyaIds]}},document});
  assert.deepEqual(asset.evidence_ids,bangladeshIds);assert.equal(asset.story_record_id,'bangladesh-measles-immunization-system-failure');assert.match(asset.body,/failure boundary/);assert.doesNotMatch(asset.body,/202,000 suspected/);
  const prompt=emradarGraphicPrompt({asset,document});
@@ -74,7 +72,7 @@ test('October 18 Bangladesh X uses one formation and adds analysis instead of re
 
 test('fixed graphic renders at 2048px without probabilistic visual approval',async()=>{
  const asset={kind:'X',body:'Evidence-backed analysis with uncertainty.',subject:'Bangladesh',evidence_ids:bangladeshIds};
- let calls=0;const provider=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async()=>{calls++;}}}}});
+ let calls=0;const provider=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{calls++;}}}}});
  const rendered=await provider.renderVisual({asset:{...asset,subject:'Bangladesh',story_record_id:'bangladesh-measles-immunization-system-failure'},document,scan:{snapshot_date:'2026-10-18'}});
  const png=Buffer.from(rendered.base64,'base64');
  assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
@@ -85,7 +83,7 @@ test('fixed graphic renders at 2048px without probabilistic visual approval',asy
 test('graphic callback receives deterministic layout diagnostics',async()=>{
  let captured;
  const openai={chat:{completions:{create:async()=>{throw Error('VISUAL_LLM_MUST_NOT_RUN');}}}};
- const provider=checkedProviders(createOpenAiPreparationProviders,{openai,onVisualInspection:async value=>{captured=value;}});
+ const provider=createOpenAiPreparationProviders({openai,onVisualInspection:async value=>{captured=value;}});
  const asset={kind:'X',body:'Evidence-backed analysis with uncertainty.',subject:'Bangladesh',evidence_ids:bangladeshIds};
  await provider.renderVisual({asset,document,scan:{snapshot_date:'2026-10-18'}});
  assert.equal(Buffer.from(captured.base64,'base64').subarray(0,8).toString('hex'),'89504e470d0a1a0a');
@@ -102,7 +100,7 @@ test('the preparation handoff preserves a failed X graphic as owner-visible inco
   write:async()=>({campaign_id:'oct18',destination_id:'x',kind:'X',body:'Analysis with a material limitation.',subject:'Bangladesh',evidence_ids:bangladeshIds}),
   renderVisual:async()=>{throw Error('V3_X_VISUAL_QUALITY_FAILED');}
  });
- const result=await preparation.prepare({scan:{artifact_sha256:'a'.repeat(64)},document:checkedDocument(document)});
+ const result=await preparation.prepare({scan:{},document});
  assert.equal(result.status,'PUBLICATION_REVIEW');
  assert.equal(persisted.assets[0].review_status,'NEEDS_REVISION');
  assert.equal(persisted.assets[0].preparation_error,'V3_X_VISUAL_QUALITY_FAILED');

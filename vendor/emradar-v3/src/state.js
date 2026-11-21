@@ -1,13 +1,9 @@
-import restartPolicy from '../../../src/emradar-v3-clean-restart.cjs';
 import {isReviewPhase} from './contracts.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import emailBrand from '../../../src/email-brand.cjs';
 import { randomUUID } from 'node:crypto';
 import { assertScan, assertDestinations, assetFingerprint, assertApproval, assertSendable, identicalEmailGroupKey, sha256 } from './contracts.js';
 import {proposalBinding} from './proposal-verification.js';
-import claimPolicy from '../../emradar-v3-authoritative/src/claim-evidence.cjs';
-import {quarantineUnverifiedAssets} from './claim-quarantine.js';
-const {assertAssetClaimEvidence,bindClaimEvidence,hasAssetClaimEvidence}=claimPolicy;
 
 const groupIdFor=(campaignId,destinationIds)=>'email-group-'+sha256([campaignId,[...destinationIds].sort()]).slice(0,24);
 const destinationIsVerified=(state,destinationId)=>state.destinations.some(destination=>destination.id===destinationId&&destination.contact_verified===true&&destination.delivery_eligible!==false);
@@ -23,10 +19,9 @@ const createEmailGroups=(campaignId,state)=>{
 };
 
 export class CampaignStore {
-  constructor(adapter,{verifyDraft}={}) {
+  constructor(adapter) {
     if (!adapter || typeof adapter.read !== 'function' || typeof adapter.compareAndSwap !== 'function') throw Error('DURABLE_ADAPTER_REQUIRED');
     this.adapter = adapter;
-    this.verifyDraft=verifyDraft;
   }
   async mutate(id, fn) {
     for (let i = 0; i < 8; i++) {
@@ -38,12 +33,11 @@ export class CampaignStore {
     }
     throw Error('CONCURRENT_UPDATE_RETRY_EXHAUSTED');
   }
-  async start(scan,{restartKey}={}) {
+  async start(scan) {
     const verified = assertScan(scan);
-    const id=restartPolicy.campaignIdentity(verified.source_key,restartKey);
+    const id = 'v3-' + sha256(verified.source_key).slice(0,32);
     await this.mutate(id, previous => {
       if (previous) {
-        if(previous.phase==='CLOSED')throw Error('CAMPAIGN_RETIRED');
         if (previous.scan.source_key !== verified.source_key) throw Error('SCAN_IDENTITY_CONFLICT');
         return previous;
       }
@@ -68,7 +62,6 @@ export class CampaignStore {
       const next = {};
       for (const asset of assets) {
         if (!valid.has(asset.destination_id) || asset.campaign_id !== id || next[asset.destination_id]) throw Error('INVALID_ASSET_DESTINATION');
-        if(asset.review_status!=='NEEDS_REVISION'&&!state.deliveries?.[asset.destination_id])assertAssetClaimEvidence(state,asset);
         if(asset.review_status!=='NEEDS_REVISION'&&asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(asset,state.destinations.find(d=>d.id===asset.destination_id));
         next[asset.destination_id] = {asset:structuredClone(asset), fingerprint:assetFingerprint(asset)};
       }
@@ -90,7 +83,6 @@ export class CampaignStore {
       if(assets.length!==additions.size) throw Error('MISSING_DESTINATION_ASSET');
       for(const asset of assets){
         if(!additions.has(asset.destination_id)||asset.campaign_id!==id||state.assets[asset.destination_id]) throw Error('INVALID_ASSET_DESTINATION');
-        if(asset.review_status!=='NEEDS_REVISION'&&!state.deliveries?.[asset.destination_id])assertAssetClaimEvidence(state,asset);
         if(asset.review_status!=='NEEDS_REVISION'&&asset.kind==='EMAIL')recipientPolicy.assertVerifiedAsset(asset,additions.get(asset.destination_id));
         state.assets[asset.destination_id]={asset:structuredClone(asset),fingerprint:assetFingerprint(asset)};
       }
@@ -115,7 +107,6 @@ export class CampaignStore {
       if (state.deliveries[destinationId]) throw Error('DECISION_AFTER_DISTRIBUTION');
       if(decision==='APPROVE'&&item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');
       state.review_actions??={};
-      if(decision==='APPROVE')assertAssetClaimEvidence(state,item.asset);
       state.decisions??={};
       if(['REJECT','REGENERATE'].includes(decision)){
        const requestedAt=new Date().toISOString(),requestId=randomUUID();
@@ -132,40 +123,10 @@ export class CampaignStore {
     });
   }
   async recordProposalVerification(id,destinationId,fingerprint,verification){
-   return this.mutate(id,state=>{
-    if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');
-    const entry=state.assets[destinationId],destination=state.destinations.find(item=>item.id===destinationId);
-    if(!entry||entry.fingerprint!==fingerprint||!destination)throw Error('STALE_ASSET_VERIFICATION');
-    const evidence=state.preparation_input?.document?.evidence??[];
-    const binding=proposalBinding({asset:entry.asset,destination,evidence});
-    for(const key of Object.keys(binding))if(verification?.[key]!==binding[key])throw Error('INVALID_PROPOSAL_VERIFICATION_BINDING');
-    state.proposal_verifications??={};
-    state.proposal_verifications[destinationId]??=[];
-    if(!state.proposal_verifications[destinationId].some(item=>item.id===verification.id))state.proposal_verifications[destinationId].push(structuredClone(verification));
-    state.events.push({type:'PROPOSAL_VERIFIED',destination_id:destinationId,id:randomUUID(),verification_id:verification.id,status:verification.status,asset_sha256:fingerprint});
-    if(verification.status==='UNSUPPORTED'&&hasAssetClaimEvidence(state,entry.asset)){
-     const rejectedDestinationIds=new Set(Object.entries(state.assets).filter(([,candidate])=>
-      candidate.asset.claim_evidence?.document_sha256===entry.asset.claim_evidence.document_sha256&&
-      candidate.asset.claim_evidence?.content_sha256===entry.asset.claim_evidence.content_sha256
-     ).map(([candidateId])=>candidateId));
-     quarantineUnverifiedAssets(state,{rejectedDestinationIds});
-    }
-    return state;
-   });
+   return this.mutate(id,state=>{if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const entry=state.assets[destinationId],destination=state.destinations.find(item=>item.id===destinationId);if(!entry||entry.fingerprint!==fingerprint||!destination)throw Error('STALE_ASSET_VERIFICATION');const binding=proposalBinding({asset:entry.asset,destination,evidence:state.preparation_input?.document?.evidence??[]});for(const key of Object.keys(binding))if(verification?.[key]!==binding[key])throw Error('INVALID_PROPOSAL_VERIFICATION_BINDING');state.proposal_verifications??={};state.proposal_verifications[destinationId]??=[];if(!state.proposal_verifications[destinationId].some(item=>item.id===verification.id))state.proposal_verifications[destinationId].push(structuredClone(verification));state.events.push({type:'PROPOSAL_VERIFIED',destination_id:destinationId,id:randomUUID(),verification_id:verification.id,status:verification.status,asset_sha256:fingerprint});return state;});
   }
   async recordAutomaticVerificationRun(id,summary){
    return this.mutate(id,state=>{if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');state.automatic_proposal_verification=structuredClone(summary);state.events??=[];state.events.push({type:'AUTOMATIC_PROPOSAL_VERIFICATION_COMPLETED',id:randomUUID(),status:summary.status,investigations_used:summary.investigations_used,distinct_proposals:summary.distinct_proposals});return state;});
-  }
-  async reviewContentEdit(state,entries,changes){
-    if(!Object.hasOwn(changes,'subject')&&!Object.hasOwn(changes,'body'))return false;
-    const asset=entries[0].asset;
-    const subject=changes.subject??asset.subject;
-    const body=asset.brand_version&&Object.hasOwn(changes,'body')?emailBrand.reviewBody(changes.body):changes.body??asset.body;
-    if(subject===asset.subject&&body===asset.body)return false;
-    for(const entry of entries)assertAssetClaimEvidence(state,entry.asset);
-    const evidence=state.preparation_input.document.evidence.filter(e=>entries.every(entry=>entry.asset.evidence_ids.includes(e.id)));
-    if(!evidence.length||!await this.verifyDraft?.({draft:{subject,body},evidence}))throw Error('V3_DRAFT_CLAIMS_UNSUPPORTED');
-    return true;
   }
   async revise(id,destinationId,fingerprint,changes,verifiedDestination=null,recipientCheck=null) {
     if (!changes || typeof changes!=='object' || Array.isArray(changes)) throw Error('INVALID_REVISION');
@@ -180,12 +141,6 @@ export class CampaignStore {
       }
       if (typeof value!=='string' || !value.trim() || value.length>50000) throw Error('INVALID_REVISION_TEXT');
     }
-    const snapshot=(await this.adapter.read(id))?.value;
-    const original=snapshot?.assets?.[destinationId];
-    if(original?.fingerprint!==fingerprint||!original)throw Error('STALE_ASSET_REVISION');
-    if(snapshot.deliveries?.[destinationId])throw Error('REVISION_AFTER_DISTRIBUTION');
-    if(Object.values(snapshot.email_groups??{}).some(group=>group.destination_ids.includes(destinationId)&&group.destination_ids.length>1))throw Error('GROUP_REVISION_REQUIRED');
-    const reviewed=await this.reviewContentEdit(snapshot,[original],changes);
     return this.mutate(id,state=>{
       if (!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
       const entry=state.assets[destinationId];
@@ -214,8 +169,6 @@ export class CampaignStore {
       if(revised.brand_version){if(Object.hasOwn(changes,'body'))revised.body=emailBrand.reviewBody(revised.body);revised.html=emailBrand.render(revised.body);}
       if (sha256(revised)===sha256(entry.asset)) return state;
       if(Object.hasOwn(changes,'to')&&verifiedDestination)recipientPolicy.assertVerifiedAsset(revised,verifiedDestination);
-      if(reviewed){assertAssetClaimEvidence(state,entry.asset);bindClaimEvidence(revised,state.preparation_input.document);}
-      assertAssetClaimEvidence(state,revised);
       const nextFingerprint=assetFingerprint(revised);
       const priorDecision=state.decisions[destinationId]?.decision??null;
       state.editorial_versions??={};state.editorial_versions[destinationId]??=[];
@@ -236,19 +189,13 @@ export class CampaignStore {
   async reviseGroup(id,groupId,contentHash,version,changes){
    if(!changes||typeof changes!=='object'||Array.isArray(changes)||!Object.keys(changes).length||Object.keys(changes).some(key=>!['subject','body'].includes(key)))throw Error('INVALID_REVISION_FIELDS');
    for(const value of Object.values(changes))if(typeof value!=='string'||!value.trim()||value.length>50000)throw Error('INVALID_REVISION_TEXT');
-   const snapshot=(await this.adapter.read(id))?.value,priorGroup=snapshot?.email_groups?.[groupId];
-   if(!priorGroup||priorGroup.content_hash!==contentHash||priorGroup.version!==version)throw Error('STALE_GROUP_VERSION');
-   if(priorGroup.destination_ids.some(destinationId=>snapshot.deliveries[destinationId]))throw Error('REVISION_AFTER_DISTRIBUTION');
-   const original=priorGroup.destination_ids.map(destinationId=>snapshot.assets[destinationId]);
-   if(original.some(entry=>!entry||identicalEmailGroupKey(entry.asset)!==contentHash))throw Error('GROUP_CONTENT_MISMATCH');
-   const reviewed=await this.reviewContentEdit(snapshot,original,changes);
    return this.mutate(id,state=>{
     if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const group=state.email_groups?.[groupId];
     if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');
     if(group.destination_ids.some(destinationId=>state.deliveries[destinationId]))throw Error('REVISION_AFTER_DISTRIBUTION');
-    for(const destinationId of group.destination_ids){const entry=state.assets[destinationId];if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash||(reviewed&&!original.some(saved=>saved.fingerprint===entry.fingerprint)))throw Error('GROUP_CONTENT_MISMATCH');}
+    for(const destinationId of group.destination_ids){const entry=state.assets[destinationId];if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');}
     const firstRevised={...state.assets[group.destination_ids[0]].asset,...changes};if(firstRevised.brand_version&&Object.hasOwn(changes,'body'))firstRevised.body=emailBrand.reviewBody(firstRevised.body);const nextContent=groupContent(firstRevised);if(nextContent.content_hash===contentHash)return state;
-    for(const destinationId of group.destination_ids){const entry=state.assets[destinationId],revised={...entry.asset,...changes};if(revised.brand_version){if(Object.hasOwn(changes,'body'))revised.body=emailBrand.reviewBody(revised.body);revised.html=emailBrand.render(revised.body);}if(reviewed){assertAssetClaimEvidence(state,entry.asset);bindClaimEvidence(revised,state.preparation_input.document);}assertAssetClaimEvidence(state,revised);state.editorial_versions??={};state.editorial_versions[destinationId]??=[];state.editorial_versions[destinationId].push(structuredClone(entry));state.assets[destinationId]={asset:revised,fingerprint:assetFingerprint(revised)};delete state.decisions[destinationId];}
+    for(const destinationId of group.destination_ids){const entry=state.assets[destinationId],revised={...entry.asset,...changes};if(revised.brand_version){if(Object.hasOwn(changes,'body'))revised.body=emailBrand.reviewBody(revised.body);revised.html=emailBrand.render(revised.body);}state.editorial_versions??={};state.editorial_versions[destinationId]??=[];state.editorial_versions[destinationId].push(structuredClone(entry));state.assets[destinationId]={asset:revised,fingerprint:assetFingerprint(revised)};delete state.decisions[destinationId];}
     const priorApproval=state.group_approvals?.[groupId]??null;delete state.group_approvals[groupId];Object.assign(group,nextContent,{version:group.version+1});
     state.events.push({type:'EMAIL_GROUP_REVISED',group_id:groupId,id:randomUUID(),previous_content_hash:contentHash,new_content_hash:nextContent.content_hash,previous_version:version,new_version:group.version,previous_approval:priorApproval,changed_fields:Object.keys(changes)});return state;
    });
@@ -258,7 +205,7 @@ export class CampaignStore {
    return this.mutate(id,state=>{
     if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const group=state.email_groups?.[groupId];
     if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');const members=[...group.destination_ids];if(!members.length)throw Error('EMPTY_GROUP');
-    for(const destinationId of members){const entry=state.assets[destinationId];if(!destinationIsVerified(state,destinationId))throw Error('UNVERIFIED_RECIPIENT');if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');if(entry.asset.review_status==='NEEDS_REVISION'&&decision==='APPROVE')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');if(state.deliveries[destinationId])throw Error('DECISION_AFTER_DISTRIBUTION');if(decision==='APPROVE')assertAssetClaimEvidence(state,entry.asset);if(state.decisions[destinationId]&&state.decisions[destinationId].decision!==decision)throw Error('GROUP_DECISION_CONFLICT');}
+    for(const destinationId of members){const entry=state.assets[destinationId];if(!destinationIsVerified(state,destinationId))throw Error('UNVERIFIED_RECIPIENT');if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');if(entry.asset.review_status==='NEEDS_REVISION'&&decision==='APPROVE')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');if(state.deliveries[destinationId])throw Error('DECISION_AFTER_DISTRIBUTION');if(state.decisions[destinationId]&&state.decisions[destinationId].decision!==decision)throw Error('GROUP_DECISION_CONFLICT');}
     const recipientSetHash=sha256(members),prior=state.group_approvals?.[groupId];if(prior?.decision===decision&&prior.content_hash===contentHash&&prior.recipient_set_sha256===recipientSetHash)return state;
     for(const destinationId of members){const fingerprint=state.assets[destinationId].fingerprint;state.decisions[destinationId]={authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId,group_id:groupId,group_content_hash:contentHash};}
     state.group_approvals??={};state.group_approvals[groupId]={authority:'OWNER',decision,campaign_id:id,group_id:groupId,content_hash:contentHash,version:group.version,destination_ids:members,recipient_set_sha256:recipientSetHash};state.events.push({type:'EMAIL_GROUP_DECIDED',group_id:groupId,id:randomUUID(),decision,content_hash:contentHash,version:group.version,destination_ids:members});return state;
@@ -279,7 +226,6 @@ export class CampaignStore {
       const item = state.assets[destinationId];
       if (!item) throw Error('UNKNOWN_DESTINATION');
       if(item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_NOT_SENDABLE');
-      assertAssetClaimEvidence(state,item.asset);
       const prior = state.deliveries[destinationId];
       const ownerRecipientOverride=item.asset.kind==='EMAIL'&&item.asset.recipient_owner_override===true;
       if(item.asset.kind==='EMAIL'&&!ownerRecipientOverride)recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));

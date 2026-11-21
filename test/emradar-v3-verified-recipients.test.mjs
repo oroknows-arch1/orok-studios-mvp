@@ -1,5 +1,3 @@
-import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
-const {checkedProviders}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import verified from './fixtures/v3-verified-recipient.cjs';
@@ -24,7 +22,7 @@ test('directory rejects unsupported writes and duplicate recipients without INSE
  await assert.rejects(directory.upsert(verified()),/DUPLICATE_RECIPIENT/);assert.equal(inserts,0);
 });
 test('missing recipient cannot call the paid writer',async()=>{
- let calls=0;const providers=checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async()=>{calls++;}}},images:{generate:async()=>{}}}});
+ let calls=0;const providers=createOpenAiPreparationProviders({openai:{chat:{completions:{create:async()=>{calls++;}}},images:{generate:async()=>{}}}});
  await assert.rejects(providers.write({campaignId:'campaign',destination:{id:'bad',evidence:{ids:['e1']}},document:{}}),/VERIFIED_RECIPIENT_REQUIRED/);assert.equal(calls,0);
 });
 test('campaign selection hides unsupported contacts, retains incomplete candidates and deduplicates exact addresses',()=>{
@@ -54,9 +52,9 @@ test('cleanup commits audit snapshots before removing active records; failures r
  client.query=async sql=>{operations.push(sql);if(sql.includes('CREATE TABLE'))throw Error('DB_FAILURE');return {rows:[]};};
  await assert.rejects(cleanUnverifiedRecipients({pool,campaignId:'campaign'}),/DB_FAILURE/);assert.equal(operations.at(-1),'ROLLBACK');
 });
-test('review assembly keeps recipient-incomplete drafts internal rather than actionable',async()=>{
+test('review assembly includes saved content without treating recipient readiness as editorial approval',async()=>{
  const d=verified(),campaign={phase:'PUBLICATION_REVIEW',scan:{},destinations:[d,{id:'bad'},{id:'x'}],assets:{journal:{asset:{kind:'EMAIL',destination_id:'journal',to:d.contact.email,contact_status:'VERIFIED',delivery_eligible:true,evidence_ids:['e1'],subject:'Story',body:'Body',from:'sean@emradar.net'}},bad:{asset:{kind:'EMAIL',destination_id:'bad'}},x:{asset:{kind:'X',destination_id:'x'}}},decisions:{bad:{decision:'REJECT'}},deliveries:{}};
  const adapter={read:async()=>({value:campaign}),compareAndSwap:async()=>{throw Error('NO_WRITES');}};
  const workflow=new ReviewWorkflow({store:{adapter},adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:'https://review.example'});workflow.authenticate=async()=>true;
- const result=await workflow.view('campaign');assert.equal(result.entries.length,2);assert.equal(result.internal_incomplete_count,1);assert.equal(result.entries.some(entry=>entry.asset.destination_id==='bad'),false);assert.equal(campaign.decisions.bad.decision,'REJECT');
+ const result=await workflow.view('campaign');assert.equal(result.entries.length,3);assert.equal(result.entries.find(entry=>entry.asset.destination_id==='bad').recipient_ready,false);assert.equal(campaign.decisions.bad.decision,'REJECT');
 });

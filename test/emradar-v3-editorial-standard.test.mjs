@@ -1,5 +1,3 @@
-import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
-const {checkedState,checkedDocument,checkedProviders,mockDraftCheck}=claimFixtures;
 import verified from './fixtures/v3-verified-recipient.cjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -13,7 +11,7 @@ import {CampaignPreparation} from '../vendor/emradar-v3/src/preparation.js';
 
 const evidence=[{id:'a:0',record_id:'a',verified:true,fact:'A programme includes proposed energy and vehicle projects.'},{id:'a:1',record_id:'a',verified:true,fact:'The provincial government launched the programme.'},{id:'b:0',record_id:'b',verified:true,fact:'A separate regional funding meeting took place.'}];
 const destination=(id,type='EDITORIAL_PUBLICATION')=>({...verified(id,evidence),id,name:id,destination_class:type,category:'news',evidence:{ids:['a:0','b:0']},relationship:{reason:'Coverage of energy and industry'}});
-function providers(requests=[],response){return checkedProviders(createOpenAiPreparationProviders,{openai:{chat:{completions:{create:async request=>{requests.push(request);const payload=JSON.parse(request.messages[1].content);const finding='The programme shows a shift from isolated proposals to a combined energy-and-vehicle agenda.';return {choices:[{message:{content:JSON.stringify(response??{subject:'Discovery for '+payload.destination.name,body:`I’m Sean Walker, working on EMRADAR.\n\nOur scan identified the combined programme. What stood out was the connection between energy and vehicle plans. ${finding}\n\nWe are developing an article on what these plans would require to become operating projects. They remain proposals.\n\nWould a research contribution examining these plans interest you? If useful, I can send a concise draft with sources for review.`,analytical_finding:finding,limitations:'They remain proposals.',story_evidence_ids:payload.evidence.map(e=>e.id)})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGE_GENERATION');}}}});}
+function providers(requests=[],response){return createOpenAiPreparationProviders({openai:{chat:{completions:{create:async request=>{requests.push(request);const payload=JSON.parse(request.messages[1].content);const finding='The programme shows a shift from isolated proposals to a combined energy-and-vehicle agenda.';return {choices:[{message:{content:JSON.stringify(response??{subject:'Discovery for '+payload.destination.name,body:`I’m Sean Walker, working on EMRADAR.\n\nOur scan identified the combined programme. What stood out was the connection between energy and vehicle plans. ${finding}\n\nWe are developing an article on what these plans would require to become operating projects. They remain proposals.\n\nWould a research contribution examining these plans interest you? If useful, I can send a concise draft with sources for review.`,analytical_finding:finding,limitations:'They remain proposals.',story_evidence_ids:payload.evidence.map(e=>e.id)})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGE_GENERATION');}}}});}
 function memory(initial){let version=initial?1:null,value=initial;const adapter={read:async()=>value?{version,value:structuredClone(value)}:null,compareAndSwap:async(_id,v,next)=>{if(v!==version)return false;version=(version??0)+1;value=structuredClone(next);return true;}};return new CampaignStore(adapter);}
 
 test('verbatim Gmail outreach is pinned by an independent literal SHA-256',()=>{
@@ -46,9 +44,7 @@ test('initial production preparation saves reference-backed drafts without exter
  // identity and publication verification still pass through CampaignStore.
  const scan={snapshot_date:'2026-10-10',artifact_sha256:'a'.repeat(64),live_artifact_sha256:'a'.repeat(64),archive_artifact_sha256:'a'.repeat(64),publication_verified:true};
  const id=await store.start(scan);await store.select(id,[destination('journal'),destination('podcast','INFORMATION_CHANNEL')]);
- const document=checkedDocument({evidence},scan);
- await store.mutate(id,current=>({...current,preparation_input:{document}}));
- await prepare.prepare({scan,document});
+ await prepare.prepare({scan,document:{evidence}});
  const state=(await store.adapter.read(id)).value;
  assert.equal(state.phase,'PUBLICATION_REVIEW');assert.equal(discovered,0);assert.deepEqual(state.decisions,{});assert.deepEqual(state.deliveries,{});
  assert(Object.values(state.assets).every(entry=>entry.asset.editorial_reference.sha256===EDITORIAL_REFERENCE.sha256));
@@ -59,7 +55,6 @@ test('refresh regenerates only undecided pitches, preserves identifiers, X, deci
  const assets=Object.fromEntries(destinations.map(d=>[d.id,{fingerprint:'old-'+d.id,asset:{campaign_id:'campaign',destination_id:d.id,kind:'EMAIL',body:'Legacy',subject:'Old',to:d.contact.email,contact_status:'VERIFIED',delivery_eligible:true}}]));
  assets.x={asset:{kind:'X',body:'Keep X'},fingerprint:'keep-x'};
  const state={phase:'PUBLICATION_REVIEW',scan:{source_key:'keep-source'},destinations,assets,decisions:{approved:{decision:'APPROVE'},rejected:{decision:'REJECT'}},deliveries:{},preparation_input:{document:{evidence}},events:[]};
- checkedState(state);
  const store=memory(state),requests=[],writer=providers(requests);
  const run=()=>refreshUnreviewedEditorialDrafts({store,write:writer.write,campaignId:'campaign'});
  assert.equal((await run()).rewritten,1);assert.equal((await run()).rewritten,0);assert.equal(requests.length,1);
@@ -85,8 +80,7 @@ test('persisted-directory draft extension uses the production OpenAI writer and 
  const {createOpenAiPreparationReviewService}=await import('../vendor/emradar-v3/src/preparation-review-service.js');
  const {sha256}=await import('../vendor/emradar-v3/src/contracts.js');
  let version=1,state={id:'campaign',phase:'PUBLICATION_REVIEW',assets:{x:{asset:{kind:'X',body:'Keep X'},fingerprint:'saved-x'}},destinations:[{id:'x'}],decisions:{x:{decision:'APPROVE'}},deliveries:{},events:[],preparation_input:{document:{evidence}}};
- checkedState(state);
- const candidate={...destination('journal'),active:true,verification:{...destination('journal').verification,status:'VERIFIED',evidence_ids:['a:0'],scan_evidence_digest:sha256(JSON.stringify(state.preparation_input.document.evidence.map(e=>[e.id,e.fact,e.source_url])))}};
+ const candidate={...destination('journal'),active:true,verification:{...destination('journal').verification,status:'VERIFIED',evidence_ids:['a:0'],scan_evidence_digest:sha256(JSON.stringify(evidence.map(e=>[e.id,e.fact,e.source_url])))}};
  const pool={query:async(sql,args=[])=>{
   if(sql.startsWith('CREATE '))return {rows:[]};
   if(sql.startsWith('SELECT record'))return {rows:[{record:candidate}]};
@@ -96,7 +90,7 @@ test('persisted-directory draft extension uses the production OpenAI writer and 
  }};
  const requests=[];
  const openai={chat:{completions:{create:async request=>{requests.push(request);const analytical_finding='The programme shows a shift from isolated proposals to a combined energy-and-vehicle agenda.';return {choices:[{message:{content:JSON.stringify({subject:'Article idea',body:`I’m Sean Walker, working on EMRADAR.\n\nOur scan identified the combined programme. ${analytical_finding}\n\nWe are developing an article on the energy and vehicle plans. These are proposals.\n\nWould a research contribution interest you? If useful, I can send a concise draft with sources for review.`,analytical_finding,limitations:'These are proposals.',story_evidence_ids:['a:0','a:1']})}}]};}}},images:{generate:async()=>{throw Error('NO_IMAGES');}}};
- const service=await createOpenAiPreparationReviewService({pool,reviewOrigin:'https://review.example.org',notify:async()=>{throw Error('NO_EMAILS');},reviewedLinks:[],openai:mockDraftCheck(openai)});
+ const service=await createOpenAiPreparationReviewService({pool,reviewOrigin:'https://review.example.org',notify:async()=>{throw Error('NO_EMAILS');},reviewedLinks:[],openai});
  assert.equal((await service.resumeEditorialDrafts('campaign')).editorial_drafts,1);
  assert.equal(state.assets.journal.asset.editorial_reference.sha256,EDITORIAL_REFERENCE.sha256);assert.equal(state.assets.x.fingerprint,'saved-x');assert.equal(state.decisions.x.decision,'APPROVE');assert(requests[0].messages[0].content.includes(originalOutreach));
 });

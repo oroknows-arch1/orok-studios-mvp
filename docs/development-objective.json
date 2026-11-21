@@ -68,7 +68,7 @@
     "external_distribution": 0
   },
   "october_18_quality_correction": {
-    "status": "FIRST_BATCH_DEPLOYED_ACTIONABLE_INVITATION_PENDING",
+    "status": "LOCALLY_VERIFIED_NOT_DEPLOYED",
     "failure_campaign_id": "v3-d83c24859c18659fda4b707fb982fe10",
     "failure_campaign_version": 25,
     "target_campaign_id": "v3-df5b240c718018880410c03a4c392d64",
@@ -822,80 +822,5 @@
     ],
     "production_campaign_mutations": 0,
     "external_distribution": 0
-  },
-  "november_18_pre_proposal_claim_gate": {
-    "status": "IMPLEMENTED_OFFLINE_PRODUCTION_RELEASE_PENDING",
-    "render_live_commit": "53a934a99845ce22865e7aa88b570a2e1993dfba",
-    "authoritative_policy_commit": "a2dfd80b72703bc94667b8eccf900991010e875a",
-    "root_cause": "Published-scan URLs promoted claims directly to verified. Drafting ran before the web-citation check and received the unverified scanner causal chain.",
-    "control": "Claim checks require a downloaded attributable article body, a matching passage and a supported angle before routing or writing. Exact draft wording is rechecked before approval eligibility. Stale unsent copy is held with its provenance and approval history preserved.",
-    "live_read_only_quarantine_preview": {
-      "affected_campaigns": 30,
-      "unsent_email_drafts_without_claim_proof": 112,
-      "unsent_x_drafts_without_claim_proof": 20,
-      "stale_approvals": 16,
-      "latest_scan_date": "2026-11-18"
-    },
-    "budget": "Existing maximum eight investigations and three web-search calls each by default. Case and search exhaustion produce holds.",
-    "production_writes": 0,
-    "external_distribution": 0,
-    "remaining_verification": "Verify the live provider and quarantine counts after separately authorised release."
-  },
-  "november_18_clean_restart": {
-    "status": "RELEASE_IN_PROGRESS",
-    "snapshot_date": "2026-11-18",
-    "source_sha256": "30ca5047700fdb60ddbbf0720c5e59980490ef04fd05b18d59ae5d6366c8afa5",
-    "scope": "Verify scanner release sidecar against live and archive bytes, retire disposable campaigns, and issue one claim-gated owner review. Preserve delivery history and existing evidence budgets."
-  },
-  "november_18_streamlined_review_batch": {
-    "status": "LOCALLY_VERIFIED_NOT_DEPLOYED",
-    "root_causes": [
-      "Interrupted evidence recovery selected only the strongest supported record, concentrating discovery on one formation.",
-      "Recipient-incomplete NEEDS_REVISION drafts were durable but appeared beside complete proposals in the actionable owner review."
-    ],
-    "correction": "Recover every previously supported interrupted formation within the existing investigation bound and without another source-search layer. Return only complete recipient-ready assets in the actionable review while retaining incomplete work in campaign state, and reject direct approval attempts for internal-only assets.",
-    "validation": {
-      "focused_review_recovery_distribution_tests": "49 passed, 1 disposable PostgreSQL test skipped",
-      "source_integration": "17/17 passed",
-      "development_harness": "PASS"
-    },
-    "preservation": {
-      "scanner_modified": false,
-      "publisher_emails_sent": 0,
-      "x_posts_published": 0,
-      "production_campaign_mutations": 0
-    },
-    "first_batch_commit": "5860a9c99e9b45ae34e95e2722d174d83bbffd3b",
-    "first_batch_deploy": "dep-dbukukui0phs73b5m2b0",
-    "first_batch_deploy_status": "live",
-    "second_batch": "Add one idempotent revision-bound private owner invitation for the existing claim-gated 18 November campaign. This path invokes only owner notification; publisher email and X release paths remain untouched.",
-    "next_action": "Verify the second batch, deploy through main, confirm the Purelymail receipt and prove the live review contains only actionable assets."
-  },
-  "november_20_owner_review_delivery_repair": {
-    "status": "OFFLINE_VERIFIED_RELEASE_PENDING",
-    "root_cause": "Release-only attestation restricted to restartDate and matching live-current bytes. DRAFT live scan aborts intake; stale restart hold suppresses later signed archives.",
-    "tests": "38 passed, 2 disposable PostgreSQL skips; V3 integration 17/17 and development harness pass. Local loopback-restricted tests require existing network-capable runner.",
-    "scope": "Signed immutable archive validation independent of live advancement; isolate inaccessible entries; recover persisted reviews before network intake. Existing hourly worker, paid-attempt holds, evidence, recipients, approvals and notification reservations retained.",
-    "missing_dates": [
-      "2026-11-19",
-      "2026-11-20"
-    ],
-    "next_action": "Deploy through existing controls; recover releases and record provider receipts and ledgers."
-  },
-  "november_21_signed_release_recovery": {
-    "status": "REPAIR_BRANCH_TESTING_PRODUCTION_UNCHANGED",
-    "scanner_release_sha256": "709ce5ead1e5b34a190db9a31835ab58d9c0a2fa1a5bcd90c19489171759cff5",
-    "root_cause": "Marketing required legacy public_verification fields absent from the valid five-gate scanner publication record.",
-    "repair_branch": "fix/nov21-five-gate-intake",
-    "authoritative_source_commit": "572f357c689b91ce69b4f27bc5ad5f2cf6263296",
-    "cost_control": "Two durably reserved outlet-discovery passes per formation and at most two contact fallback searches per pass; budget holds remain incomplete.",
-    "campaign_19": "v3-0b1fc19030a18405e20e2092b9698cdd",
-    "campaign_20": "v3-109516676ccd7103998c4e5e185e892f",
-    "campaign_21": null,
-    "production_deployed": false,
-    "publisher_emails_sent_by_repair": 0,
-    "x_posts_published_by_repair": 0,
-    "consecutive_scheduled_runs": 0,
-    "remaining": "CI must pass after pin update. Deployment auto-triggers hourly intake and may incur paid claim investigations; recovery spending is prohibited without separate authorization. Preserve original reviews and obtain an exact budget-bound approval before activating 21 November research."
   }
 }

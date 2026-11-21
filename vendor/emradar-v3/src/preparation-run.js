@@ -1,11 +1,8 @@
-import restartPolicy from '../../../src/emradar-v3-clean-restart.cjs';
 import {isReviewPhase} from './contracts.js';
-import {createHash,randomUUID} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {verifyPublishedScan} from './scan-intake.js';
 import {CampaignPreparation} from './preparation.js';
 import {normalizePublishedEvidence} from './scan-evidence-adapter.js';
-import claimPolicy from '../../emradar-v3-authoritative/src/claim-evidence.cjs';
-const {hasCheckedDocument,assertCheckedDocument}=claimPolicy;
 
 
 export function createVerifiedVisualRenderer(renderVisual){
@@ -28,56 +25,31 @@ export function createVerifiedVisualRenderer(renderVisual){
 
 // Compose existing preparation workers. Providers are injected; this entry point
 // never issues a review notification, approves content or distributes anything.
-export function createPreparationRun({store,verifyClaims,discover,write,renderVisual,fetcher}) {
- if(typeof verifyClaims!=='function' || typeof renderVisual!=='function' || typeof store?.mutate!=='function') throw Error('PREPARATION_RUN_DEPENDENCIES_REQUIRED');
+export function createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher}) {
+ if(typeof researchEvidence!=='function' || typeof renderVisual!=='function' || typeof store?.mutate!=='function') throw Error('PREPARATION_RUN_DEPENDENCIES_REQUIRED');
  const preparation=new CampaignPreparation({store,discover,write,renderVisual:createVerifiedVisualRenderer(renderVisual)});
- return async ({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,restartKey,history=[]})=>{
+ return async ({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,history=[]})=>{
   const verified=await verifyPublishedScan({snapshotDate,expectedSha256,liveUrl,archiveUrl,publicationRecord,releaseAttestation,fetcher});
   const {scan}=verified;
   const document=normalizePublishedEvidence(verified.document);
-  const campaignId=await store.start(scan,{restartKey});
-  // The signed scanner's complete candidate register remains visible to the
-  // owner even when subsequent claim verification cannot admit any proposal.
-  // These are unverified scanner hypotheses, never publication evidence.
-  await store.mutate(campaignId,current=>{
-   if(!Array.isArray(current.owner_investigation_records)){
-    current.owner_investigation_records=(document.records??[]).filter(r=>typeof r?.id==='string').map(r=>({
-     id:r.id,theme:typeof r.theme==='string'?r.theme.slice(0,350):'',
-     why_surfaced:typeof r.why_surfaced==='string'?r.why_surfaced.slice(0,1200):'',
-     scanner_status:typeof r.status==='string'?r.status:'UNKNOWN'
-    }));
-   }
-   return current;
-  });
+  const campaignId=await store.start(scan);
   let state=(await store.adapter.read(campaignId)).value;
   if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
-  const reuseResearch=state.claim_gate_attempt?.status==='VERIFIED'&&hasCheckedDocument(state.preparation_input?.document,scan);
-  const recoveryIds=current=>restartPolicy.recoverableRecords(current,restartKey)?.length?restartPolicy.recoverableRecords(current,restartKey):restartPolicy.recoverableSourceRecords(current);
-  const recoverRecordIds=hasCheckedDocument(state.preparation_input?.document,scan)?recoveryIds(state):null;
-  if(recoverRecordIds?.length||!hasCheckedDocument(state.preparation_input?.document,scan)){
-   const attempt=randomUUID();
+  if(!state.preparation_input) {
+   let research,warning=null;
+   try{research=await researchEvidence({scan,document});if(!Array.isArray(research?.evidence))throw Error('EVIDENCE_RESEARCH_RESULT_REQUIRED');}
+   catch(error){warning=/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'EVIDENCE_RESEARCH_FAILED';research={status:'NEEDS_REVISION',evidence:[],warning};}
+   // Retain the original source and uncertainty verbatim. Research remains a
+   // separate sourced record; it cannot overwrite an existing evidence identity.
+   const evidence=new Map((document.evidence??[]).map(item=>[item.id,item]));
+   for(const item of research.evidence) if(item?.id && !evidence.has(item.id)) evidence.set(item.id,item);
+   const input={...document,evidence:[...evidence.values()],research};
    state=await store.mutate(campaignId,current=>{
-    if(recoverRecordIds?.length&&JSON.stringify(recoveryIds(current))===JSON.stringify(recoverRecordIds)){
-     current.claim_gate_history=[...(current.claim_gate_history??[]),{attempt:current.claim_gate_attempt,document:current.preparation_input.document}].slice(-3);
-     current.claim_gate_previous={attempt:current.claim_gate_attempt,document:current.preparation_input.document};
-     const previousRevision=current.claim_gate_attempt?.policy_revision;
-     const policyRevision=previousRevision==='passage-selection-v6'?'question-completion-v7':previousRevision==='partial-claim-v5'?'passage-selection-v6':previousRevision==='exact-figure-v4'?'partial-claim-v5':previousRevision==='credit-restored-v3'?'exact-figure-v4':previousRevision==='provider-diagnostics-v2'?'credit-restored-v3':'provider-diagnostics-v2';
-     current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision,policy_revision:policyRevision,recovery_record_ids:recoverRecordIds};
-    }else if(!current.claim_gate_attempt)current.claim_gate_attempt={id:attempt,status:'RUNNING',source_reader_revision:restartPolicy.sourceReaderRevision};
-    return current;
-   });
-   if(state.claim_gate_attempt?.id!==attempt)return {campaignId,status:'CLAIM_EVIDENCE_HELD'};
-   const checked=await verifyClaims({scan,document,recoverRecordIds});
-   assertCheckedDocument(checked,scan);
-   state=await store.mutate(campaignId,current=>{
-    current.preparation_input={document:checked};
-    current.claim_gate_attempt={...current.claim_gate_attempt,status:checked.evidence.length?'VERIFIED':'NO_VERIFIED_ANGLE'};
-    // Resume pre-upgrade interrupted preparation from the checked dossier.
-    if(current.phase==='DESTINATIONS_SELECTED'){current.phase='SCAN_VERIFIED';current.destinations=[];}
+    if(!current.preparation_input) current.preparation_input={document:input};
+    if(warning)current.preparation_warnings=[...(current.preparation_warnings??[]),{stage:'EVIDENCE_RESEARCH',code:warning}];
     return current;
    });
   }
-  if(!state.preparation_input.document.evidence.length)return {campaignId,status:'CLAIM_EVIDENCE_HELD'};
-  return preparation.prepare({scan,restartKey,document:state.preparation_input.document,history,reuseResearch});
+  return preparation.prepare({scan,document:state.preparation_input.document,history});
  };
 }

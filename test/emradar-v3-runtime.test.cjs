@@ -100,7 +100,7 @@ test('published archive index enumerates attestable scans in chronological order
  const docs=new Map();
  for(const date of dates){
   const digest=require('node:crypto').createHash('sha256').update(date).digest('hex'),archiveUrl=`https://emerging-markets-radar.onrender.com/data/checkpoints/discovery-${date}.json`;
-  docs.set(`https://emerging-markets-radar.onrender.com/verification/publication-${date}.json`,{snapshot_date:date,publication_state:'PUBLISHED',public_verification:{artifact_sha256:digest,verification_contract:'live-reader-exact-identity-v2',archive_data_url:archiveUrl},gates:{public_snapshot_verification:'PASS'},downstream_release_allowed:true});
+  docs.set(`https://emerging-markets-radar.onrender.com/verification/publication-${date}.json`,{snapshot_date:date,public_verification:{artifact_sha256:digest,verification_contract:'live-reader-exact-identity-v2',archive_data_url:archiveUrl},gates:{public_snapshot_verification:'PASS'},downstream_release_allowed:true});
   docs.set(`https://emerging-markets-radar.onrender.com/verification/downstream-release-attestation-${date}.json`,{snapshot_date:date,source_path:`data/checkpoints/discovery-${date}.json`,source_sha256:digest,publication_state:'PUBLISHED',downstream_release_allowed:true,native_gates:{publication:'PASS'},attested_by:'AUTHORIZED_SOURCE_RELEASE_REVIEW',campaign_authority:{required_stop:'PUBLICATION_REVIEW',external_publication_allowed:false}});
  }
  const fetcher=async url=>docs.has(url)||url.endsWith('archive-index.json')?({ok:true,status:200,arrayBuffer:async()=>Buffer.from(JSON.stringify(url.endsWith('archive-index.json')?index:docs.get(url)))}):({ok:false,status:404});
@@ -157,69 +157,4 @@ test('incomplete hourly recovery remains retryable and never notifies early',asy
  assert.equal(notifications,0);
  assert.equal((await resumePendingDiscovery({pool,service})).recovery,'COMPLETE');
  assert.equal(resumes,2);assert.equal(notifications,1);
-});
-
-function signedReleaseFixture(){
- const origin='https://emerging-markets-radar.onrender.com';
- const docs=new Map();
- const dates=['2026-11-19','2026-11-20'];
- for(const date of dates){
-  const path=`data/checkpoints/discovery-${date}.json`;
-  const body=JSON.stringify({snapshot_date:date,publication_state:'PUBLISHED',evidence:[]});
-  docs.set(origin+'/'+path,body);
-  docs.set(`${origin}/verification/downstream-release-attestation-${date}.json`,JSON.stringify({snapshot_date:date,source_path:path,source_sha256:require('node:crypto').createHash('sha256').update(body).digest('hex'),publication_state:'PUBLISHED',downstream_release_allowed:true,native_gates:{publication:'PASS'},attested_by:'AUTHORIZED_SOURCE_RELEASE_REVIEW',campaign_authority:{required_stop:'PUBLICATION_REVIEW',external_publication_allowed:false}}));
- }
- docs.set(origin+'/data/archive-index.json',JSON.stringify({scans:[],snapshots:dates.map(date=>({snapshot_date:date,path:`data/checkpoints/discovery-${date}.json`}))}));
- docs.set(origin+'/data/discovery.json',JSON.stringify({snapshot_date:'2026-11-21',publication_state:'DRAFT'}));
- const fetcher=async url=>({ok:docs.has(url),status:docs.has(url)?200:404,arrayBuffer:async()=>Buffer.from(docs.get(url))});
- return {docs,dates,fetcher,origin};
-}
-test('signed releases survive live advancement and a five-minute early publication check',async()=>{
- const {collectPublishedScans,selectNextPublishedScan,campaignIdFor}=require('../src/emradar-v3-runtime.cjs');
- const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
- const {docs,fetcher,origin}=signedReleaseFixture();
- const release=origin+'/verification/downstream-release-attestation-2026-11-20.json',signed=docs.get(release);
- docs.delete(release);
- let scans=await collectPublishedScans({fetcher});
- assert.deepEqual(scans.map(x=>x.snapshotDate),['2026-11-19']);
- // Next existing scheduler tick: no intervention, no sticky early-failure state.
- docs.set(release,signed);
- scans=await collectPublishedScans({fetcher});
- assert.deepEqual(scans.map(x=>x.snapshotDate),['2026-11-19','2026-11-20']);
- for(const input of scans)assert.equal((await verifyPublishedScan({...input,fetcher})).scan.artifact_sha256,input.expectedSha256);
- const prepared=new Map();let preparations=0;
- for(let trigger=0;trigger<4;trigger++){
-  const selected=await selectNextPublishedScan({published:scans,readCampaign:async id=>prepared.get(id)});
-  if(selected){preparations++;prepared.set(campaignIdFor(selected),{phase:'PUBLICATION_REVIEW'});}
- }
- assert.equal(preparations,2);
-});
-test('denied, inaccessible and altered signed releases never fall back to live evidence',async()=>{
- const {collectPublishedScans}=require('../src/emradar-v3-runtime.cjs');
- const {docs,fetcher,origin}=signedReleaseFixture();
- const key=origin+'/verification/downstream-release-attestation-2026-11-20.json';
- const signed=JSON.parse(docs.get(key));
- docs.set(origin+'/data/discovery.json',docs.get(origin+'/data/checkpoints/discovery-2026-11-20.json'));
- for(const bad of [{...signed,downstream_release_allowed:false},{...signed,source_sha256:'f'.repeat(64)}]){
-  docs.set(key,JSON.stringify(bad));
-  assert.deepEqual((await collectPublishedScans({fetcher})).map(x=>x.snapshotDate),['2026-11-19']);
- }
- docs.set(key,JSON.stringify(signed));
- assert.deepEqual((await collectPublishedScans({fetcher:async url=>{if(url===key)throw Error('UNAVAILABLE');return fetcher(url);}})).map(x=>x.snapshotDate),['2026-11-19']);
-});
-
-test('current scanner five-gate publication sidecar is accepted only when every recorded gate passes',async()=>{
- const {collectPublishedScans}=require('../src/emradar-v3-runtime.cjs');
- const {verifyPublishedScan}=await import('../vendor/emradar-v3/src/scan-intake.js');
- const {docs,fetcher,origin}=signedReleaseFixture();
- const date='2026-11-20',release=JSON.parse(docs.get(origin+'/verification/downstream-release-attestation-'+date+'.json'));
- const key=origin+'/verification/publication-'+date+'.json';
- const publication={snapshot_date:date,publication_state:'PUBLISHED',downstream_release_allowed:true,public_verification:{artifact_sha256:release.source_sha256,verification_contract:'live-reader-exact-identity-v2',archive_data_url:origin+'/'+release.source_path},gates:Object.fromEntries(['exact_current_bytes','exact_archive_bytes','archive_index','dashboard_render','exact_commit_deployment'].map(key=>[key,'PASS']))};
- docs.set(key,JSON.stringify(publication));
- const scans=await collectPublishedScans({fetcher});assert.equal(scans.length,2);
- assert.equal((await verifyPublishedScan({...scans[1],fetcher})).scan.artifact_sha256,release.source_sha256);
- for(const gate of Object.keys(publication.gates)){
-  docs.set(key,JSON.stringify({...publication,gates:{...publication.gates,[gate]:'FAIL'}}));
-  assert.deepEqual((await collectPublishedScans({fetcher})).map(x=>x.snapshotDate),['2026-11-19']);
- }
 });

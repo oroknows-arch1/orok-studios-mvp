@@ -3,9 +3,6 @@ import {verifyEditorialAsset} from './destination-selection.js';
 import {assertDestinations} from './contracts.js';
 import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
 
-import claimPolicy from '../../emradar-v3-authoritative/src/claim-evidence.cjs';
-const {assertCheckedDocument}=claimPolicy;
-
 const failureCode=error=>/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'PREPARATION_WORKER_FAILED';
 const incompleteAsset=({campaignId,destination,evidenceIds,error})=>({
  campaign_id:campaignId,destination_id:destination.id,kind:destination.id==='x'?'X':'EMAIL',
@@ -20,10 +17,8 @@ export class CampaignPreparation {
   if(!store?.select || typeof discover!=='function' || typeof write!=='function' || typeof renderVisual!=='function') throw Error('PREPARATION_DEPENDENCIES_REQUIRED');
   this.store=store;this.discover=discover;this.write=write;this.renderVisual=renderVisual;
  }
- async prepare({scan,document,restartKey,history=[],reuseResearch=false}) {
-  assertCheckedDocument(document,scan);
-  if(!document.evidence.length)throw Error('V3_NO_VERIFIED_ANGLE');
-  const campaignId=await this.store.start(scan,{restartKey});
+ async prepare({scan,document,history=[]}) {
+  const campaignId=await this.store.start(scan);
   const existing=(await this.store.adapter.read(campaignId))?.value;
   if(isReviewPhase(existing?.phase)) return {campaignId,status:'ALREADY_PREPARED'};
   if(existing?.phase!=='SCAN_VERIFIED' && existing?.phase!=='DESTINATIONS_SELECTED') throw Error('CAMPAIGN_PHASE_UNSUPPORTED');
@@ -31,7 +26,7 @@ export class CampaignPreparation {
   let destinations;
   if(existing.phase==='DESTINATIONS_SELECTED') destinations=existing.destinations;
   else {
-   try{destinations=await this.discover({scan,document,restartKey,history,reuseResearch});}
+   try{destinations=await this.discover({scan,document,history});}
    catch(error){
     warnings.push({stage:'DISCOVERY',code:failureCode(error)});
     destinations=[{id:'x',category:'social',contact_verified:true,evidence:{ids:(document?.evidence??[]).filter(e=>e?.verified===true).map(e=>e.id)}}];
