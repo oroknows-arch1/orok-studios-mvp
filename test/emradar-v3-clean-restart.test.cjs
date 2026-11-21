@@ -103,3 +103,19 @@ test('question-led campaign retries only provider failures once without revisiti
  assert.deepEqual(recoverableSourceRecords(state),['failed']);
  assert.equal(recoverableSourceRecords({...state,claim_gate_attempt:{...state.claim_gate_attempt,policy_revision:'provider-diagnostics-v2'}}),null);
 });
+
+
+test('only the exact credit-held 21 November campaign gets one bounded recovery',()=>{
+ const {recoverableSourceRecords}=require('../src/emradar-v3-clean-restart.cjs');
+ const state={id:'v3-24f5f995f02b72406c040e3f4ca5189f',scan:{snapshot_date:'2026-11-21',artifact_sha256:'709ce5ead1e5b34a190db9a31835ab58d9c0a2fa1a5bcd90c19489171759cff5'},
+  phase:'SCAN_VERIFIED',claim_gate_previous:{attempt:{status:'NO_VERIFIED_ANGLE'}},
+  claim_gate_attempt:{status:'NO_VERIFIED_ANGLE',policy_revision:'provider-diagnostics-v2'},
+  preparation_input:{document:{evidence:[],claim_audit:[
+   {record_id:'credit',status:'EVIDENCE_CHECK_FAILED',provider_code:'credit_balance_exhausted'},
+   {record_id:'other',status:'EVIDENCE_CHECK_FAILED',provider_code:'rate_limit_exceeded'},
+   {record_id:'unreadable',status:'SOURCE_INACCESSIBLE'}]}}};
+ assert.deepEqual(recoverableSourceRecords(state),['credit']);
+ assert.equal(recoverableSourceRecords({...state,id:'v3-wrong'}),null);
+ assert.equal(recoverableSourceRecords({...state,scan:{...state.scan,artifact_sha256:'a'.repeat(64)}}),null);
+ assert.equal(recoverableSourceRecords({...state,claim_gate_attempt:{status:'NO_VERIFIED_ANGLE',policy_revision:'credit-restored-v3'}}),null);
+});
