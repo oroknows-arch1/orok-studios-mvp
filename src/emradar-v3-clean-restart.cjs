@@ -5,11 +5,14 @@ const restartDate='2026-11-18';
 const restartKey='claim-evidence-restart-2026-11-18';
 const sourceReaderRevision='article-body-blocks-v2';
 function recoverableSourceRecords(state){
- if(state?.phase!=='SCAN_VERIFIED'||state.claim_gate_attempt?.status!=='NO_VERIFIED_ANGLE'||
-    state.claim_gate_attempt?.policy_revision!=='investigative-question-v1')return null;
+ if(state?.phase!=='SCAN_VERIFIED'||state.claim_gate_attempt?.status!=='NO_VERIFIED_ANGLE')return null;
+ const revision=state.claim_gate_attempt?.policy_revision;
+ if(revision==='provider-diagnostics-v2'||(state.claim_gate_previous&&revision!=='investigative-question-v1'))return null;
  const document=state.preparation_input?.document;
  if(document?.evidence?.length!==0)return null;
- return (document.claim_audit??[]).filter(item=>item.status==='EVIDENCE_CHECK_FAILED').map(item=>item.record_id);
+ const statuses=revision==='investigative-question-v1'?['EVIDENCE_CHECK_FAILED']:
+  ['SOURCE_INACCESSIBLE','NO_SUPPORTED_SIGNIFICANT_ANGLE','EVIDENCE_CHECK_FAILED'];
+ return (document.claim_audit??[]).filter(item=>statuses.includes(item.status)).map(item=>item.record_id);
 }
 function campaignIdentity(sourceKey,key){
  return 'v3-'+createHash('sha256').update(key?sourceKey+':'+key:sourceKey).digest('hex').slice(0,32);
