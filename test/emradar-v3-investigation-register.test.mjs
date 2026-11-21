@@ -37,3 +37,44 @@ test('newer claim audit status takes precedence and held candidates cannot be ap
  assert.equal(view.investigation.find(item=>item.id==='discovery-2').status,'SOURCE_INACCESSIBLE');
  await assert.rejects(workflow.decide('v3-test','session','secret','discovery-2','APPROVE','fake'),/V3_ACTIONABLE_REVIEW_REQUIRED/);
 });
+
+test('a signed evidence-held campaign can notify its owner without approving an asset',async()=>{
+ const original=Array.from({length:8},(_,index)=>({
+  record_id:'candidate-'+index,status:'NO_SUPPORTED_SIGNIFICANT_ANGLE',
+  claims:[{id:'c-'+index,status:'UNRESOLVED'}]
+ }));
+ const state={
+  id:'held-test',phase:'SCAN_VERIFIED',scan:{snapshot_date:'2026-11-21',artifact_sha256:'a'.repeat(64)},
+  preparation_input:{document:{claim_audit:original,records:[],evidence:[]}},
+  owner_investigation_records:original.map(item=>({id:item.record_id,theme:item.record_id})),
+  assets:{},destinations:[],decisions:{},deliveries:{},events:[]
+ };
+ const table=new Map([['held-test',state]]);
+ const adapter={
+  read:async key=>table.has(key)?{value:table.get(key),version:1}:null,
+  compareAndSwap:async(key,version,value)=>{table.set(key,value);return true;}
+ };
+ const store={adapter,ensureEmailGroups:async()=>{throw Error('MUST_NOT_PREPARE_HELD_ASSETS');},
+  decide:async()=>{throw Error('MUST_NOT_APPROVE_HELD_CLAIM');}};
+ let messages=0;
+ const workflow=new ReviewWorkflow({store,adapter,baseUrl:'https://owner.example',
+  notify:async input=>{messages++;assert.equal(input.recipient,'sean@emradar.net');return {
+   accepted:true,provider_id:'test-mail-1',recipient:input.recipient,campaign_id:input.campaignId
+  };}});
+ const issued=await workflow.issue('held-test');
+ assert.equal(issued.status,'NOTIFIED');
+ assert.equal(messages,1);
+ assert.equal(table.get('review:held-test').notification_receipt.accepted,true);
+ workflow.authenticate=async()=>true;
+ const view=await workflow.view('held-test','owner-session','secret');
+ assert.equal(view.investigation_only,true);
+ assert.equal(view.investigation.length,8);
+ assert.deepEqual(view.entries,[]);
+ await assert.rejects(workflow.decide('held-test','owner-session','secret','candidate-1','APPROVE','unused'),/V3_ACTIONABLE_REVIEW_REQUIRED/);
+});
+test('unsigned or unaudited scans cannot receive owner investigation invitations',async()=>{
+ const state={phase:'SCAN_VERIFIED',scan:{artifact_sha256:'a'.repeat(64)},preparation_input:{document:{claim_audit:[]}}};
+ const adapter={read:async()=>({value:state}),compareAndSwap:async()=>true};
+ const workflow=new ReviewWorkflow({store:{adapter},adapter,baseUrl:'https://owner.example',notify:async()=>{throw Error('MUST_NOT_NOTIFY');}});
+ await assert.rejects(workflow.issue('bad'),/CAMPAIGN_NOT_READY/);
+});
