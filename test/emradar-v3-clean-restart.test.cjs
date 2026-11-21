@@ -119,3 +119,16 @@ test('only the exact credit-held 21 November campaign gets one bounded recovery'
  assert.equal(recoverableSourceRecords({...state,scan:{...state.scan,artifact_sha256:'a'.repeat(64)}}),null);
  assert.equal(recoverableSourceRecords({...state,claim_gate_attempt:{status:'NO_VERIFIED_ANGLE',policy_revision:'credit-restored-v3'}}),null);
 });
+
+
+test('exact figure correction rechecks only the Colombian source once',()=>{
+ const {recoverableSourceRecords}=require('../src/emradar-v3-clean-restart.cjs');
+ const state={id:'v3-24f5f995f02b72406c040e3f4ca5189f',scan:{artifact_sha256:'709ce5ead1e5b34a190db9a31835ab58d9c0a2fa1a5bcd90c19489171759cff5'},phase:'SCAN_VERIFIED',
+  claim_gate_previous:{attempt:{status:'NO_VERIFIED_ANGLE'}},claim_gate_attempt:{status:'NO_VERIFIED_ANGLE',policy_revision:'credit-restored-v3'},
+  preparation_input:{document:{evidence:[],claim_audit:[
+   {record_id:'colombia-accesos-norte-ii-construction-2026',status:'NO_SUPPORTED_SIGNIFICANT_ANGLE'},
+   {record_id:'nigeria-2026-upstream-licensing-round-2026',status:'NO_SUPPORTED_SIGNIFICANT_ANGLE'}]}}};
+ assert.deepEqual(recoverableSourceRecords(state),['colombia-accesos-norte-ii-construction-2026']);
+ assert.equal(recoverableSourceRecords({...state,claim_gate_attempt:{status:'NO_VERIFIED_ANGLE',policy_revision:'exact-figure-v4'}}),null);
+ assert.equal(recoverableSourceRecords({...state,scan:{artifact_sha256:'a'.repeat(64)}}),null);
+});
