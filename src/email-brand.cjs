@@ -1,12 +1,10 @@
 'use strict';
 // Canonical presentation: one reviewed text body, deterministic HTML.
 const identity=Object.freeze({name:'Sean Walker',address:'sean@emradar.net',reply_to:'sean@emradar.net',website:'emradar.net',role:'EMRADAR | Research & Editorial'});
-const version='see-change-live-pattern-v1';
+const version='connected-earth-v1';
 const banner_sha256='5ff3edcfe20c6c4e9dd6d81fb96b430d476d7b1cac3df3ed0ecdcdd1c887ee8b';
 const banner='https://emerging-markets-radar.onrender.com/assets/connected-earth-email-v1.jpg';
-const priorTagline='Tracking how world changes create market opportunities and real-world consequences.';
-const signature=[identity.name,identity.role,'See the change. Live your pattern.',identity.address,identity.website].join('\n');
-const priorSignature=[identity.name,identity.role,priorTagline,identity.address,identity.website].join('\n');
+const signature=[identity.name,identity.role,'Tracking how world changes create market opportunities and real-world consequences.',identity.address,identity.website].join('\n');
 const disclaimer='This email is from EMRADAR Research & Editorial. It contains independent analysis based on publicly available information. It is not financial advice. Please consider your own evaluation and due diligence.';
 const tail=signature+'\n\n'+disclaimer;
 const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -31,7 +29,7 @@ function brand(email){
 function reviewBody(body){
  let lines=body.trimEnd().split('\n');
  if(lines.at(-1)?.trim()===disclaimer){lines.pop();while(lines.at(-1)?.trim()==='')lines.pop();}
- for(const suffix of [signature.split('\n'),priorSignature.split('\n'),['Sean Walker','EMRADAR']]){
+ for(const suffix of [signature.split('\n'),['Sean Walker','EMRADAR']]){
   if(lines.length>=suffix.length&&suffix.every((line,index)=>lines[lines.length-suffix.length+index].trim()===line)){
    lines=lines.slice(0,-suffix.length);break;
   }

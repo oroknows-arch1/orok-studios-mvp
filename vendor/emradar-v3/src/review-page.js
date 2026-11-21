@@ -18,7 +18,7 @@ summary{cursor:pointer;padding:12px 0;overflow-wrap:anywhere}article a{display:i
 <p id="status" role="status">Opening your private review…</p><button id="discover" type="button" disabled>Run Discovery</button><button id="connect-x" type="button" disabled>Connect X</button><button id="check-x" type="button" disabled>Check X connection</button><main id="entries"></main>
 <script>
 'use strict';
-let campaign,invitationToken,investigationOnly=false;
+let campaign,invitationToken;
 const status=document.getElementById('status'),main=document.getElementById('entries');
 const csrf=()=>decodeURIComponent((document.cookie.split('; ').find(x=>x.startsWith('emradar_v3_csrf='))||'').split('=').slice(1).join('='));
 const api=async(path,payload)=>{
@@ -55,7 +55,7 @@ const addVerification=(card,item)=>{
  const verify=text('button','Verify Again');verify.addEventListener('click',()=>verifyCurrent(verify,item));section.append(verify);card.append(section);
 };
 function saveFailure(error){
- const messages={ACCESS_DENIED:'Your sign-in expired. Copy your text, then reopen your private review.',CSRF_DENIED:'The security check failed. Copy your text, then refresh the page.',ORIGIN_DENIED:'Open the review on its original secure site.',STALE_ASSET_REVISION:'This email changed since you opened it. Copy your text, then refresh and edit the latest version.',STALE_GROUP_VERSION:'This group changed since you opened it. Copy your text, then refresh and edit the latest version.',GROUP_REVISION_REQUIRED:'Edit this email using the shared-group controls.',GROUP_CONTENT_MISMATCH:'The shared content changed. Copy your text, then refresh the review.',REVISION_AFTER_DISTRIBUTION:'This email has a delivery record and can no longer be edited.',INVALID_REVISION_TEXT:'Enter non-empty text of at most 50,000 characters.',EMAIL_BRAND_TEXT_REQUIRED:'The signature or disclaimer is incomplete. Keep the complete footer and retry.',REQUEST_TOO_LARGE:'The edit exceeds the request size limit.',V3_DRAFT_CLAIMS_UNSUPPORTED:'The saved source passages do not support this edit. Your text is still in the editor.',V3_ASSET_CLAIM_EVIDENCE_REQUIRED:'This draft needs a replacement based on checked source passages.',REVISION_SAVE_FAILED:'The server could not confirm persistence. Copy your text and refresh before retrying.'};
+ const messages={ACCESS_DENIED:'Your sign-in expired. Copy your text, then reopen your private review.',CSRF_DENIED:'The security check failed. Copy your text, then refresh the page.',ORIGIN_DENIED:'Open the review on its original secure site.',STALE_ASSET_REVISION:'This email changed since you opened it. Copy your text, then refresh and edit the latest version.',STALE_GROUP_VERSION:'This group changed since you opened it. Copy your text, then refresh and edit the latest version.',GROUP_REVISION_REQUIRED:'Edit this email using the shared-group controls.',GROUP_CONTENT_MISMATCH:'The shared content changed. Copy your text, then refresh the review.',REVISION_AFTER_DISTRIBUTION:'This email has a delivery record and can no longer be edited.',INVALID_REVISION_TEXT:'Enter non-empty text of at most 50,000 characters.',EMAIL_BRAND_TEXT_REQUIRED:'The signature or disclaimer is incomplete. Keep the complete footer and retry.',REQUEST_TOO_LARGE:'The edit exceeds the request size limit.',REVISION_SAVE_FAILED:'The server could not confirm persistence. Copy your text and refresh before retrying.'};
  const reference=/^[a-f0-9-]{36}$/.test(error.reference||'')?' Reference: '+error.reference+'.':'';
  return 'Save failed. Your changes are still in this editor. '+(messages[error.message]||'The request could not complete. Retry or copy your text before closing.')+reference;
 }
@@ -85,63 +85,9 @@ function openEditor({heading,initial,multiline=true,save}){
 }
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
- investigationOnly=view.investigation_only===true;
  main.replaceChildren();
- document.querySelector('header h1').textContent=investigationOnly?'EMRADAR · Investigation Review':'EMRADAR · Publication Review';
- document.querySelector('header p').textContent=investigationOnly?'All held discoveries are available for manual investigation. No claims or assets are approved for distribution.':'Approval saves your decision. Use the separate release control to distribute approved content.';
  const automatic=view.automaticVerification;
  if(automatic){const summary=document.createElement('article');summary.append(text('h2','Automatic proposal verification'),text('p',automatic.status+' · '+automatic.verified+' verified · '+automatic.investigation_required+' requiring investigation · '+automatic.investigations_used+' of '+automatic.max_investigations+' investigation calls used · '+automatic.reused_successes+' successful results reused'));main.append(summary);}
- const investigation=view.investigation??[];
- if(investigation.length){
-  const register=document.createElement('article');
-  const admitted=investigation.filter(item=>item.admitted).length;
-  register.append(text('h2','Original scan investigation · '+admitted+' of '+investigation.length+' admitted'),
-   text('p','Research candidates are shown for owner triage only. Held discoveries are not approved proposals and cannot be sent to publishers or posted on X.'));
-  const pending=document.createElement('details');
-  pending.open=true;pending.append(text('summary','Show all '+investigation.length+' discovery outcomes'));
-  const list=document.createElement('ul');
-  for(const item of investigation){
-   const label=item.id.replace(/-20[0-9]{2}(?:-[0-9]+)?$/,'').replace(/-/g,' ');
-   const detail=item.admitted?'Admitted for proposal preparation':
-    'Held for investigation ('+item.status+')';
-   const line=document.createElement('li');
-   line.append(text('strong',item.scanner_theme||label),text('p',detail+' · '+item.supported_claims+' supported claim(s), '+item.unresolved_claims+' unresolved'));
-   if(item.scanner_rationale)line.append(text('p','Scanner hypothesis (not independently verified): '+item.scanner_rationale));
-   const triage=item.owner_triage;
-   if(triage)line.append(text('p','Owner research decision: '+triage.decision+(triage.note?' · '+triage.note:'')));
-   const actions=document.createElement('div');actions.className='actions';
-   for(const choice of ['PRIORITIZE','DEFER','EXCLUDE']){
-    const control=text('button',choice==='PRIORITIZE'?'Investigate':choice==='DEFER'?'Later':'Exclude from research');
-    control.type='button';
-    if(triage?.decision===choice)control.disabled=true;
-    control.addEventListener('click',async()=>{
-     const note=prompt('Research notes or questions (optional):',triage?.note??'');
-     if(note===null)return;
-     control.disabled=true;
-     try{await api('investigation-triage',{campaignId:campaign,recordId:item.id,decision:choice,note});await refresh();status.textContent='Research decision saved. No publication permission was granted.';}
-     catch(error){status.textContent='Research decision was not saved: '+error.message;control.disabled=false;}
-    });
-    actions.append(control);
-   }
-   line.append(actions);
-   list.append(line);
-  }
-  pending.append(list);register.append(pending);
-  const copyX=text('button','Copy X audience research brief');copyX.type='button';
-  copyX.addEventListener('click',async()=>{
-   const chosen=investigation.filter(item=>item.owner_triage?.decision!=='EXCLUDE'&&item.owner_triage?.decision!=='DEFER');
-   if(!chosen.length){status.textContent='No discoveries selected for X audience research.';return;}
-   const brief=[
-    'EMRADAR X AUDIENCE RESEARCH — INVESTIGATION ONLY',
-    'These scanner hypotheses are NOT independently verified. Confirm factual statements from attributable primary passages before drafting any publishable claim.',
-    'Find 20–30 genuine current X conversations across affected communities, firms, institutions and local languages. Return only exact x.com/account/status/id links, authors, dates, context and 8 evidence-grounded reply opportunities. Never invent links, facts or quotes. No posting.',
-    ...chosen.map((item,index)=>(index+1)+'. '+(item.scanner_theme||item.id)+' — '+(item.scanner_rationale||'')+' | Gate: '+item.status+' | Owner note: '+(item.owner_triage?.note||'none'))
-   ].join('\\n\\n');
-   try{await navigator.clipboard.writeText(brief);status.textContent='X research brief copied. Verification and posting remain separate.';}
-   catch{openEditor({heading:'Copy X research brief',initial:brief,save:async()=>{}});status.textContent='Copy the research brief from the editor. Nothing was published.';}
-  });
-  register.append(copyX);main.append(register);
- }
  const counts={approved:0,rejected:0,undecided:0};
  for(const entry of view.entries){
   if(entry.decision?.decision==='APPROVE')counts.approved++;
@@ -300,7 +246,7 @@ async function refresh(){
    if(target){const link=document.createElement('a');link.href='#'+encodeURIComponent(target);link.textContent='Back to current proposal and review controls';main.append(link);}
   }else main.append(card);
  }
- status.textContent=(investigationOnly?'Investigation only — no proposals are approved for distribution. ':view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
+ status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
 }
 (async()=>{
  try{
@@ -330,13 +276,12 @@ async function refresh(){
    catch{status.textContent='X connection could not be verified. Use Connect X if reconnection is needed.';}
    finally{checkX.disabled=false;}
   });
-  const discover=document.getElementById('discover');discover.disabled=investigationOnly;
+  const discover=document.getElementById('discover');discover.disabled=false;
   discover.addEventListener('click',async()=>{
-   if(investigationOnly)return;
    discover.disabled=true;status.textContent='Discovering evidence-matched destinations and preparing review drafts…';
    try{const result=await api('discover',{campaignId:campaign});await refresh();status.textContent+=' Discovery: '+(result.editorial_drafts??0)+' new drafts.';}
    catch(e){status.textContent='Discovery could not complete: '+e.message;}
-   finally{discover.disabled=investigationOnly;}
+   finally{discover.disabled=false;}
   });
  }catch(e){
   status.textContent='Your saved sign-in has expired or is unavailable on this device. Your approvals are preserved.';
@@ -344,11 +289,8 @@ async function refresh(){
    const renew=text('button','Email me a fresh private sign-in link');
    renew.addEventListener('click',async()=>{
     renew.disabled=true;
-    try{const result=await api('request-access',{campaignId:campaign,token:invitationToken});status.textContent=result.status==='ACTIVE_SESSION'?'Your secure sign-in is still active. Reload this page to reopen the review.':result.status==='EXISTING_INVITATION'?'Use the latest private invitation already sent to sean@emradar.net.':'Your private invitation was accepted for sending to sean@emradar.net. Inbox arrival is not yet confirmed.';}
-    catch(error){
-     const messages={REVIEW_ACCESS_DENIED:'This page no longer has a valid invitation or owner session. Open the latest complete private OWNER REVIEW link in your Purelymail inbox.',REVIEW_NOT_OPEN:'This campaign is not currently open for owner review. No decisions were changed.',REVIEW_ACCESS_REQUEST_ALREADY_RECORDED:'A sign-in request has already been recorded for this campaign today. Check the owner inbox; no duplicate was sent.',REVIEW_NOTIFICATION_AMBIGUOUS:'The email provider outcome is uncertain. Check your inbox before requesting another link; no duplicate was sent.',REVIEW_LINK_ALREADY_ISSUED:'An unexpired invitation is already active. Open the most recent private link in your inbox.'};
-     status.textContent=messages[error.message]||'Owner sign-in recovery could not be confirmed. No new invitation was sent. Reopen your latest private email link.';
-    }
+    try{const result=await api('request-access',{campaignId:campaign,token:invitationToken});status.textContent=result.status==='EXISTING_INVITATION'?'Use the latest private invitation already sent to sean@emradar.net.':'Your private invitation was accepted for sending to sean@emradar.net. Inbox arrival is not yet confirmed.';}
+    catch(error){status.textContent='A sign-in link was already requested today, or its delivery is uncertain. No duplicate was sent.';}
    });main.replaceChildren(renew);
   }
  }

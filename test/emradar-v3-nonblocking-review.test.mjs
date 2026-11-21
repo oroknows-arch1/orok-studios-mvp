@@ -1,5 +1,3 @@
-import claimFixtures from "./fixtures/v3-claim-fixtures.cjs";
-const {checkedAsset,checkedState,checkedDocument}=claimFixtures;
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {CampaignPreparation} from '../vendor/emradar-v3/src/preparation.js';
@@ -24,7 +22,7 @@ test('writer, missing-contact and oversized-X failures all reach owner-visible r
   if(destination.id==='missing-contact')throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
   return {campaign_id:campaignId,destination_id:'x',kind:'X',subject:'Verified',body:'Verified fact',evidence_ids:['e1']};
  },renderVisual:async()=>{throw Error('V3_X_GRAPHIC_LAYOUT_OVERFLOW');}});
- const result=await preparation.prepare({scan:{artifact_sha256:'a'.repeat(64)},document:checkedDocument({evidence})});
+ const result=await preparation.prepare({scan:{},document:{evidence}});
  assert.equal(result.status,'PUBLICATION_REVIEW');assert.equal(result.assets,3);assert.equal(result.warnings,3);
  assert.deepEqual(Object.keys(state.assets).sort(),['missing-contact','writer-failure','x']);
  for(const {asset} of Object.values(state.assets))assert.equal(asset.review_status,'NEEDS_REVISION');
@@ -44,8 +42,6 @@ test('incomplete items can be rejected, excluded or queued for regeneration but 
 test('rejection feedback is revision-bound, missing feedback waits, and a later owner approval cancels pending regeneration',async()=>{
  let version=1,value={phase:'PUBLICATION_REVIEW',destinations:[destinations[0]],assets:{'writer-failure':{asset:{campaign_id:campaignId,destination_id:'writer-failure',kind:'EMAIL',subject:'A researched angle',body:'Ready content',review_status:'READY'},fingerprint:'fingerprint'}},decisions:{},deliveries:{},events:[]};
  const adapter={read:async()=>({version,value:structuredClone(value)}),compareAndSwap:async(_id,expected,next)=>{if(expected!==version)return false;value=structuredClone(next);version++;return true;}};
- checkedState(value);
- checkedAsset(value.assets['writer-failure'].asset,value.preparation_input.document);
  const store=new CampaignStore(adapter);
  await store.decide(campaignId,'writer-failure','REJECT','fingerprint','');
  assert.equal(value.decisions['writer-failure'].decision,'REJECT');assert.equal(value.decisions['writer-failure'].feedback_required,true);

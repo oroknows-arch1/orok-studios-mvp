@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,actionableReviewPending,runActionableReview,pool,runCampaign,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -731,10 +731,6 @@ if (require.main === module) {
     }else if(editorialWritingReviewPending){
       runEditorialWritingReview().then(result=>console.log('V3_EDITORIAL_WRITING_REVIEW',JSON.stringify(result)))
         .catch(error=>console.error('V3_EDITORIAL_WRITING_REVIEW_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_PROVIDER_FAILED'));
-    }
-    if(actionableReviewPending){
-      runActionableReview().then(result=>console.log('V3_ACTIONABLE_OWNER_REVIEW',JSON.stringify(result)))
-        .catch(error=>console.error('V3_ACTIONABLE_OWNER_REVIEW_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'ACTIONABLE_REVIEW_FAILED'));
     }
     // Always recover ready, unnotified campaigns at startup, regardless of historical maintenance jobs.
     // Campaign-level advisory locks and durable review records prevent duplicate invitations.
