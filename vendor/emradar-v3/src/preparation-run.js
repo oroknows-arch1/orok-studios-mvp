@@ -36,6 +36,19 @@ export function createPreparationRun({store,verifyClaims,discover,write,renderVi
   const {scan}=verified;
   const document=normalizePublishedEvidence(verified.document);
   const campaignId=await store.start(scan,{restartKey});
+  // The signed scanner's complete candidate register remains visible to the
+  // owner even when subsequent claim verification cannot admit any proposal.
+  // These are unverified scanner hypotheses, never publication evidence.
+  await store.mutate(campaignId,current=>{
+   if(!Array.isArray(current.owner_investigation_records)){
+    current.owner_investigation_records=(document.records??[]).filter(r=>typeof r?.id==='string').map(r=>({
+     id:r.id,theme:typeof r.theme==='string'?r.theme.slice(0,350):'',
+     why_surfaced:typeof r.why_surfaced==='string'?r.why_surfaced.slice(0,1200):'',
+     scanner_status:typeof r.status==='string'?r.status:'UNKNOWN'
+    }));
+   }
+   return current;
+  });
   let state=(await store.adapter.read(campaignId)).value;
   if(isReviewPhase(state.phase)) return {campaignId,status:'ALREADY_PREPARED'};
   const reuseResearch=state.claim_gate_attempt?.status==='VERIFIED'&&hasCheckedDocument(state.preparation_input?.document,scan);

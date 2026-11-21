@@ -137,7 +137,9 @@ const campaignIdFor=published=>campaignIdentity(published.snapshotDate+':'+publi
 async function selectNextPublishedScan({published,readCampaign}){
  for(const candidate of [...published].sort((a,b)=>a.snapshotDate.localeCompare(b.snapshotDate))){
   const existing=await readCampaign(campaignIdFor(candidate));
-  if((existing?.claim_gate_attempt?.status==='NO_VERIFIED_ANGLE'&&!recoverableSourceRecords(existing)?.length)||existing?.claim_gate_attempt?.status==='RUNNING')continue;
+  // A held investigation still needs one owner notification. Never loop paid
+  // evidence retries after that notification, and never duplicate the campaign.
+  if(existing?.owner_investigation_notified_at||existing?.claim_gate_attempt?.status==='RUNNING')continue;
   if(!['PUBLICATION_REVIEW','CLOSED'].includes(existing?.phase))return {...candidate,resume:Boolean(existing)};
  }
  return null;
@@ -429,7 +431,32 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     }
     // Preparation owns evidence research and discovery, preserving their order
     // and resuming persisted destinations instead of repeating completed work.
-    return {...await service.prepareAndNotify(selected),snapshotDate:selected.snapshotDate,archive_unverified_dates:available.blocked?.map(item=>item.snapshotDate).filter(Boolean)??[]};
+    const prepared=await service.prepareAndNotify(selected);
+    if(prepared.status==='CLAIM_EVIDENCE_HELD'){
+     const held=(await adapter.read(campaignId))?.value;
+     // Owner visibility cannot be blocked by a failed proposal gate. No
+     // publication assets are created, and no release permission is granted.
+     const audit=held?.preparation_input?.document?.claim_audit??held?.claim_gate_previous?.document?.claim_audit;
+     if(Array.isArray(audit)&&audit.length>0){
+      const priorReview=(await adapter.read('review:'+campaignId))?.value;
+      if(!priorReview){
+       const invitation=await service.workflow.issue(campaignId);
+       await service.store.mutate(campaignId,current=>{
+        current.owner_investigation_notified_at=new Date().toISOString();
+        current.events??=[];
+        current.events.push({type:'OWNER_INVESTIGATION_NOTIFIED',at:current.owner_investigation_notified_at});
+        return current;
+       });
+       return {...prepared,investigation_review:invitation.status,snapshotDate:selected.snapshotDate};
+      }
+      if(['NOTIFIED','CONSUMED'].includes(priorReview.status)){
+       await service.store.mutate(campaignId,current=>({...current,owner_investigation_notified_at:current.owner_investigation_notified_at??new Date().toISOString()}));
+       return {...prepared,investigation_review:'EXISTING',snapshotDate:selected.snapshotDate};
+      }
+      return {...prepared,investigation_review:'NOTIFICATION_AMBIGUOUS',snapshotDate:selected.snapshotDate};
+     }
+    }
+    return {...prepared,snapshotDate:selected.snapshotDate,archive_unverified_dates:available.blocked?.map(item=>item.snapshotDate).filter(Boolean)??[]};
    }finally{
     await client.query('SELECT pg_advisory_unlock(hashtext($1))',[campaignId]);
     client.release();
