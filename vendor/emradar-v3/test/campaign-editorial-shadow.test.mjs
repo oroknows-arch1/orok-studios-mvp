@@ -83,3 +83,25 @@ test('one successful Google review is durable and not repeated; asset changes ge
  const changed=await auditCampaignOnce({adapter,campaignId:'test-campaign',state:stateCopy,request,model:'gemini-3.5-flash'});
  assert.equal(changed.status,'ADVISORY');assert.equal(calls,2);assert.notEqual(changed.recordKey,first.recordKey);
 });
+
+test('unavailable free Google reviewer is stored once and does not loop on restart',async()=>{
+ const records=new Map();
+ const adapter={
+  async read(k){return records.get(k)??null},
+  async compareAndSwap(k,version,value){
+   const current=records.get(k);
+   if(version===null&&current)return false;
+   if(version!==null&&(!current||current.version!==version))return false;
+   records.set(k,{version:(current?.version??0)+1,value});
+   return true;
+  }
+ };
+ let calls=0;
+ const request=async()=>{calls++;throw Error('provider unavailable')};
+ const a=await auditCampaignOnce({adapter,campaignId:'offline-failure',state,request,model:'gemini-3.5-flash'});
+ const b=await auditCampaignOnce({adapter,campaignId:'offline-failure',state,request,model:'gemini-3.5-flash'});
+ assert.equal(a.status,'AUDITOR_UNAVAILABLE');
+ assert.equal(b.status,'ALREADY_ATTEMPTED');
+ assert.equal(calls,1);
+ assert.equal(records.get(a.recordKey).value.status,'AUDITOR_UNAVAILABLE');
+});
