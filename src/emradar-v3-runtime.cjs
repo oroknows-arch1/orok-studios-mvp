@@ -264,7 +264,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    // Experimental, disabled unless explicitly enabled and a server-side API key exists.
    // A missing key never affects the existing marketing pipeline.
    shadowEditorialAudit:env.EMRADAR_V3_CAMPAIGN_GOOGLE_SHADOW==='true'&&env.GEMINI_API_KEY
-    ? {model:env.EMRADAR_V3_GOOGLE_MODEL||'gemini-2.5-flash',
+    ? {model:env.EMRADAR_V3_GOOGLE_MODEL||'gemini-3.5-flash',googleSearch:env.EMRADAR_V3_GOOGLE_PAID_SEARCH==='true',
        request:createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY})}
     : null
   });
@@ -278,20 +278,27 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const {auditCampaignInShadow}=await import('../vendor/emradar-v3/src/campaign-editorial-shadow.js');
    const request=createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY});
    return runReleaseOnce({adapter:service.store.adapter,
-    key:'v3-google-connection-probe:2026-11-22:'+googleSmokeCampaignId,
+    key:'v3-google-free-campaign-audit:2026-11-22:'+googleSmokeCampaignId,
     run:async()=>{
-     // Minimal, single Search-grounded request before further campaign-sized calls.
-     const payload={model:'gemini-2.5-flash',
-      input:'Using Google Search, identify whether EBRD project 56011 is approved. Reply with only this JSON: {"proposals":[]}.',
-      store:false,tools:[{type:'google_search'}]};
+     const model='gemini-3.5-flash';
+     // One tiny free-tier compatibility check. No Google Search or paid grounding.
      try{
-      const response=await request(payload,AbortSignal.timeout(45000));
-      return {status:'GOOGLE_CONNECTED',jsonReceived:Array.isArray(response?.proposals),model:payload.model};
+      const hello=await request({model,input:'Return only this JSON object: {"proposals":[]}',store:false,
+       response_format:{type:'text',mime_type:'application/json',schema:{type:'object',properties:{
+        proposals:{type:'array',items:{type:'string'}}},required:['proposals']}}},AbortSignal.timeout(30000));
+      if(!Array.isArray(hello?.proposals))return {status:'GOOGLE_UNUSABLE_PROBE',model};
      }catch(error){
       const message=String(error?.message??'');
-      return {status:'GOOGLE_CONNECTION_FAILED',errorType:/^GEMINI_AUDIT_(?:HTTP_[0-9]{3}|NOT_COMPLETED|EMPTY_OUTPUT|INVALID_JSON)$/.test(message)
-       ?message:(error?.name==='TimeoutError'?'TIMEOUT':error?.cause?.code==='ENOTFOUND'?'DNS_FAILED':'FETCH_OR_PROVIDER_ERROR'),model:payload.model};
+      return {status:'GOOGLE_CONNECTION_FAILED',model,errorType:/^GEMINI_AUDIT_(?:HTTP_[0-9]{3}|NOT_COMPLETED|EMPTY_OUTPUT|INVALID_JSON)$/.test(message)
+       ?message:'FETCH_OR_PROVIDER_ERROR'};
      }
+     const state=(await service.store.adapter.read(googleSmokeCampaignId))?.value;
+     if(state?.phase!=='PUBLICATION_REVIEW')return {status:'NO_REVIEW_CAMPAIGN',model};
+     const audit=await auditCampaignInShadow({state,request,model,googleSearch:false,timeoutMs:90000});
+     const counts={};
+     for(const row of audit.verdicts??[])counts[row.verdict]=(counts[row.verdict]??0)+1;
+     return {status:audit.status,checked:audit.proposalCount??0,counts,model,
+      searchGrounding:'OFF',errorType:audit.errorType??null};
     }});
   };
   const runRegeneration=async(campaignId,destinationId)=>{
