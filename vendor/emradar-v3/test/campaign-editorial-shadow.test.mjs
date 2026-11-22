@@ -83,3 +83,21 @@ test('one successful Google review is durable and not repeated; asset changes ge
  const changed=await auditCampaignOnce({adapter,campaignId:'test-campaign',state:stateCopy,request,model:'gemini-3.5-flash'});
  assert.equal(changed.status,'ADVISORY');assert.equal(calls,2);assert.notEqual(changed.recordKey,first.recordKey);
 });
+
+test('deployed free-tier audit defaults to no paid Google Search',async()=>{
+ const payloads=[];
+ const result=await auditCampaignOnce({
+  adapter:{
+   read:async()=>null,
+   compareAndSwap:async()=>true
+  },
+  campaignId:'no-search-by-default',state,model:'gemini-3.5-flash',
+  request:async payload=>{
+   payloads.push(payload);
+   return valid;
+  }
+ });
+ assert.equal(result.status,'ADVISORY');
+ assert.equal(payloads.length,1);
+ assert.equal(payloads[0].tools,undefined);
+});
