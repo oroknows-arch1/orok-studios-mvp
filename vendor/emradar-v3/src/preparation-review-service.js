@@ -26,6 +26,7 @@ import {verifyEditorialAsset} from './destination-selection.js';
 import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
 import {editorialApplies, editorialStatus, hasEditorialOutcome, isEditorialReady, prepareEditorialReview} from './editorial-preparation.js';
 import {convert} from 'html-to-text';
+import {auditCampaignInShadow} from './campaign-editorial-shadow.js';
 
 export async function excludeSourceInstitutionDestinations({store,directory,campaignId}){
  const state=(await store.adapter.read(campaignId))?.value,document=state?.preparation_input?.document;
@@ -85,7 +86,7 @@ export function assessPublicationReview({state,candidates}) {
 // owner-notification transports have been configured and independently tested.
 // Does not mount HTTP routes, deploy, distribute or trigger a campaign at import.
 export async function createPreparationReviewService({
- pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,assessEditorial,readPrimarySource,autonomousDiscovery=false
+ pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,assessEditorial,readPrimarySource,autonomousDiscovery=false,shadowEditorialAudit=null
 }) {
  if(typeof pool?.query!=='function'||typeof notify!=='function'||
     typeof researchEvidence!=='function'||typeof write!=='function'||
@@ -375,6 +376,13 @@ export async function createPreparationReviewService({
    completion=await saveCompletion(result.campaignId);
   }
   if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
+  // Optional independent editorial experiment: run once on the whole prepared campaign,
+  // after normal source checks and before owner notification. No mutations or blocking.
+  // Disabled by default. The owner review proceeds even if the auditor is unavailable.
+  if(shadowEditorialAudit?.request){
+   const snapshot=(await adapter.read(result.campaignId))?.value;
+   if(snapshot)await auditCampaignInShadow({state:snapshot,...shadowEditorialAudit});
+  }
   return {...result,status:'PUBLICATION_REVIEW',...completion};
  },workflow:{issue:ensureOwnerReview}})};
 }
