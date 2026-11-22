@@ -36,5 +36,10 @@ export async function auditCampaignInShadow({state,request,model,timeoutMs=45000
    seen.add(row.id);
   }
   return {status:'ADVISORY',proposalCount:packet.length,verdicts:rows.map(row=>({...row,fingerprint:fingerprints.get(row.id)}))};
- }catch(error){return {status:'AUDITOR_UNAVAILABLE',errorType:error?.name==='TimeoutError'?'TIMEOUT':'REQUEST_FAILED'};}
+ }catch(error){
+  const message=String(error?.message??'');
+  const classified=/^GEMINI_AUDIT_(?:HTTP_\\d{3}|NOT_COMPLETED|EMPTY_OUTPUT|INVALID_JSON)$/.test(message)
+   ?message:(error?.name==='TimeoutError'?'TIMEOUT':'REQUEST_FAILED');
+  return {status:'AUDITOR_UNAVAILABLE',errorType:classified};
+ }
 }
