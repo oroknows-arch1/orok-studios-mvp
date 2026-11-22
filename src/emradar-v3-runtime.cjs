@@ -9,7 +9,7 @@ const ATTESTATION_DIR=path.join(__dirname,'../vendor/emradar-v3/verification');
 const SCAN_ORIGIN='https://emerging-markets-radar.onrender.com';
 const SCAN_INDEX_URL=SCAN_ORIGIN+'/data/archive-index.json';
 const FIXED_X_TEMPLATE_VERSION='emradar-formation-card-v2';
-const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/verify','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
+const REVIEW_PATHS=new Set(['/review/access','/api/review/request-access','/api/review/exchange','/api/review/view','/api/review/decision','/api/review/group','/api/review/group-revise','/api/review/group-member','/api/review/revise','/api/review/discover','/api/review/release','/api/review/x/connect','/api/review/x/callback','/api/review/x/status']);
 
 function loadPublishedScans(attestationDir=ATTESTATION_DIR){
  return readdirSync(attestationDir).filter(name=>/^publication-\d{4}-\d{2}-\d{2}\.json$/.test(name)).map(name=>name.slice(12,-5)).filter(date=>{
@@ -138,7 +138,7 @@ async function selectNextPublishedScan({published,readCampaign}){
   const existing=await readCampaign(campaignIdFor(candidate));
   // A retired historical campaign is terminal. It must never monopolise
   // later published scans after returning to the pre-19 November runtime.
-  if(existing?.phase==='CLOSED')continue;
+  if(existing?.phase==='CLOSED'||existing?.review_completion?.editorial_checked===true)continue;
   if(existing?.phase!=='PUBLICATION_REVIEW')return {...candidate,resume:Boolean(existing)};
  }
  return null;
@@ -151,6 +151,7 @@ async function resumePendingDiscovery({pool,service}){
   WHERE c.payload->>'phase' IN ('PUBLICATION_REVIEW','ASSETS_PREPARED')
   AND c.payload->'preparation_input'->'document' IS NOT NULL
   AND COALESCE(c.payload->'review_completion'->>'complete','false')<>'true'
+  AND COALESCE(c.payload->'review_completion'->>'editorial_checked','false')<>'true'
   AND r.campaign_id IS NULL
   ORDER BY c.updated_at ASC,c.campaign_id ASC LIMIT 1`);
  const campaignId=rows[0]?.campaign_id;if(!campaignId)return null;
@@ -204,7 +205,7 @@ async function runOwnerInvitationOnce({adapter,workflow,inspectInbox,campaignId,
  return runReleaseOnce({adapter,key,isComplete:result=>result.status==='OWNER_REVIEW_READY',run:async()=>{
   await workflow.issue(campaignId);
   const review=(await adapter.read('review:'+campaignId))?.value;
-  if(review?.status!=='NOTIFIED'||review.notification_receipt?.recipient!=='sean@emradar.net')throw Error('V3_OWNER_NOTIFICATION_UNCONFIRMED');
+  if(!['NOTIFIED','CONSUMED'].includes(review?.status)||review.notification_receipt?.recipient!=='sean@emradar.net')throw Error('V3_OWNER_NOTIFICATION_UNCONFIRMED');
   const inbox=await inspectInbox({provider_id:review.notification_receipt.provider_id,campaignId,reviewOrigin,token_hash:review.token_hash});
   return {status:inbox.status==='PASS'&&inbox.link_ready?'OWNER_REVIEW_READY':'OWNER_REVIEW_BLOCKED',recipient:'sean@emradar.net',smtp:'PASS',inbox};
  }});
@@ -218,10 +219,7 @@ async function restoreOwnerReviewAccess({adapter,workflow,inspectMailbox,inspect
   const routing=await inspectMailbox(input);
   await adapter.compareAndSwap(key+':mailbox',null,routing);
   if(routing.status!=='PASS'||!routing.inbox)return {status:'OWNER_REVIEW_BLOCKED',reason:routing.reason??'INVITATION_FILED_OUTSIDE_INBOX',routing,emails_sent:0};
-  // A live unconsumed invitation is never replaced by another message.
-  if(!['CONSUMED','EXPIRED'].includes(review.status)&&review.expires_at>Date.now())return {status:'OWNER_REVIEW_READY',smtp:'PASS',inbox:routing,emails_sent:0};
-  const fresh=await runOwnerInvitationOnce({adapter,workflow,inspectInbox,campaignId,reviewOrigin,key:key+':fresh'});
-  return {...fresh,routing,emails_sent:1};
+  return {status:'OWNER_REVIEW_READY',smtp:'PASS',inbox:routing,emails_sent:0};
  }});
 }
 
@@ -261,9 +259,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   const service=await createOpenAiPreparationReviewService({
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
-   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true',
-   proposalVerificationMaxInvestigations:Number(env.EMRADAR_V3_PROPOSAL_MAX_INVESTIGATIONS||8),
-   proposalVerificationMaxToolCalls:Number(env.EMRADAR_V3_PROPOSAL_MAX_TOOL_CALLS||3)
+   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
   });
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
@@ -278,6 +274,10 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
      if(!revision){
       await service.updateRegenerationStatus(campaignId,destinationId,requestId,'RUNNING',{started_at:action.started_at??new Date().toISOString()});
       revision=await service.regenerateRejectedAsset(campaignId,destinationId,requestId);
+     }
+     if(state.editorial_preparation){
+      const outcomes=await service.editorialReview(campaignId,{ids:[destinationId],checkOnly:true});
+      if(!['READY_VERIFIED','CORRECTED_READY'].includes(outcomes[destinationId]))throw Error('EDITORIAL_CHECK_REQUIRED');
      }
      const notified=await service.workflow.issue(campaignId,{revisionId:revision.revisionId});
      await service.updateRegenerationStatus(campaignId,destinationId,requestId,'COMPLETE',{completed_at:new Date().toISOString(),owner_notification: notified.status});
@@ -421,6 +421,32 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     client.release();
    }
   };
+  const {recoveryCampaignId}=await import('../vendor/emradar-v3/src/editorial-preparation.js');
+  const runEditorialRecovery=async()=>{
+   const state=(await service.store.adapter.read(recoveryCampaignId))?.value;
+   if(state?.phase!=='PUBLICATION_REVIEW')return null;
+   const client=await pool.connect();
+   try{
+    const lock=await client.query('SELECT pg_try_advisory_lock(hashtext($1)) AS acquired',[recoveryCampaignId]);
+    if(!lock.rows[0]?.acquired)return null;
+    const current=(await service.store.adapter.read(recoveryCampaignId)).value;
+    const review=(await service.store.adapter.read('review:'+recoveryCampaignId))?.value;
+    if(current.editorial_preparation?.recovery_revision_id===review?.revision_id&&
+       current.editorial_preparation?.recovery_revision_id&&['NOTIFIED','CONSUMED','ISSUED','NOTIFICATION_AMBIGUOUS'].includes(review.status))return null;
+    const result=await service.recoverEditorialReview(recoveryCampaignId);
+    if(result.provider_id){
+     const invitation=(await service.store.adapter.read('review:'+recoveryCampaignId)).value;
+     try{
+      const inbox=await integration.inspectOwnerInvitation({provider_id:result.provider_id,campaignId:recoveryCampaignId,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,token_hash:invitation.token_hash});
+      result.inbox={status:inbox.status,link_ready:inbox.link_ready===true,inbox_uid:inbox.inbox_uid??null};
+     }catch{result.inbox={status:'UNCONFIRMED'};}
+    }
+    return result;
+   }finally{
+    await client.query('SELECT pg_advisory_unlock(hashtext($1))',[recoveryCampaignId]);
+    client.release();
+   }
+  };
   // One bounded verification of this discovery revision, using the existing
   // latest campaign. No notification, release, scan or content regeneration.
   const discoveryTestKey='v3-publication-first-discovery:2026-10-21-formation-coverage-v3';
@@ -537,7 +563,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
    return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
   };
-  return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runEditorialRecovery,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};

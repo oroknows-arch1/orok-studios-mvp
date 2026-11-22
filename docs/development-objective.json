@@ -1,6 +1,12 @@
 {
   "schema_version": 1,
   "objective_id": "emradar-v3-final-marketing-signoff",
+  "editorial_preparation_issue_56": {
+    "campaign_id": "v3-ee0ca7e9f07c03189d961df231589882",
+    "baseline": "Production has 16 assets, 12 distinct versions and four saved revisions that had not been applied.",
+    "acceptance": "Check exact saved wording and publication fit, classify all 16 and confirm a corrected Purelymail receipt. Verify durable history, previous deliveries and no new distribution.",
+    "deployment": "Pending CI and live verification"
+  },
   "status": "IN_PROGRESS",
   "campaign_id": "v3-df5b240c718018880410c03a4c392d64",
   "objective": "Finish existing EMRADAR V3 marketing: sufficient evidence-verified destinations, automatic scan-to-review, fresh private owner invitation, owner-approved distribution, receipts and feedback. Freeze unrelated work.",

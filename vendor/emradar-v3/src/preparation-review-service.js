@@ -12,18 +12,20 @@ import {CampaignStore} from './state.js';
 import {OutletDirectory} from './outlet-directory.js';
 import {createDirectoryDiscovery} from './directory-discovery.js';
 import {createReviewedEvidenceLinker} from './reviewed-evidence-links.js';
-import {pinnedHtml} from './autonomous-outlet-discovery.js';
+import {pinnedHtml,pinnedSource} from './autonomous-outlet-discovery.js';
 import {createAutonomousOutletDiscovery} from './autonomous-outlet-discovery.js';
-import {createEditorialContactResearch} from './editorial-contact-research.js';
+import {createEditorialContactResearch,publicContactUrl} from './editorial-contact-research.js';
 import {lookup} from 'node:dns/promises';
+import {createHash} from 'node:crypto';
+import {extractText,getDocumentProxy} from 'unpdf';
 import {createPreparationRun,createVerifiedVisualRenderer} from './preparation-run.js';
 import {ReviewWorkflow} from './review-workflow.js';
 import {createPublicationReviewHandoff} from './publication-review-handoff.js';
 import {sha256,MAX_DESTINATIONS,isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
-import {ProposalVerificationService} from './proposal-verification.js';
-import {automaticallyVerifyProposals} from './automatic-proposal-verification.js';
+import {editorialApplies, editorialStatus, hasEditorialOutcome, isEditorialReady, prepareEditorialReview} from './editorial-preparation.js';
+import {convert} from 'html-to-text';
 
 export async function excludeSourceInstitutionDestinations({store,directory,campaignId}){
  const state=(await store.adapter.read(campaignId))?.value,document=state?.preparation_input?.document;
@@ -67,21 +69,23 @@ export function assessPublicationReview({state,candidates}) {
  const recipients=publications.filter(recipientPolicy.verifiedDestination);
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
- const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&asset.delivery_eligible===true&&recipientPolicy.recipientReadyForReview(asset,state.destinations.find(d=>d.id===asset.destination_id))&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
+ const ready=asset=>!editorialApplies(state)||isEditorialReady(editorialStatus(state,asset.destination_id));
+ const emailIds=new Set(assets.filter(asset=>ready(asset)&&asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&asset.delivery_eligible===true&&recipientPolicy.recipientReadyForReview(asset,state.destinations.find(d=>d.id===asset.destination_id))&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
  const missing=recipients.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
- const incomplete=assets.filter(asset=>asset.review_status==='NEEDS_REVISION');
+ const incomplete=assets.filter(asset=>asset.review_status==='NEEDS_REVISION'||(!state.deliveries?.[asset.destination_id]&&!ready(asset)));
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
- const xReady=Boolean(x?.body&&(x.visual_url||x.visual_base64));
+ const xReady=Boolean(x?.body&&ready(x)&&(x.visual_url||x.visual_base64));
  // Review availability is independent of unfinished editorial destinations. Only independently ready, verified assets may be approved or distributed.
  const visible=xReady||emailIds.size>0;
- return {complete:visible,review_ready:visible,delivery_ready:missing.length===0&&incomplete.length===0&&xReady,verified_publications:publications.length,verified_contacts:recipients.length,unresolved_contacts:publications.length-recipients.length,editorial_emails:emailIds.size,x_ready:xReady,needs_revision:incomplete.map(asset=>asset.destination_id),missing_destination_ids:missing};
+ const editorial_checked=editorialApplies(state)&&Boolean(state.editorial_preparation)&&assets.every(asset=>hasEditorialOutcome(state,asset.destination_id));
+ return {complete:visible,...(editorialApplies(state)?{editorial_checked}:{}),review_ready:visible,delivery_ready:missing.length===0&&incomplete.length===0&&xReady,verified_publications:publications.length,verified_contacts:recipients.length,unresolved_contacts:publications.length-recipients.length,editorial_emails:emailIds.size,x_ready:xReady,needs_revision:incomplete.map(asset=>asset.destination_id),missing_destination_ids:missing};
 }
 
 // Explicit assembly of existing V3 workers. Call only after provider and
 // owner-notification transports have been configured and independently tested.
 // Does not mount HTTP routes, deploy, distribute or trigger a campaign at import.
 export async function createPreparationReviewService({
- pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,investigateProposal,autonomousDiscovery=false,proposalVerificationMaxInvestigations=8
+ pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,assessEditorial,autonomousDiscovery=false
 }) {
  if(typeof pool?.query!=='function'||typeof notify!=='function'||
     typeof researchEvidence!=='function'||typeof write!=='function'||
@@ -92,17 +96,71 @@ export async function createPreparationReviewService({
  await adapter.initialize();
  await directory.initialize();
  const store=new CampaignStore(adapter);
- const verifier=typeof investigateProposal==='function'?new ProposalVerificationService({investigate:investigateProposal}):null;
  const discover=createDirectoryDiscovery({
   directory,linkEvidence:autonomousDiscovery?createCoverageDiscovery({directory,scanDigest:document=>sha256(JSON.stringify(document.evidence.filter(e=>e?.verified===true&&e?.id&&e?.fact&&e?.source_url).map(e=>[e.id,e.fact,e.source_url]))),searchFormation:createAutonomousOutletDiscovery({openai,directory,fetcher})}):discoverLinks??createReviewedEvidenceLinker({reviewedLinks})
  });
- const basePrepare=createPreparationRun({store,researchEvidence,discover,write,renderVisual,fetcher});
  const prepare=async input=>{
   const result=await basePrepare(input),state=(await adapter.read(result.campaignId))?.value;
-  if(verifier&&state&&isReviewPhase(state.phase))await automaticallyVerifyProposals({store,campaignId:result.campaignId,verifier,maxInvestigations:proposalVerificationMaxInvestigations});
+  if(assessEditorial&&state&&isReviewPhase(state.phase))await editorialReview(result.campaignId);
   return result;
  };
  const renderVerifiedVisual=createVerifiedVisualRenderer(renderVisual);
+ const fetchSource=async raw=>{
+  const url=publicContactUrl(raw);
+  if(!url)return null;
+  const source=await pinnedSource(url,lookup,{timeoutMs:10000,maxBytes:8000000,allowPdf:true,redirects:2});
+  let text, passages_only=false;
+  if(source.type.includes('application/pdf')){
+   const pdf=await getDocumentProxy(new Uint8Array(source.bytes),{isEvalSupported:false,stopAtErrors:true});
+   try{
+    if(pdf.numPages>60)return null;
+    const extracted=await extractText(pdf,{mergePages:false});
+    text=extracted.text.join('\n\n');
+    if(text.length>65000){
+     const filename=decodeURIComponent(url.pathname);
+     if(!/mygov/i.test(filename))return null;
+     // The gazette is a whole newspaper. Keep the full article pages, not a snippet.
+     text=extracted.text.filter(page=>/Dongo\s+Kundu|HERCULES/i.test(page)).join('\n\n');
+     passages_only=true;
+    }
+   }finally{await pdf.destroy();}
+  }else{
+   text=convert(source.bytes.toString('utf8'),{wordwrap:false,selectors:['nav','script','style','footer','img','form','noscript'].map(selector=>({selector,format:'skip'})).concat({selector:'a',options:{ignoreHref:true}})});
+  }
+  if(text.length<100||text.length>65000)return null;
+  return {url:source.url,text,passages_only,page_sha256:createHash('sha256').update(source.bytes).digest('hex')};
+ };
+ const sourceReads=new Map();
+ const readSource=raw=>{
+  const previous=sourceReads.get(raw);
+  if(previous&&Date.now()-previous.startedAt<30*60*1000)return previous.promise;
+  if(sourceReads.size>=90)sourceReads.delete(sourceReads.keys().next().value);
+  const promise=fetchSource(raw).catch(()=>null);
+  sourceReads.set(raw,{startedAt:Date.now(),promise});
+  return promise;
+ };
+ const writeGrounded=async input=>{
+  if(!assessEditorial)return write(input);
+  const ids=new Set(input.destination.evidence?.ids??[]);
+  const urls=[...new Set(input.document.evidence.filter(item=>ids.has(item.id)).map(item=>item.source_url).filter(Boolean))];
+  const sourcePages=(await Promise.all(urls.map(readSource))).filter(Boolean);
+  if(!sourcePages.length)throw Error('PRIMARY_SOURCE_PASSAGE_UNAVAILABLE');
+  return write({...input,sourcePages});
+ };
+ const basePrepare=createPreparationRun({store,researchEvidence,discover,write:writeGrounded,renderVisual,fetcher});
+ const renderRevision=async(asset,state)=>{
+  const visual=await renderVerifiedVisual({asset,document:state.preparation_input.document,scan:state.scan});
+  return {...asset,visual_sha256:visual.sha256,visual_url:visual.url};
+ };
+ const editorialReview=async (campaignId,options={})=>{
+  if(!assessEditorial)return null;
+  const current=(await adapter.read(campaignId))?.value;
+  if(!current?.editorial_preparation)await store.mutate(campaignId,state=>{
+   state.editorial_preparation??={outcomes:{}};
+   return state;
+  });
+  return prepareEditorialReview({store,campaignId,readSource,assess:assessEditorial,renderRevision,...options});
+ };
  const ensureBrandedX=async campaignId=>{
   const state=(await adapter.read(campaignId))?.value,entry=state?.assets?.x;
   if(!entry||entry.asset.visual_brand_version===GRAPHIC_STANDARD.version||state.decisions?.x||state.deliveries?.x)return false;
@@ -137,7 +195,7 @@ export async function createPreparationReviewService({
   await directory.upsert(verified);
   return verified;
  };
- const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin,verifyRecipient,verifier});
+ const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin,verifyRecipient,reviewEditorial:editorialReview});
  const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS,verifiedPublicationsOnly=false,existingDrafts={}}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
@@ -150,7 +208,7 @@ export async function createPreparationReviewService({
    let asset;
    try{
     if(!destination.delivery_eligible)throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
-    asset=compatible?{...structuredClone(previous),to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,recipient_verification:destination.contact}:await write({campaignId,destination,document:state.preparation_input.document,scan:state.scan});
+    asset=compatible?{...structuredClone(previous),to:destination.contact.email,contact_status:'VERIFIED',delivery_eligible:true,recipient_verification:destination.contact}:await writeGrounded({campaignId,destination,document:state.preparation_input.document,scan:state.scan});
     verifyEditorialAsset(asset,{evidenceIds});asset.review_status='READY';
    }catch(error){asset={campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',subject:'Preparation incomplete: '+(destination.name??destination.id),body:'Preparation did not complete for this item. Review the persisted warning and regenerate or exclude it.',from:'sean@emradar.net',evidence_ids:destination.evidence.ids.filter(id=>evidenceIds.has(id)),review_status:'NEEDS_REVISION',preparation_error:/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'EDITORIAL_PREPARATION_FAILED',delivery_eligible:false,contact_status:'UNVERIFIED'};}
    await store.extendReview(campaignId,[destination],[asset]);
@@ -168,7 +226,8 @@ export async function createPreparationReviewService({
   if(!destination)throw Error('REGENERATION_DESTINATION_MISSING');
   const document=state.preparation_input?.document;
   if(!document)throw Error('REGENERATION_EVIDENCE_MISSING');
-  const asset=await write({campaignId,destination,document,scan:state.scan,ownerFeedback:action.feedback});
+  const writeRevision=editorialApplies(state)?writeGrounded:write;
+  const asset=await writeRevision({campaignId,destination,document,scan:state.scan,ownerFeedback:action.feedback});
   if(!asset||asset.campaign_id!==campaignId||asset.destination_id!==destinationId||asset.kind!==entry.asset.kind)throw Error('REGENERATION_ASSET_MISMATCH');
   if(asset.kind==='X'){
    const visual=await renderVerifiedVisual({asset,document,scan:state.scan});
@@ -208,6 +267,18 @@ export async function createPreparationReviewService({
   }
   return workflow.issue(campaignId);
  };
+ const recoverEditorialReview=async campaignId=>{
+  const outcomes=await editorialReview(campaignId);
+  const state=(await adapter.read(campaignId)).value;
+  if(!Object.keys(state.assets).every(id=>hasEditorialOutcome(state,id)))return {outcomes,notification:'EDITORIAL_CHECK_PENDING'};
+  const revisionId=sha256(['editorial-preparation-56',Object.entries(outcomes).map(([id,status])=>[id,status,state.assets[id].fingerprint])]);
+  if(!Object.values(outcomes).some(isEditorialReady))return {outcomes,notification:'NO_ACTIONABLE_PROPOSAL'};
+  // The repair revision is constant for this campaign across restart and retries.
+  const saved=await store.mutate(campaignId,current=>{current.editorial_preparation.recovery_revision_id??=revisionId;return current;});
+  await workflow.issue(campaignId,{revisionId:saved.editorial_preparation.recovery_revision_id});
+  const review=(await adapter.read('review:'+campaignId))?.value;
+  return {outcomes,notification:review.status,provider_id:review.notification_receipt?.provider_id};
+ };
  const saveCompletion=async campaignId=>{
   const completion=await reviewCompletion(campaignId);
   const currentState=(await adapter.read(campaignId))?.value;
@@ -239,8 +310,11 @@ export async function createPreparationReviewService({
     current.destinations=current.destinations.map(d=>!current.decisions?.[d.id]&&!current.deliveries?.[d.id]&&fresh.has(d.id)?{...d,...fresh.get(d.id),evidence:d.evidence}:d);
     return current;
    });
-   if(autonomousDiscovery)resumed.editorial_refresh=await refreshUnreviewedEditorialDrafts({store,write,campaignId});
-  }finally{completion=await saveCompletion(campaignId);}
+   if(autonomousDiscovery&&!assessEditorial)resumed.editorial_refresh=await refreshUnreviewedEditorialDrafts({store,write,campaignId});
+  }finally{
+   if(assessEditorial)await editorialReview(campaignId);
+   completion=await saveCompletion(campaignId);
+  }
   const notification=completion.complete&&notifyOwner?await ensureOwnerReview(campaignId):null;
   return {...resumed,status:completion.complete?'PUBLICATION_REVIEW':'ASSETS_PREPARED',...completion,notification:notification?.status??(completion.complete?'NOT_REQUESTED':'NOT_READY')};
  };
@@ -283,14 +357,15 @@ export async function createPreparationReviewService({
   const state=(await adapter.read(campaignId)).value;
   return {campaignId,status:'PUBLICATION_REVIEW',existing:false,groups:Object.values(state.email_groups??{}).filter(group=>group.destination_ids.length>1).length,recipients:verified.length};
  };
- return {store,directory,workflow,prepare,discover,excludeSourceInstitutions:async campaignId=>{const excluded=await excludeSourceInstitutionDestinations({store,directory,campaignId});if(excluded.length)await saveCompletion(campaignId);return excluded;},refreshUnreviewedXVisual:ensureBrandedX,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),prepareReplacementReview,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,regenerateRejectedAsset,updateRegenerationStatus,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
+ return {store,directory,workflow,prepare,discover,recoverEditorialReview,editorialReview,excludeSourceInstitutions:async campaignId=>{const excluded=await excludeSourceInstitutionDestinations({store,directory,campaignId});if(excluded.length)await saveCompletion(campaignId);return excluded;},refreshUnreviewedXVisual:ensureBrandedX,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),prepareReplacementReview,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,regenerateRejectedAsset,updateRegenerationStatus,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
   const prior=(await adapter.read(result.campaignId))?.value;
   if(result.status==='ALREADY_PREPARED'&&!prior?.review_completion)await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});
   let completion=await saveCompletion(result.campaignId);
-  if(!completion.complete){
+  if(!completion.complete&&!completion.editorial_checked){
    if(result.status==='ALREADY_PREPARED')await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});
    else await resumeEditorialDrafts(result.campaignId,{verifiedPublicationsOnly:true});
+   if(assessEditorial)await editorialReview(result.campaignId);
    completion=await saveCompletion(result.campaignId);
   }
   if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
@@ -300,7 +375,7 @@ export async function createPreparationReviewService({
 
 // Convenience composition for the paid API's existing OpenAI connection.
 // Caller still controls activation, review notification and all external effects.
-export async function createOpenAiPreparationReviewService({openai,proposalVerificationMaxToolCalls=3,...options}) {
- const providers=createOpenAiPreparationProviders({openai,proposalVerificationMaxToolCalls});
+export async function createOpenAiPreparationReviewService({openai,...options}) {
+ const providers=createOpenAiPreparationProviders({openai});
  return createPreparationReviewService({...options,...providers,openai});
 }

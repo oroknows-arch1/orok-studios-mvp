@@ -1,5 +1,5 @@
+import {editorialApplies, editorialStatus, isEditorialReady} from './editorial-preparation.js';
 import {isReviewPhase} from './contracts.js';
-import {proposalBinding} from './proposal-verification.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {randomUUID,createHash,timingSafeEqual} from 'node:crypto';
 import {issueReviewAccess,consumeReviewAccess,matchesReviewAccess} from './review-access.js';
@@ -7,11 +7,11 @@ import {createOwnerSession,validateOwnerSession,OWNER_SESSION_TTL_MS} from './ow
 import {validateNotificationReceipt} from './owner-notification.js';
 
 export class ReviewWorkflow {
- constructor({store,adapter,notify,baseUrl,verifyRecipient,verifier=null,clock=()=>Date.now()}) {
+ constructor({store,adapter,notify,baseUrl,verifyRecipient,reviewEditorial,clock=()=>Date.now()}) {
   if(!store?.adapter || !adapter?.read || !adapter?.compareAndSwap || typeof notify!=='function') throw Error('REVIEW_DEPENDENCIES_REQUIRED');
   const url=new URL(baseUrl);
   if(url.protocol!=='https:' || url.username || url.password || url.search || url.hash) throw Error('SECURE_REVIEW_URL_REQUIRED');
-  this.store=store;this.adapter=adapter;this.notify=notify;this.baseUrl=url.origin;this.verifyRecipient=verifyRecipient;this.verifier=verifier;this.clock=clock;
+  this.store=store;this.adapter=adapter;this.notify=notify;this.baseUrl=url.origin;this.verifyRecipient=verifyRecipient;this.reviewEditorial=reviewEditorial;this.clock=clock;
  }
  async update(key,fn) {
   for(let attempt=0;attempt<8;attempt++){
@@ -36,10 +36,10 @@ export class ReviewWorkflow {
   if(existing && !replaceForRevision && ['ISSUED','NOTIFICATION_AMBIGUOUS'].includes(existing.status))throw Error('REVIEW_NOTIFICATION_AMBIGUOUS');
   const {token,record}=issueReviewAccess({campaignId,now});
   await this.update(key,old=>{
-   if(old?.revision_id===revisionId&&revisionId&&['NOTIFIED','CONSUMED'].includes(old.status))throw Error('REVIEW_REVISION_ALREADY_NOTIFIED');
+   if(old?.revision_id===revisionId&&revisionId&&['NOTIFIED','CONSUMED','ISSUED','NOTIFICATION_AMBIGUOUS'].includes(old.status))throw Error('REVIEW_REVISION_ALREADY_ISSUED');
    if(old && !replaceForRevision && ['NOTIFIED','CONSUMED'].includes(old.status))throw Error('REVIEW_LINK_ALREADY_ISSUED');
    if(old && !replaceForRevision && ['ISSUED','NOTIFICATION_AMBIGUOUS'].includes(old.status))throw Error('REVIEW_NOTIFICATION_AMBIGUOUS');
-   return {...record,status:'ISSUED',revision_id:revisionId,owner_session:null,notification_id:randomUUID(),previous_reviews:old?[...(old.previous_reviews??[]),Object.fromEntries(Object.entries(old).filter(([key])=>key!=='previous_reviews'))]:[]};
+   return {...record,status:'ISSUED',revision_id:revisionId,owner_session:old?.owner_session??null,notification_id:randomUUID(),previous_reviews:old?[...(old.previous_reviews??[]),Object.fromEntries(Object.entries(old).filter(([key])=>key!=='previous_reviews'))]:[]};
   });
   const link=this.baseUrl+'/review/access#token='+encodeURIComponent(token)+'&campaign='+encodeURIComponent(campaignId);
   // Notification failure is recorded as AMBIGUOUS; never silently reissue a second live link.
@@ -117,7 +117,8 @@ export class ReviewWorkflow {
    const destination=campaign.destinations.find(d=>d.id===asset.destination_id);
    const recipientReady=asset.kind!=='EMAIL'||recipientPolicy.recipientReadyForReview(asset,destination);
    const revision=!historical?(campaign.events??[]).findLast(event=>event.type==='ASSET_REVISED'&&event.destination_id===asset.destination_id&&event.new_fingerprint===fingerprint):null;
-   return {asset,fingerprint,historical,label,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
+   const editorial_status=historical?'HISTORICAL':editorialStatus(campaign,asset.destination_id);
+   return {asset,fingerprint,historical,label,editorial_status,editorial_ready:editorial_status==='LEGACY'||isEditorialReady(editorial_status),editorial_reason:campaign.editorial_preparation?.outcomes?.[asset.destination_id]?.reason??null,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
     revision:revision?{id:revision.id,fingerprint}:null,
     recipient_warning:asset.recipient_verification?.status==='OWNER_OVERRIDE'?asset.recipient_verification.warning_code:null,
     groupId:!historical?memberGroups.get(asset.destination_id)??null:null,recipientVerified:destination?.contact_verified===true,
@@ -128,7 +129,7 @@ export class ReviewWorkflow {
     verification:historical?null:campaign.proposal_verifications?.[asset.destination_id]?.at(-1)??null};
   };
   const history=[];
-  for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft'}));
+  for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft',decision:entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
   return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};
@@ -136,47 +137,6 @@ export class ReviewWorkflow {
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
   return this.store.decide(campaignId,destinationId,decision,fingerprint,feedback);
- }
- async verifyAgain(campaignId,sessionId,secret,destinationId,fingerprint){
-  await this.authenticate(campaignId,sessionId,secret);if(!this.verifier)throw Error('PROPOSAL_VERIFICATION_UNAVAILABLE');
-  const campaign=(await this.store.adapter.read(campaignId))?.value,entry=campaign?.assets?.[destinationId];if(!entry||entry.fingerprint!==fingerprint)throw Error('STALE_ASSET_VERIFICATION');
-  const destination=campaign.destinations.find(item=>item.id===destinationId);
-  const evidence=campaign.preparation_input?.document?.evidence??[];
-  const binding=proposalBinding({asset:entry.asset,destination,evidence});
-  const current=campaign.proposal_verifications?.[destinationId]?.at(-1)??null;
-  const valid=record=>record?.status==='VERIFIED'&&record.deliverable===true&&Array.isArray(record.claims)&&record.claims.length>0&&record.claims.every(claim=>claim.material===false||claim.status==='VERIFIED')&&typeof record.expires_at==='string'&&Date.parse(record.expires_at)>this.clock()&&record.evidence_sha256===binding.evidence_sha256;
-  // A repeat click for unchanged content must not trigger another paid investigation.
-  if(valid(current)&&Object.keys(binding).every(key=>current[key]===binding[key]))return {...current,reused:true,reuse_reason:current.review_scope==='SHARED_EXACT_CONTENT'?'IDENTICAL_CONTENT_AND_EVIDENCE':'UNCHANGED_PROPOSAL'};
-  // Share only verified findings for the exact same complete subject and body, evidence,
-  // kind and evidence IDs. Recipient-specific changes never share a verification.
-  const sameContent=other=>other.asset.kind===entry.asset.kind&&other.asset.subject===entry.asset.subject&&other.asset.body===entry.asset.body&&JSON.stringify([...(other.asset.evidence_ids??[])].sort())===JSON.stringify([...(entry.asset.evidence_ids??[])].sort());
-  for(const [otherId,other] of Object.entries(campaign.assets??{})){
-   if(otherId===destinationId||!sameContent(other))continue;
-   const source=(campaign.proposal_verifications?.[otherId]??[]).findLast(valid);
-   if(!source||source.asset_sha256!==other.fingerprint)continue;
-   const sourceDestination=campaign.destinations.find(item=>item.id===otherId);
-   const sourceBinding=proposalBinding({asset:other.asset,destination:sourceDestination,evidence});
-   if(Object.keys(sourceBinding).some(key=>source[key]!==sourceBinding[key]))continue;
-   const verification={...structuredClone(source),...binding,id:randomUUID(),reused_from_verification_id:source.id,review_scope:'SHARED_EXACT_CONTENT',verified_at:source.verified_at,expires_at:source.expires_at};
-   await this.store.recordProposalVerification(campaignId,destinationId,fingerprint,verification);
-   return {...verification,reused:true,reuse_reason:'IDENTICAL_CONTENT_AND_EVIDENCE'};
-  }
-  const verification=await this.verifier.verify({asset:entry.asset,destination,evidence,previous:current});
-  await this.store.recordProposalVerification(campaignId,destinationId,fingerprint,verification);
-  // Automatically populate identical proposals after one successful investigation.
-  // This does not approve recipients, edit their drafts, or make outbound sends.
-  if(valid(verification)){
-   for(const [otherId,other] of Object.entries(campaign.assets??{})){
-    if(otherId===destinationId||!sameContent(other))continue;
-    const dest=campaign.destinations.find(item=>item.id===otherId);
-    const otherBinding=proposalBinding({asset:other.asset,destination:dest,evidence});
-    const last=campaign.proposal_verifications?.[otherId]?.at(-1);
-    if(last&&Object.keys(otherBinding).every(key=>last[key]===otherBinding[key])&&valid(last))continue;
-    const shared={...structuredClone(verification),...otherBinding,id:randomUUID(),reused_from_verification_id:verification.id,review_scope:'SHARED_EXACT_CONTENT'};
-    await this.store.recordProposalVerification(campaignId,otherId,other.fingerprint,shared);
-   }
-  }
-  return {...verification,reused:false};
  }
  async revise(campaignId,sessionId,secret,destinationId,fingerprint,changes) {
   await this.authenticate(campaignId,sessionId,secret);
@@ -191,12 +151,15 @@ export class ReviewWorkflow {
     recipientCheck={ownerOverride:true,warningCode:/^[A-Z0-9_]{1,80}$/.test(candidate)?candidate:'CONTACT_VERIFICATION_FAILED'};
    }
   }
-  await this.store.revise(campaignId,destinationId,fingerprint,changes,verifiedDestination,recipientCheck);
+  const state=await this.store.revise(campaignId,destinationId,fingerprint,changes,verifiedDestination,recipientCheck);
+  if(editorialApplies(state))await this.reviewEditorial?.(campaignId,{ids:[destinationId],checkOnly:true}).catch(()=>{});
   return {saved:true,recipient_warning:recipientCheck?.warningCode??null};
  }
  async reviseGroup(campaignId,sessionId,secret,groupId,contentHash,version,changes){
   await this.authenticate(campaignId,sessionId,secret);
-  return this.store.reviseGroup(campaignId,groupId,contentHash,version,changes);
+  const state=await this.store.reviseGroup(campaignId,groupId,contentHash,version,changes);
+  if(editorialApplies(state))await this.reviewEditorial?.(campaignId,{ids:state.email_groups[groupId].destination_ids,checkOnly:true}).catch(()=>{});
+  return state;
  }
  async decideGroup(campaignId,sessionId,secret,groupId,decision,contentHash,version){
   await this.authenticate(campaignId,sessionId,secret);return this.store.decideGroup(campaignId,groupId,decision,contentHash,version);
