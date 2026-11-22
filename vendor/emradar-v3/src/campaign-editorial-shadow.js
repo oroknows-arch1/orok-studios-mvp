@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 // Optional read-only whole-campaign editorial audit. Does not approve, edit, send or publish.
 export function buildCampaignEditorialPacket(state) {
  const destinations=new Map((state?.destinations??[]).map(d=>[d.id,d]));
- return Object.entries(state?.assets??{}).filter(([,entry])=>entry?.asset?.body).map(([id,entry])=>{
+ return Object.entries(state?.assets??{}).filter(([id,entry])=>entry?.asset?.body&&!state?.deliveries?.[id]&&!state?.decisions?.[id]).map(([id,entry])=>{
   const a=entry.asset,d=destinations.get(id),ids=new Set(d?.evidence?.ids??[]);
   const sourceUrls=[...new Set((state?.preparation_input?.document?.evidence??[])
    .filter(e=>ids.has(e.id)&&e.verified===true&&typeof e.source_url==='string').map(e=>e.source_url))];
@@ -59,7 +59,7 @@ export async function auditCampaignOnce({adapter,campaignId,state,request,model,
  const digest=createHash('sha256').update(JSON.stringify(packet.map(p=>[p.id,p.fingerprint]))).digest('hex');
  const key='v3-google-shadow:'+campaignId+':'+digest;
  const previous=await adapter.read(key);
- if(previous)return {status:'ALREADY_ATTEMPTED',recordKey:key};
+ if(previous)return {status:previous.value?.status==='ADVISORY'?'ADVISORY':'ALREADY_ATTEMPTED',checked:previous.value?.checked??0,counts:previous.value?.counts??{},recordKey:key,reused:true};
  const reserved=await adapter.compareAndSwap(key,null,{
   status:'STARTED',campaign_id:campaignId,asset_digest:digest,created_at:new Date().toISOString()
  });

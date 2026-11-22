@@ -27,6 +27,7 @@ import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparat
 import {editorialApplies, editorialStatus, hasEditorialOutcome, isEditorialReady, prepareEditorialReview} from './editorial-preparation.js';
 import {convert} from 'html-to-text';
 import {auditCampaignOnce} from './campaign-editorial-shadow.js';
+import {reconcileCollaborativeEditorial} from './collaborative-editorial-review.js';
 
 export async function excludeSourceInstitutionDestinations({store,directory,campaignId}){
  const state=(await store.adapter.read(campaignId))?.value,document=state?.preparation_input?.document;
@@ -375,24 +376,63 @@ export async function createPreparationReviewService({
    if(assessEditorial)await editorialReview(result.campaignId);
    completion=await saveCompletion(result.campaignId);
   }
-  if(!completion.complete)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
-  // Optional independent editorial experiment: run once on the whole prepared campaign,
-  // after normal source checks and before owner notification. No mutations or blocking.
-  // Disabled by default. The owner review proceeds even if the auditor is unavailable.
-  if(shadowEditorialAudit?.request&&result.status!=='ALREADY_PREPARED'){
+  if(!completion.complete){
+   // Do not disappear downstream when all prepared drafts are held for evidence.
+   // Expose the unresolved work to the owner but keep all approval/send checks.
+   const held=(await adapter.read(result.campaignId))?.value;
+   if(!Object.keys(held?.assets??{}).length)throw Error('V3_PUBLICATION_REVIEW_INCOMPLETE');
+   await store.mutate(result.campaignId,current=>{
+    current.phase='PUBLICATION_REVIEW';
+    current.review_completion={...completion,held_review:true};
+    current.events.push({type:'OWNER_REVIEW_WITH_UNRESOLVED_EDITORIAL_ITEMS'});
+    return current;
+   });
+  }
+  // One collaborative editorial pass: Google challenges, V3 checks sources and
+  // corrects only the challenged assets, then Google checks changed wording once.
+  // Existing V3 evidence and owner-approval safeguards remain authoritative.
+  if(shadowEditorialAudit?.request&&!(await adapter.read('review:'+result.campaignId))?.value){
    try{
-    const snapshot=(await adapter.read(result.campaignId))?.value;
-    if(snapshot){
-     const audit=await auditCampaignOnce({adapter,campaignId:result.campaignId,
-      state:snapshot,...shadowEditorialAudit});
-     console.log('V3_GOOGLE_SHADOW_RESULT',JSON.stringify({
-      campaign_id:result.campaignId,status:audit.status,
-      checked:audit.checked??0,counts:audit.counts??{}
-     }));
+    const google=state=>auditCampaignOnce({adapter,campaignId:result.campaignId,
+     state,...shadowEditorialAudit});
+    const summary=await reconcileCollaborativeEditorial({adapter,campaignId:result.campaignId,
+     reviewGoogle:google,reviewV3:editorialReview,maximumCorrections:6});
+    console.log('V3_COLLABORATIVE_EDITORIAL_RESULT',JSON.stringify({
+     campaign_id:result.campaignId,status:summary.status,
+     objections:summary.google_objections??0,corrected:summary.corrected??0,
+     reassessed:summary.reassessed??0,outstanding:summary.outstanding??0,
+     final_status:summary.final_status??'NOT_RUN'
+    }));
+    // Revised assets may change the completion count and exact fingerprints.
+    if(summary.corrected>0||summary.reassessed>0){
+     const next=await reviewCompletion(result.campaignId);
+     if(next.complete)completion=await saveCompletion(result.campaignId);
+     else{
+      completion={...next,held_review:true};
+      await store.mutate(result.campaignId,current=>{
+       // Review remains open for held proposals. Approval of held assets is
+       // still prohibited by the separate owner-decision/send protections.
+       current.phase='PUBLICATION_REVIEW';
+       current.review_completion=completion;
+       return current;
+      });
+     }
     }
+    // Present the collaborative work in the owner-review API while preserving
+    // exact asset fingerprints, source evidence and existing approvals.
+    if(summary.status==='COMPLETE'||summary.status==='ALREADY_RECONCILED')
+     await store.mutate(result.campaignId,current=>{
+      current.collaborative_editorial={
+       first_audit:summary.first_audit,final_audit:summary.final_audit,
+       objections:summary.google_objections,corrected:summary.corrected,
+       reassessed:summary.reassessed,outstanding:summary.outstanding,
+       final_status:summary.final_status,reviewed_at:new Date().toISOString()
+      };
+      return current;
+     });
    }catch{
-    // An optional editor must never block owner review, SMTP notification or approvals.
-    console.error('V3_GOOGLE_SHADOW_FAILED','AUDITOR_OR_STORAGE_UNAVAILABLE');
+    // Never suppress an ordinary owner review because an optional editor failed.
+    console.error('V3_COLLABORATIVE_EDITORIAL_UNAVAILABLE');
    }
   }
   return {...result,status:'PUBLICATION_REVIEW',...completion};

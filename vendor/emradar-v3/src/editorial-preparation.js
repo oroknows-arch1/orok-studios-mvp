@@ -67,7 +67,7 @@ function reviseText(asset, proposed) {
 
 // Each exact draft and its outlet set shares one investigation. Persist outcomes
 // after each group so interruption does not discard completed work.
-export async function prepareEditorialReview({store, campaignId, readSource, assess, renderRevision, ids=null, checkOnly=false}) {
+export async function prepareEditorialReview({store, campaignId, readSource, assess, renderRevision, ids=null, checkOnly=false, forceRecheck=false, googleFeedback=null}) {
  const state = (await store.adapter.read(campaignId))?.value;
  if (!state?.preparation_input?.document) throw Error('EDITORIAL_PREPARATION_STATE_REQUIRED');
  const groups = new Map();
@@ -83,7 +83,7 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
  const orderedGroups = [...groups.values()].sort((a,b) => Number(hasSaved(b)) - Number(hasSaved(a)));
  for (const entries of orderedGroups) {
   if(ids&&!entries.some(({asset})=>ids.includes(asset.destination_id)))continue;
-  const pending = entries.filter(({asset}) => !hasEditorialOutcome(state, asset.destination_id));
+  const pending = entries.filter(({asset}) => (forceRecheck && ids?.includes(asset.destination_id)) || !hasEditorialOutcome(state, asset.destination_id));
   if (!pending.length) continue;
   const first = pending[0].asset;
   const evidence = evidenceFor(state).filter(item => first.evidence_ids?.includes(item.id));
@@ -104,26 +104,21 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
   }))).filter(Boolean);
   const destinations = entries.map(({asset}) => destinationFor(state, asset.destination_id))
    .map(({id,name,category,website,relationship,publication_type}) => ({id,name,category,website,relationship,publication_type}));
-  const context = {destinations, pages, savedPassages:savedPages, previous:previous.map(({claims, contradictions}) => ({claims, contradictions}))};
+  const context = {destinations, pages, savedPassages:savedPages, previous:previous.map(({claims, contradictions}) => ({claims, contradictions})),googleFeedback:entries.map(({asset})=>({destination_id:asset.destination_id,...(googleFeedback?.[asset.destination_id]??{})})).filter(item=>item.verdict)};
   let candidate = first, check = null, reason = 'PRIMARY_SOURCE_PASSAGE_UNAVAILABLE';
   if (pages.length) {
    try {
-    if (saved) candidate = reviseText(first, saved.revised_proposal) ?? first;
-    else if (checkOnly || first.editorial_source_grounded || priorOutcomes.some(outcome => isEditorialReady(outcome.status))) candidate = first;
-    else {
-     const draft = await assess({...context, proposal:proposalText(first), stage:'CORRECT'});
-     if (draft?.revision) candidate = reviseText(first, draft.revision) ?? first;
-     else check = draft;
+    // One source-backed check first. Spend a V3 correction call only when
+    // the exact wording fails, or when Google identified a concrete objection.
+    if (saved && !forceRecheck) candidate = reviseText(first, saved.revised_proposal) ?? first;
+    if (forceRecheck && !checkOnly){
+     const challenged=await assess({...context,proposal:proposalText(candidate),stage:'CORRECT'});
+     const corrected=reviseText(candidate,challenged?.revision);
+     if(corrected)candidate=corrected;
     }
-    if (!check) check = await assess({...context, proposal:proposalText(candidate), stage:'CHECK'});
-    if (!checkOnly && (saved || first.editorial_source_grounded) && !entries.some(({asset}) => usableCheck(check, pages, asset.destination_id))) {
-     const narrowed = await assess({...context, previous:[...context.previous,{claims:check?.claims,contradictions:check?.contradictions}], proposal:proposalText(candidate), stage:'CORRECT'});
-     const revised = reviseText(candidate, narrowed?.revision);
-     if (revised && sha256(proposalText(revised)) !== sha256(proposalText(candidate))) {
-      candidate = revised;
-      check = await assess({...context, proposal:proposalText(candidate), stage:'CHECK'});
-     }
-    }
+    check = await assess({...context,proposal:proposalText(candidate),stage:'CHECK'});
+    // Unresolved first checks are held. Google reviews the campaign once,
+    // then V3 only pays for source-backed correction of selected objections.
     reason = typeof check?.explanation === 'string' ? check.explanation.slice(0,500) : 'EDITORIAL_CHECK_UNRESOLVED';
     if (first.kind === 'X' && usableCheck(check, pages, first.destination_id) &&
         sha256(proposalText(candidate)) !== sha256(proposalText(first))) {
@@ -146,7 +141,7 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
    const status = ready ? (assetFingerprint(asset) === entry.fingerprint ? 'READY_VERIFIED' : 'CORRECTED_READY') : 'INVESTIGATION_REQUIRED';
    const claims = Array.isArray(check?.claims) ? check.claims.filter(Boolean) : [];
    const passages = claims.flatMap(claim => Array.isArray(claim.passages) ? claim.passages.filter(Boolean) : []);
-   return {id, fingerprint:entry.fingerprint, inputBinding:bindingFor(state, entry.asset), asset, record:{
+   return {id, fingerprint:entry.fingerprint, forceOutcome:Boolean(forceRecheck), inputBinding:bindingFor(state, entry.asset), asset, record:{
     id:randomUUID(), ...bindingFor(state, asset), status, reason,
     claims, sources:passages.flatMap(({url,quote}) => {
      const page = pages.find(item => item.url === url && normalize(quote).length >= 24 && normalize(item.text).includes(normalize(quote)));

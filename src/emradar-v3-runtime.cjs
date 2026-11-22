@@ -261,10 +261,11 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   const service=await createOpenAiPreparationReviewService({
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
    autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true',
-   // Experimental, disabled unless explicitly enabled and a server-side API key exists.
-   // A missing key never affects the existing marketing pipeline.
+   // The free Google editorial collaborator runs within the existing V3
+   // preparation/owner-review pipeline. It never buys Google Search grounding
+   // and cannot approve/send; V3 alone verifies original sources.
    shadowEditorialAudit:env.EMRADAR_V3_CAMPAIGN_GOOGLE_SHADOW==='true'&&env.GEMINI_API_KEY
-    ? {model:env.EMRADAR_V3_GOOGLE_MODEL||'gemini-3.5-flash',googleSearch:env.EMRADAR_V3_GOOGLE_PAID_SEARCH==='true',
+    ? {model:'gemini-3.5-flash',googleSearch:false,
        request:createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY})}
     : null
   });

@@ -78,7 +78,7 @@ test('one successful Google review is durable and not repeated; asset changes ge
  assert.equal(first.checked,16);
  assert.equal(records.get(first.recordKey).value.outcomes.length,16);
  const repeated=await auditCampaignOnce({adapter,campaignId:'test-campaign',state:stateCopy,request,model:'gemini-3.5-flash'});
- assert.equal(repeated.status,'ALREADY_ATTEMPTED');assert.equal(calls,1);
+ assert.equal(repeated.status,'ADVISORY');assert.equal(repeated.reused,true);assert.equal(calls,1);
  stateCopy.assets['id-0'].fingerprint='new-fingerprint';
  const changed=await auditCampaignOnce({adapter,campaignId:'test-campaign',state:stateCopy,request,model:'gemini-3.5-flash'});
  assert.equal(changed.status,'ADVISORY');assert.equal(calls,2);assert.notEqual(changed.recordKey,first.recordKey);

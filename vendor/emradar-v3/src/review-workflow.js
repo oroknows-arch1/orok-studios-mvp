@@ -111,6 +111,11 @@ export class ReviewWorkflow {
   await this.authenticate(campaignId,sessionId,secret);
   const campaign=typeof this.store.ensureEmailGroups==='function'?await this.store.ensureEmailGroups(campaignId):(await this.adapter.read(campaignId))?.value;
   if(!campaign || !isReviewPhase(campaign.phase)) throw Error('REVIEW_NOT_OPEN');
+  // Fetch the final campaign advice once, without performing another model call.
+  // A stale Google verdict must never be attached to an edited draft.
+  const auditKey=campaign.collaborative_editorial?.final_audit??campaign.collaborative_editorial?.first_audit;
+  const audit=auditKey?(await this.adapter.read(auditKey))?.value:null;
+  const advice=new Map(audit?.status==='ADVISORY'?(audit.outcomes??[]).map(row=>[row.id,row]):[]);
   const memberGroups=new Map(Object.values(campaign.email_groups??{}).flatMap(group=>group.destination_ids.map(destinationId=>[destinationId,group.id])));
   const describe=(entry,{historical=false,label='',decision=null}={})=>{
    const {asset,fingerprint}=entry;
@@ -118,7 +123,8 @@ export class ReviewWorkflow {
    const recipientReady=asset.kind!=='EMAIL'||recipientPolicy.recipientReadyForReview(asset,destination);
    const revision=!historical?(campaign.events??[]).findLast(event=>event.type==='ASSET_REVISED'&&event.destination_id===asset.destination_id&&event.new_fingerprint===fingerprint):null;
    const editorial_status=historical?'HISTORICAL':editorialStatus(campaign,asset.destination_id);
-   return {asset,fingerprint,historical,label,editorial_status,editorial_ready:editorial_status==='LEGACY'||isEditorialReady(editorial_status),editorial_reason:campaign.editorial_preparation?.outcomes?.[asset.destination_id]?.reason??null,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
+   const googleAdvice=advice.get(asset.destination_id);
+   return {asset,fingerprint,historical,label,editorial_status,editorial_ready:editorial_status==='LEGACY'||isEditorialReady(editorial_status),editorial_reason:campaign.editorial_preparation?.outcomes?.[asset.destination_id]?.reason??null,collaborative_advice:!historical&&googleAdvice&&googleAdvice.fingerprint===fingerprint?{verdict:googleAdvice.verdict,reason:googleAdvice.reason,correction:googleAdvice.correction}:null,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
     revision:revision?{id:revision.id,fingerprint}:null,
     recipient_warning:asset.recipient_verification?.status==='OWNER_OVERRIDE'?asset.recipient_verification.warning_code:null,
     groupId:!historical?memberGroups.get(asset.destination_id)??null:null,recipientVerified:destination?.contact_verified===true,
@@ -132,7 +138,7 @@ export class ReviewWorkflow {
   for(const versions of Object.values(campaign.editorial_versions??{}))for(const entry of versions)if(entry?.asset)history.push(describe(entry,{historical:true,label:'Previous draft',decision:entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.rejected??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Rejected draft',decision:entry.rejection??entry.previous_decision??null}));
   for(const entry of campaign.editorial_rewrite?.variants??[])if(entry?.asset)history.push(describe(entry,{historical:true,label:'Saved writing alternative'}));
-  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};
+  return {campaignId,phase:campaign.phase,completion:campaign.review_completion??null,automaticVerification:campaign.automatic_proposal_verification??null,collaborativeEditorial:campaign.collaborative_editorial??null,warnings:campaign.preparation_warnings??[],scan:campaign.scan,entries:Object.values(campaign.assets).map(entry=>describe(entry)),history,groups:Object.values(campaign.email_groups??{}).map(group=>({...group,approval:campaign.group_approvals?.[group.id]??null}))};
  }
  async decide(campaignId,sessionId,secret,destinationId,decision,fingerprint,feedback='') {
   await this.authenticate(campaignId,sessionId,secret);
