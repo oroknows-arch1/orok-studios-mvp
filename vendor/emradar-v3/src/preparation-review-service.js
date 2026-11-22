@@ -26,7 +26,7 @@ import {verifyEditorialAsset} from './destination-selection.js';
 import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
 import {editorialApplies, editorialStatus, hasEditorialOutcome, isEditorialReady, prepareEditorialReview} from './editorial-preparation.js';
 import {convert} from 'html-to-text';
-import {auditCampaignInShadow} from './campaign-editorial-shadow.js';
+import {auditCampaignOnce} from './campaign-editorial-shadow.js';
 
 export async function excludeSourceInstitutionDestinations({store,directory,campaignId}){
  const state=(await store.adapter.read(campaignId))?.value,document=state?.preparation_input?.document;
@@ -380,16 +380,19 @@ export async function createPreparationReviewService({
   // after normal source checks and before owner notification. No mutations or blocking.
   // Disabled by default. The owner review proceeds even if the auditor is unavailable.
   if(shadowEditorialAudit?.request&&result.status!=='ALREADY_PREPARED'){
-   const snapshot=(await adapter.read(result.campaignId))?.value;
-   if(snapshot){
-    const audit=await auditCampaignInShadow({state:snapshot,...shadowEditorialAudit});
-    // Report only aggregate result, never private proposal text, reviewer links or credentials.
-    const counts={};
-    for(const row of audit.verdicts??[])counts[row.verdict]=(counts[row.verdict]??0)+1;
-    console.log('V3_GOOGLE_SHADOW_RESULT',JSON.stringify({
-     campaign_id:result.campaignId,status:audit.status,
-     checked:audit.proposalCount??0,counts
-    }));
+   try{
+    const snapshot=(await adapter.read(result.campaignId))?.value;
+    if(snapshot){
+     const audit=await auditCampaignOnce({adapter,campaignId:result.campaignId,
+      state:snapshot,...shadowEditorialAudit});
+     console.log('V3_GOOGLE_SHADOW_RESULT',JSON.stringify({
+      campaign_id:result.campaignId,status:audit.status,
+      checked:audit.checked??0,counts:audit.counts??{}
+     }));
+    }
+   }catch{
+    // An optional editor must never block owner review, SMTP notification or approvals.
+    console.error('V3_GOOGLE_SHADOW_FAILED','AUDITOR_OR_STORAGE_UNAVAILABLE');
    }
   }
   return {...result,status:'PUBLICATION_REVIEW',...completion};
