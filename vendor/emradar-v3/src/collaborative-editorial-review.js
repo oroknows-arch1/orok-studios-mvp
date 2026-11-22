@@ -16,6 +16,9 @@ export async function reconcileCollaborativeEditorial({
  const initial=await reviewGoogle(state);
  if(initial.status!=='ADVISORY'||!initial.recordKey)
   return {status:'GOOGLE_UNAVAILABLE',google_status:initial.status};
+ const receiptKey='v3-collaborative-editorial:'+campaignId+':'+initial.recordKey.split(':').at(-1);
+ const priorReceipt=(await adapter.read(receiptKey))?.value;
+ if(priorReceipt?.status==='COMPLETE')return {...priorReceipt,status:'ALREADY_RECONCILED'};
  const saved=(await adapter.read(initial.recordKey))?.value;
  if(saved?.status!=='ADVISORY'||!Array.isArray(saved.outcomes))
   return {status:'GOOGLE_UNUSABLE'};
@@ -60,7 +63,6 @@ export async function reconcileCollaborativeEditorial({
   outstanding:requested.length-selected.length,results};
  // Store a lightweight reconciliation receipt separate from proposals/approvals.
  // No mutable campaign state is touched by this advisory receipt.
- const key='v3-collaborative-editorial:'+campaignId+':'+initial.recordKey.split(':').at(-1);
- await adapter.compareAndSwap(key,null,{...outcome,at:new Date().toISOString()});
+ await adapter.compareAndSwap(receiptKey,null,{...outcome,at:new Date().toISOString()});
  return outcome;
 }
