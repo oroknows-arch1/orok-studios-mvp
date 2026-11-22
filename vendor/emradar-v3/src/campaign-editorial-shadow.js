@@ -19,6 +19,12 @@ export async function auditCampaignInShadow({state,request,model,timeoutMs=45000
    type:'object',properties:{proposals:{type:'array',items:{type:'object',properties:{
     id:{type:'string'},verdict:{type:'string',enum:[...verdicts]},reason:{type:'string'},correction:{type:'string'},sourceUrls:{type:'array',items:{type:'string'}}
    },required:['id','verdict','reason','correction','sourceUrls']}}},required:['proposals']}}};
+ // Gemini 2.5 accepts Google Search grounding OR structured output, not both.
+ // Request JSON in normal text mode and validate all returned IDs locally.
+ if(/^gemini-2\.5-/.test(model??'')){
+  delete payload.response_format;
+  payload.input='Return ONLY a JSON object with a "proposals" array; each row must have id, verdict (READY/CORRECT/INVESTIGATE/DROP), reason, correction, sourceUrls (URL strings). Exactly one row per supplied id. No markdown. Search for contradictory primary evidence.\\n'+payload.input;
+ }
  try {
   const response=await request(payload,AbortSignal.timeout(timeoutMs)),rows=response?.proposals;
   if(!Array.isArray(rows)||rows.length!==packet.length)return {status:'UNUSABLE_AUDIT'};
