@@ -59,7 +59,7 @@ export async function auditCampaignOnce({adapter,campaignId,state,request,model,
  const digest=createHash('sha256').update(JSON.stringify(packet.map(p=>[p.id,p.fingerprint]))).digest('hex');
  const key='v3-google-shadow:'+campaignId+':'+digest;
  const previous=await adapter.read(key);
- if(previous)return {status:'ALREADY_ATTEMPTED',recordKey:key};
+ if(previous)return {status:previous.value?.status==='ADVISORY'?'ADVISORY':'ALREADY_ATTEMPTED',checked:previous.value?.checked??0,counts:previous.value?.counts??{},recordKey:key,reused:true};
  const reserved=await adapter.compareAndSwap(key,null,{
   status:'STARTED',campaign_id:campaignId,asset_digest:digest,created_at:new Date().toISOString()
  });
