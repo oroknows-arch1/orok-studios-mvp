@@ -1,5 +1,7 @@
 name: EMRADAR whole-campaign Google shadow tests
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - 'vendor/emradar-v3/src/campaign-editorial-shadow.js'
