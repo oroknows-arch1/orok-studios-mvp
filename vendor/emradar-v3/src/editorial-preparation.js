@@ -113,7 +113,7 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
     else {
      const draft = await assess({...context, proposal:proposalText(first), stage:'CORRECT'});
      if (draft?.revision) candidate = reviseText(first, draft.revision) ?? first;
-     else check = draft;
+     else if (!forceRecheck) check = draft;
     }
     if (!check) check = await assess({...context, proposal:proposalText(candidate), stage:'CHECK'});
     if (!checkOnly && (saved || first.editorial_source_grounded) && !entries.some(({asset}) => usableCheck(check, pages, asset.destination_id))) {
