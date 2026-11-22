@@ -4,7 +4,7 @@ import {CampaignStore} from '../vendor/emradar-v3/src/state.js';
 import {prepareEditorialReview} from '../vendor/emradar-v3/src/editorial-preparation.js';
 import {assetFingerprint} from '../vendor/emradar-v3/src/contracts.js';
 import {proposalBinding} from '../vendor/emradar-v3/src/proposal-verification.js';
-import {MemoryAdapter} from '../vendor/emradar-v3-authoritative/src/adapters/memory.js';
+// This stand-alone test uses a local in-memory store; no external database.
 
 // Isolated replay based on the held 22 November Alamedin proposal and official
 // EBRD 56011/ADB 59196-001 records. No production DB, network, SMTP or X.
@@ -16,7 +16,16 @@ const adbText='Project number 59196-001. Project Status Proposed. The project wi
 const originalText='Alamedin, Kyrgyzstan: EBRD approved 20 MW solar and 6 MWh storage; ADB lists 15 MWac floating solar at HPP-5. Co-location could reuse hydro grid access and ease hydrology risk. Floating solar is proposed; EBRD approval is not a signed loan; main works remain unawarded.';
 
 test('held Alamedin X draft can be rechecked using official source passages without publishing',async()=>{
- const adapter=new MemoryAdapter();
+ const records=new Map();
+ const adapter={
+  async read(key){return records.get(key)??null;},
+  async compareAndSwap(key,version,value){
+   const old=records.get(key);
+   if(version===null&&old)return false;
+   if(version!==null&&old?.version!==version)return false;
+   records.set(key,{version:(old?.version??0)+1,value});return true;
+  }
+ };
  const store=new CampaignStore(adapter);
  const asset={campaign_id:id,destination_id:'x',kind:'X',subject:'Alamedin hydro cascade adds solar-and-storage plans',body:originalText,
   story_record_id:'kyrgyz-hydro-solar-storage-hybrid-2026',review_status:'READY',evidence_ids:['kyrgyz:0','kyrgyz:1'],
