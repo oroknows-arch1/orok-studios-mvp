@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,runEditorialRecovery,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard,googleSmokePending,runGoogleSmoke}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,runEditorialRecovery,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -737,10 +737,6 @@ if (require.main === module) {
     const recoverEditorial=()=>runEditorialRecovery?.().then(result=>{
       if(result)console.log('V3_EDITORIAL_RECOVERY',JSON.stringify(result));
     }).catch(error=>console.error('V3_EDITORIAL_RECOVERY_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_RECOVERY_FAILED'));
-    if(googleSmokePending&&typeof runGoogleSmoke==='function'){
-      runGoogleSmoke().then(result=>console.log('V3_GOOGLE_ONE_SHOT_AUDIT',JSON.stringify(result)))
-        .catch(error=>console.error('V3_GOOGLE_ONE_SHOT_AUDIT_FAILED',error?.message??'AUDITOR_FAILED'));
-    }
     recoverEditorial();
     prepareLatest();
     const v3IntakeTimer=setInterval(()=>{recoverEditorial();prepareLatest();},60*60*1000);
