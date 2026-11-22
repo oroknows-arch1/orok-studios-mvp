@@ -86,3 +86,34 @@ test('repeated exact audit does not repeat source investigation',async()=>{
  assert.equal(second.status,'ALREADY_RECONCILED');
  assert.equal(g.revisions.length,1);
 });
+
+test('unchanged recipient draft can receive a stricter V3 outcome after Google challenge',async()=>{
+ const {CampaignStore}=await import('../src/state.js');
+ const {assetFingerprint}=await import('../src/contracts.js');
+ const {proposalBinding}=await import('../src/proposal-verification.js');
+ const id='v3-source-recheck',destination={id:'a',name:'Publication A',contact:{email:'editor@example.org'},contact_verified:true,delivery_eligible:true};
+ const asset={campaign_id:id,destination_id:'a',kind:'EMAIL',subject:'A development',body:'A proposed investment remains unresolved.',to:'editor@example.org',evidence_ids:['one'],review_status:'READY',contact_status:'VERIFIED'};
+ const evidence=[{id:'one',fact:'Project is proposed',verified:true,source_url:'https://example.org/source'}];
+ const binding=proposalBinding({asset,destination,evidence});
+ const old={...binding,status:'READY_VERIFIED',reason:'Previously accepted'};
+ const original={phase:'PUBLICATION_REVIEW',id,assets:{a:{asset,fingerprint:assetFingerprint(asset)}},
+  destinations:[destination],preparation_input:{document:{evidence}},editorial_preparation:{outcomes:{a:old}},
+  decisions:{},deliveries:{},events:[],email_groups:{},group_approvals:{}};
+ const rows=new Map([[id,{version:1,value:original}]]);
+ const adapter={
+  async read(key){return rows.get(key)??null},
+  async compareAndSwap(key,version,value){
+   const prev=rows.get(key);if(version===null?Boolean(prev):prev?.version!==version)return false;
+   rows.set(key,{version:(prev?.version??0)+1,value});return true;
+  }
+ };
+ const store=new CampaignStore(adapter);
+ await store.applyEditorialPreparation(id,[{id:'a',fingerprint:assetFingerprint(asset),
+  inputBinding:binding,asset,forceOutcome:true,
+  record:{...binding,status:'INVESTIGATION_REQUIRED',reason:'Original passage does not support the amount',claims:[],sources:[]}}]);
+ const after=(await adapter.read(id)).value;
+ assert.equal(after.assets.a.fingerprint,assetFingerprint(asset));
+ assert.equal(after.editorial_preparation.outcomes.a.status,'INVESTIGATION_REQUIRED');
+ assert.equal(after.editorial_preparation.history.length,1);
+ assert.deepEqual(after.decisions,{});
+});
