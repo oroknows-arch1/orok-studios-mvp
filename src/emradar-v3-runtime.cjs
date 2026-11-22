@@ -439,6 +439,28 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
     if(!lock.rows[0]?.acquired)return null;
     const current=(await service.store.adapter.read(recoveryCampaignId)).value;
     const review=(await service.store.adapter.read('review:'+recoveryCampaignId))?.value;
+    // A delivered owner invitation must not suppress one source-backed
+    // recovery of a held X proposal. This is bounded to the 22 Nov asset.
+    const pendingX=current.assets?.x&&!current.deliveries?.x&&!current.decisions?.x&&
+      !['READY_VERIFIED','CORRECTED_READY'].includes(current.editorial_preparation?.outcomes?.x?.status);
+    if(pendingX&&!current.editorial_preparation?.alamedin_x_source_retry_20261122){
+     let outcome='UNRESOLVED';
+     try{
+      const statuses=await service.editorialReview(recoveryCampaignId,{ids:['x']});
+      outcome=statuses?.x??'UNRESOLVED';
+     }catch(error){
+      outcome=/^[A-Z0-9_]+$/.test(error?.message??'')?error.message:'SOURCE_RECOVERY_UNAVAILABLE';
+     }
+     await service.store.mutate(recoveryCampaignId,state=>{
+      state.editorial_preparation??={outcomes:{}};
+      state.editorial_preparation.alamedin_x_source_retry_20261122={outcome,attempted_at:new Date().toISOString()};
+      return state;
+     });
+     console.log('V3_X_SOURCE_RECOVERY',JSON.stringify({campaignId:recoveryCampaignId,outcome}));
+     // The existing invitation/session reads current durable assets and status.
+     // Do not issue a new email or publish to X.
+     return {campaignId:recoveryCampaignId,x_recovery:outcome,external_distribution:0};
+    }
     if(current.editorial_preparation?.recovery_revision_id===review?.revision_id&&
        current.editorial_preparation?.recovery_revision_id&&['NOTIFIED','CONSUMED','ISSUED','NOTIFICATION_AMBIGUOUS'].includes(review.status))return null;
     const result=await service.recoverEditorialReview(recoveryCampaignId);
