@@ -2,7 +2,7 @@ import {createHash} from 'node:crypto';
 // Optional read-only whole-campaign editorial audit. Does not approve, edit, send or publish.
 export function buildCampaignEditorialPacket(state) {
  const destinations=new Map((state?.destinations??[]).map(d=>[d.id,d]));
- return Object.entries(state?.assets??{}).filter(([,entry])=>entry?.asset?.body).map(([id,entry])=>{
+ return Object.entries(state?.assets??{}).filter(([id,entry])=>entry?.asset?.body&&!state?.deliveries?.[id]&&!state?.decisions?.[id]).map(([id,entry])=>{
   const a=entry.asset,d=destinations.get(id),ids=new Set(d?.evidence?.ids??[]);
   const sourceUrls=[...new Set((state?.preparation_input?.document?.evidence??[])
    .filter(e=>ids.has(e.id)&&e.verified===true&&typeof e.source_url==='string').map(e=>e.source_url))];
