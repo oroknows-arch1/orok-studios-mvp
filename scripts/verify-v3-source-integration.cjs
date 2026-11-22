@@ -37,6 +37,16 @@ function verifyV3SourceIntegration() {
     if (sourceSha256 !== overlaySha256) throw new Error('V3_SHARED_FILE_DIVERGED:' + relative);
     shared[relative] = sourceSha256;
   }
+  const runtimeOverrides = {};
+  for (const override of manifest.runtime_overrides ?? []) {
+    if (override.path !== 'src/review-access.js') throw new Error('V3_RUNTIME_OVERRIDE_NOT_AUTHORISED');
+    const sourceSha256 = digest(path.join(source, override.path));
+    const overlaySha256 = digest(path.join(overlay, override.path));
+    if (sourceSha256 !== override.source_sha256 || overlaySha256 !== override.overlay_sha256) {
+      throw new Error('V3_RUNTIME_OVERRIDE_DIVERGED:' + override.path);
+    }
+    runtimeOverrides[override.path] = {sourceSha256, overlaySha256};
+  }
   const authoritativeStandards={};
   for(const relative of manifest.authoritative_standard_files??[]){
     const sourceFile=path.join(source,relative);
@@ -49,7 +59,7 @@ function verifyV3SourceIntegration() {
   }
   const provider=fs.readFileSync(path.join(overlay,'src/openai-preparation-providers.js'),'utf8');
   if(!provider.includes("from '../../emradar-v3-authoritative/src/graphic-renderer.js'"))throw new Error('V3_AUTHORITATIVE_GRAPHIC_RENDERER_NOT_USED');
-  return {status:'V3_SOURCE_INTEGRATED',repository:manifest.repository,commit:manifest.commit,path:manifest.path,runtime_overlay:manifest.runtime_overlay,authorised_submodules:submoduleUrls.length,shared,authoritativeStandards};
+  return {status:'V3_SOURCE_INTEGRATED',repository:manifest.repository,commit:manifest.commit,path:manifest.path,runtime_overlay:manifest.runtime_overlay,authorised_submodules:submoduleUrls.length,shared,runtimeOverrides,authoritativeStandards};
 }
 
 if (require.main === module) console.log(JSON.stringify(verifyV3SourceIntegration()));
