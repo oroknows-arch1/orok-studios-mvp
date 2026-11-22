@@ -245,6 +245,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
  if(!Array.isArray(reviewedLinks))throw Error('V3_APPROVED_LINKS_INVALID');
  const {createOpenAiPreparationReviewService}=await import('../vendor/emradar-v3/src/preparation-review-service.js');
  const {createReviewServer}=await import('../vendor/emradar-v3/src/http.js');
+ const {createGeminiEditorialRequest}=await import('../vendor/emradar-v3/src/gemini-editorial-transport.js');
  const pool=createPool({connectionString:databaseUrl});
  try{
   const integration=createV3IsolatedWiring({
@@ -259,7 +260,13 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   const service=await createOpenAiPreparationReviewService({
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
-   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
+   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true',
+   // Experimental, disabled unless explicitly enabled and a server-side API key exists.
+   // A missing key never affects the existing marketing pipeline.
+   shadowEditorialAudit:env.EMRADAR_V3_CAMPAIGN_GOOGLE_SHADOW==='true'&&env.GEMINI_API_KEY
+    ? {model:env.EMRADAR_V3_GOOGLE_MODEL||'gemini-3.8-flash',
+       request:createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY})}
+    : null
   });
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
