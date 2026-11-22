@@ -32,3 +32,15 @@ test('provider unavailable never blocks and does not alter saved campaign',async
  assert.equal((await auditCampaignInShadow({state,request:async()=>{throw Error('offline')}})).status,'AUDITOR_UNAVAILABLE');
  assert.equal(JSON.stringify(state),before);
 });
+
+test('Gemini 2.5 search request omits unsupported strict schema but retains 16 verdicts',async()=>{
+ let captured;
+ const result=await auditCampaignInShadow({state,model:'gemini-2.5-flash',request:async payload=>{
+  captured=payload;return valid;
+ }});
+ assert.equal(result.status,'ADVISORY');
+ assert.equal(result.verdicts.length,16);
+ assert.equal(captured.response_format,undefined);
+ assert.deepEqual(captured.tools,[{type:'google_search'}]);
+ assert.match(captured.input,/Return ONLY a JSON object/);
+});
