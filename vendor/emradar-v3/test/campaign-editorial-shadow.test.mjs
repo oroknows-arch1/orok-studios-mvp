@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildCampaignEditorialPacket,auditCampaignInShadow} from '../src/campaign-editorial-shadow.js';
+import {buildCampaignEditorialPacket,auditCampaignInShadow,auditCampaignOnce} from '../src/campaign-editorial-shadow.js';
 
 const state={assets:Object.fromEntries(Array.from({length:16},(_,i)=>['id-'+i,{fingerprint:'sha-'+i,asset:{subject:'Subject',body:'Proposal '+i,recipient_email:'SECRET'}}])),
  destinations:Array.from({length:16},(_,i)=>({id:'id-'+i,name:'Publisher '+i,evidence:{ids:['source']},contact:{email:'PRIVATE@EXAMPLE.COM'}})),
@@ -57,4 +57,29 @@ test('free Gemini 3.5 editorial audit uses supplied evidence without paid search
  assert.equal(calls,1);
  assert.equal(result.status,'ADVISORY');
  assert.equal(result.verdicts.length,16);
+});
+
+test('one successful Google review is durable and not repeated; asset changes get new identity',async()=>{
+ const records=new Map();
+ const adapter={
+  async read(k){return records.get(k)??null},
+  async compareAndSwap(k,version,value){
+   const old=records.get(k);
+   if(version===null&&old)return false;
+   if(version!==null&&(!old||old.version!==version))return false;
+   records.set(k,{version:(old?.version??0)+1,value});return true;
+  }
+ };
+ const stateCopy=structuredClone(state);
+ let calls=0;
+ const request=async payload=>{calls++;assert.equal(payload.tools,undefined);return valid};
+ const first=await auditCampaignOnce({adapter,campaignId:'test-campaign',state:stateCopy,request,model:'gemini-3.5-flash'});
+ assert.equal(first.status,'ADVISORY');
+ assert.equal(first.checked,16);
+ assert.equal(records.get(first.recordKey).value.outcomes.length,16);
+ const repeated=await auditCampaignOnce({adapter,campaignId:'test-campaign',state:stateCopy,request,model:'gemini-3.5-flash'});
+ assert.equal(repeated.status,'ALREADY_ATTEMPTED');assert.equal(calls,1);
+ stateCopy.assets['id-0'].fingerprint='new-fingerprint';
+ const changed=await auditCampaignOnce({adapter,campaignId:'test-campaign',state:stateCopy,request,model:'gemini-3.5-flash'});
+ assert.equal(changed.status,'ADVISORY');assert.equal(calls,2);assert.notEqual(changed.recordKey,first.recordKey);
 });
