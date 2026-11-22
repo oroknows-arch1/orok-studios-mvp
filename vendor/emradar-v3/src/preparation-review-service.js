@@ -124,7 +124,7 @@ export async function createPreparationReviewService({
      text=extracted.text.filter(page=>/Dongo\s+Kundu|HERCULES/i.test(page)).join('\n\n');
      passages_only=true;
     }
-   }finally{await pdf.destroy();}
+   }finally{await pdf.loadingTask.destroy();}
   }else{
    text=convert(source.bytes.toString('utf8'),{wordwrap:false,selectors:['nav','script','style','footer','img','form','noscript'].map(selector=>({selector,format:'skip'})).concat({selector:'a',options:{ignoreHref:true}})});
   }
