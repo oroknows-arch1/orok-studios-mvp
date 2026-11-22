@@ -1,0 +1,31 @@
+name: EMRADAR whole-campaign Google shadow tests
+on:
+  pull_request:
+    paths:
+      - 'vendor/emradar-v3/src/campaign-editorial-shadow.js'
+      - 'vendor/emradar-v3/src/gemini-editorial-transport.js'
+      - 'vendor/emradar-v3/src/preparation-review-service.js'
+      - 'vendor/emradar-v3/test/campaign-editorial-shadow.test.mjs'
+      - 'vendor/emradar-v3/test/gemini-editorial-transport.test.mjs'
+      - 'src/emradar-v3-runtime.cjs'
+      - 'server.js'
+      - '.github/workflows/emradar-google-shadow.yml'
+  workflow_dispatch:
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check syntax
+        run: |
+          node --check vendor/emradar-v3/src/campaign-editorial-shadow.js
+          node --check vendor/emradar-v3/src/gemini-editorial-transport.js
+          node --check vendor/emradar-v3/src/preparation-review-service.js
+          node --check src/emradar-v3-runtime.cjs
+          node --check server.js
+      - name: Test the real Google request adapter offline (no Google key needed)
+        run: |
+          node --test vendor/emradar-v3/test/campaign-editorial-shadow.test.mjs vendor/emradar-v3/test/gemini-editorial-transport.test.mjs

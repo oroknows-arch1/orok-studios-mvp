@@ -245,6 +245,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
  if(!Array.isArray(reviewedLinks))throw Error('V3_APPROVED_LINKS_INVALID');
  const {createOpenAiPreparationReviewService}=await import('../vendor/emradar-v3/src/preparation-review-service.js');
  const {createReviewServer}=await import('../vendor/emradar-v3/src/http.js');
+ const {createGeminiEditorialRequest}=await import('../vendor/emradar-v3/src/gemini-editorial-transport.js');
  const pool=createPool({connectionString:databaseUrl});
  try{
   const integration=createV3IsolatedWiring({
@@ -259,8 +260,36 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   const service=await createOpenAiPreparationReviewService({
    pool,openai,notify,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,reviewedLinks,fetcher,
-   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true'
+   autonomousDiscovery:env.EMRADAR_V3_AUTONOMOUS_DISCOVERY==='true',
+   // Experimental, disabled unless explicitly enabled and a server-side API key exists.
+   // A missing key never affects the existing marketing pipeline.
+   shadowEditorialAudit:env.EMRADAR_V3_CAMPAIGN_GOOGLE_SHADOW==='true'&&env.GEMINI_API_KEY
+    ? {model:env.EMRADAR_V3_GOOGLE_MODEL||'gemini-2.5-flash',
+       request:createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY})}
+    : null
   });
+  // One controlled, read-only historical campaign audit for the Google integration.
+  // A durable one-use key prevents new paid calls on each restart.
+  const googleSmokeCampaignId=env.EMRADAR_V3_GOOGLE_SMOKE_CAMPAIGN_ID;
+  const googleSmokePending=Boolean(googleSmokeCampaignId&&env.GEMINI_API_KEY);
+  const runGoogleSmoke=async()=>{
+   if(!googleSmokePending)return {status:'NOT_CONFIGURED'};
+   if(!/^v3-[a-f0-9]{32}$/.test(googleSmokeCampaignId))throw Error('INVALID_GOOGLE_SMOKE_CAMPAIGN_ID');
+   const {auditCampaignInShadow}=await import('../vendor/emradar-v3/src/campaign-editorial-shadow.js');
+   const request=createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY});
+   return runReleaseOnce({adapter:service.store.adapter,
+    key:'v3-google-smoke:2026-11-22:'+googleSmokeCampaignId,
+    run:async()=>{
+     const state=(await service.store.adapter.read(googleSmokeCampaignId))?.value;
+     if(!state||state.phase!=='PUBLICATION_REVIEW')return {status:'NO_REVIEW_CAMPAIGN'};
+     const audit=await auditCampaignInShadow({state,request,model:'gemini-2.5-flash',timeoutMs:90000});
+     const counts={};
+     for(const row of audit.verdicts??[])counts[row.verdict]=(counts[row.verdict]??0)+1;
+     // Persist only usage-relevant summary; never write proposal edits or decisions.
+     return {status:audit.status,checked:audit.proposalCount??0,counts,model:'gemini-2.5-flash',
+      errorType:audit.errorType??null};
+    }});
+  };
   const runRegeneration=async(campaignId,destinationId)=>{
    const client=await pool.connect(),lockKey='v3-review-regeneration:'+campaignId+':'+destinationId;
    try{
@@ -563,7 +592,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    if(old?.value.status==='COMPLETE'&&old.value.result?.status==='OWNER_REVIEW_BLOCKED')await service.store.adapter.compareAndSwap(ownerInvitationKey,old.version,{...old.value,status:'BLOCKED',completion_correction:{previous_status:'COMPLETE',reason:'INBOX_VERIFICATION_FAILED'}});
    return restoreOwnerReviewAccess({adapter:service.store.adapter,workflow:service.workflow,inspectMailbox:integration.inspectOwnerMailbox,inspectInbox:integration.inspectOwnerInvitation,campaignId:editorialCampaign,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,key:ownerAccessKey});
   };
-  return {replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runEditorialRecovery,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
+  return {googleSmokePending,runGoogleSmoke,replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,enabled:true,pool,service,runCampaign,runEditorialRecovery,runRegeneration,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard};
  }catch(error){await pool.end?.();throw error;}
 }
 module.exports={resumePendingDiscovery,restoreOwnerReviewAccess,runOwnerInvitationOnce,mountV3PreparationReview,loadPublishedScans,refreshPublishedScans,enumeratePublishedScans,mergeCurrentPublishedScan,campaignIdFor,selectNextPublishedScan,runNextPublishedCampaign,runReleaseOnce,runIncompleteCampaignRecovery};
