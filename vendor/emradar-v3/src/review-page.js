@@ -62,8 +62,9 @@ function openEditor({heading,initial,multiline=true,save}){
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
  main.replaceChildren();
- const counts={approved:0,rejected:0,undecided:0};
+ const counts={approved:0,rejected:0,undecided:0,held:0};
  for(const entry of view.entries){
+  if(entry.editorial_status==='INVESTIGATION_REQUIRED'){counts.held++;continue;}
   if(entry.decision?.decision==='APPROVE')counts.approved++;
   else if(entry.decision?.decision==='REJECT')counts.rejected++;
   else counts.undecided++;
@@ -232,7 +233,7 @@ async function refresh(){
    if(target){const link=document.createElement('a');link.href='#'+encodeURIComponent(target);link.textContent='Back to current proposal and review controls';main.append(link);}
   }else main.append(card);
  }
- status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
+ status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision'+(counts.held?' · '+counts.held+' need investigation':'')+'.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
 }
 (async()=>{
  try{

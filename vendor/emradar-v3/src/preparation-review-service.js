@@ -1,7 +1,7 @@
 import {createCoverageDiscovery,assessDiscoveryCoverage,coverageKey,isEditorialSourceInstitution} from '../../emradar-v3-authoritative/src/discovery-coverage.js';
 import {GRAPHIC_STANDARD} from './graphic-standard.js';
 import {assetFingerprint} from './contracts.js';
-import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION} from './editorial-reference.js';
+import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION,isEditorialDestination,selectEditorialEvidence} from './editorial-reference.js';
 import {cleanUnverifiedRecipients} from './verified-recipient-recovery.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {refreshUnreviewedEditorialDrafts} from './editorial-standard-refresh.js';
@@ -85,7 +85,7 @@ export function assessPublicationReview({state,candidates}) {
 // owner-notification transports have been configured and independently tested.
 // Does not mount HTTP routes, deploy, distribute or trigger a campaign at import.
 export async function createPreparationReviewService({
- pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,assessEditorial,autonomousDiscovery=false
+ pool,reviewOrigin,notify,researchEvidence,write,renderVisual,reviewedLinks,fetcher,discoverLinks,openai,assessEditorial,readPrimarySource,autonomousDiscovery=false
 }) {
  if(typeof pool?.query!=='function'||typeof notify!=='function'||
     typeof researchEvidence!=='function'||typeof write!=='function'||
@@ -135,14 +135,15 @@ export async function createPreparationReviewService({
   const previous=sourceReads.get(raw);
   if(previous&&Date.now()-previous.startedAt<30*60*1000)return previous.promise;
   if(sourceReads.size>=90)sourceReads.delete(sourceReads.keys().next().value);
-  const promise=fetchSource(raw).catch(()=>null);
+  const promise=Promise.resolve().then(()=>(readPrimarySource??fetchSource)(raw)).catch(()=>null);
   sourceReads.set(raw,{startedAt:Date.now(),promise});
   return promise;
  };
  const writeGrounded=async input=>{
   if(!assessEditorial)return write(input);
-  const ids=new Set(input.destination.evidence?.ids??[]);
-  const urls=[...new Set(input.document.evidence.filter(item=>ids.has(item.id)).map(item=>item.source_url).filter(Boolean))];
+  const ids=input.destination.evidence?.ids??[];
+  const evidence=input.destination.id==='x'||isEditorialDestination(input.destination)?selectEditorialEvidence(input.document,ids).evidence:input.document.evidence.filter(item=>ids.includes(item.id));
+  const urls=[...new Set(evidence.map(item=>item.source_url).filter(Boolean))];
   const sourcePages=(await Promise.all(urls.map(readSource))).filter(Boolean);
   if(!sourcePages.length)throw Error('PRIMARY_SOURCE_PASSAGE_UNAVAILABLE');
   return write({...input,sourcePages});
@@ -271,10 +272,14 @@ export async function createPreparationReviewService({
   const outcomes=await editorialReview(campaignId);
   const state=(await adapter.read(campaignId)).value;
   if(!Object.keys(state.assets).every(id=>hasEditorialOutcome(state,id)))return {outcomes,notification:'EDITORIAL_CHECK_PENDING'};
+  const completion=await reviewCompletion(campaignId);
   const revisionId=sha256(['editorial-preparation-56',Object.entries(outcomes).map(([id,status])=>[id,status,state.assets[id].fingerprint])]);
-  if(!Object.values(outcomes).some(isEditorialReady))return {outcomes,notification:'NO_ACTIONABLE_PROPOSAL'};
+  if(!completion.complete){
+   await store.mutate(campaignId,current=>{current.review_completion=completion;return current;});
+   return {outcomes,notification:'NO_ACTIONABLE_PROPOSAL'};
+  }
   // The repair revision is constant for this campaign across restart and retries.
-  const saved=await store.mutate(campaignId,current=>{current.editorial_preparation.recovery_revision_id??=revisionId;return current;});
+  const saved=await store.mutate(campaignId,current=>{current.editorial_preparation.recovery_revision_id??=revisionId;current.review_completion=completion;return current;});
   await workflow.issue(campaignId,{revisionId:saved.editorial_preparation.recovery_revision_id});
   const review=(await adapter.read('review:'+campaignId))?.value;
   return {outcomes,notification:review.status,provider_id:review.notification_receipt?.provider_id};
