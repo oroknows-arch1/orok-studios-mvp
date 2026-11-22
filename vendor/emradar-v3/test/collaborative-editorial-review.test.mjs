@@ -117,3 +117,36 @@ test('unchanged recipient draft can receive a stricter V3 outcome after Google c
  assert.equal(after.editorial_preparation.history.length,1);
  assert.deepEqual(after.decisions,{});
 });
+
+test('V3 checks a supported new draft in one model call rather than speculative pre-correction',async()=>{
+ const {prepareEditorialReview}=await import('../src/editorial-preparation.js');
+ const {CampaignStore}=await import('../src/state.js');
+ const {assetFingerprint}=await import('../src/contracts.js');
+ const id='v3-one-check',url='https://example.org/sources/test';
+ const passage='The board announced the project remains proposed and subject to financing approval.';
+ const destination={id:'a',name:'Publication A',category:'publication',contact:{email:'editor@example.org'},contact_verified:true,delivery_eligible:true};
+ const asset={campaign_id:id,destination_id:'a',kind:'EMAIL',subject:'The proposed project and its financing question',body:'The board has proposed a project. The financing approval has not been confirmed.',to:'editor@example.org',evidence_ids:['one'],review_status:'READY',contact_status:'VERIFIED'};
+ const evidence=[{id:'one',fact:passage,verified:true,source_url:url}];
+ const original={id,phase:'PUBLICATION_REVIEW',assets:{a:{asset,fingerprint:assetFingerprint(asset)}},
+  destinations:[destination],preparation_input:{document:{evidence}},editorial_preparation:{outcomes:{}},
+  decisions:{},deliveries:{},events:[],email_groups:{},group_approvals:{}};
+ const rows=new Map([[id,{version:1,value:original}]]);
+ const adapter={
+  async read(k){return rows.get(k)??null},
+  async compareAndSwap(k,version,value){
+   const prior=rows.get(k);if(version===null?Boolean(prior):prior?.version!==version)return false;
+   rows.set(k,{version:(prior?.version??0)+1,value});return true;
+  }
+ };
+ const store=new CampaignStore(adapter);
+ const stages=[];
+ const assess=async({stage})=>{stages.push(stage);return {
+  status:'VERIFIED',deliverable:true,fit:{a:true},
+  claims:[{material:true,status:'VERIFIED',text:'The project is proposed',passages:[{url,quote:passage}]}],
+  contradictions:[],revision:null,explanation:'Article offers a legitimate unresolved question'
+ }};
+ const outcome=await prepareEditorialReview({store,campaignId:id,readSource:async()=>({url,text:passage,page_sha256:'sha-page'}),
+  assess,renderRevision:async asset=>asset});
+ assert.deepEqual(stages,['CHECK']);
+ assert.equal(outcome.a,'READY_VERIFIED');
+});
