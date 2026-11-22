@@ -1,34 +1,23 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createOpenAiPreparationProviders} from '../src/openai-preparation-providers.js';
+import {readFileSync} from 'node:fs';
 
-function providerCapture(){
- const calls=[];
- const openai={chat:{completions:{create:async input=>{
-  calls.push(input);
-  return {choices:[{message:{content:JSON.stringify({status:'INVESTIGATION_REQUIRED',deliverable:false,
-   fit:{outlet:false},claims:[],contradictions:[],revision:null,explanation:'No passages'})}}]};
- }}}};
- return {calls,provider:createOpenAiPreparationProviders({openai})};
-}
-const draft={kind:'EMAIL',subject:'A proposed investment and an open question',body:'The approval is proposed. Whether it proceeds remains unknown.'};
-const context={proposal:draft,destinations:[{id:'outlet',name:'Example Publication'}],pages:[],previous:[]};
-test('upstream CORRECT instruction demands supported factual premises and visible qualifications',async()=>{
- const {calls,provider}=providerCapture();
- await provider.assessEditorial({...context,stage:'CORRECT'});
- const system=calls[0].messages[0].content;
- assert.match(system,/UPSTREAM CLAIM REPAIR/);
- assert.match(system,/actual recipient-facing body/);
- assert.match(system,/remove the assertion/);
- assert.match(system,/do not offer an article claiming findings/i);
+const providerSource=readFileSync(new URL('../src/openai-preparation-providers.js',import.meta.url),'utf8');
+
+// The isolated Google CI checkout does not contain the linked authoritative
+// graphic-renderer repository. Verify prompt contracts without importing a
+// graphic-rendering dependency or making a model call.
+test('upstream claim repair requires source scrutiny and recipient-visible qualifications',()=>{
+ assert.match(providerSource,/UPSTREAM CLAIM REPAIR/);
+ assert.match(providerSource,/original attributable source passages/);
+ assert.match(providerSource,/actual recipient-facing body/);
+ assert.match(providerSource,/remove the assertion/);
+ assert.match(providerSource,/do not offer an article claiming findings/i);
 });
-test('final CHECK tests EMRADAR story and deliverable promise while preserving qualified uncertainties',async()=>{
- const {calls,provider}=providerCapture();
- await provider.assessEditorial({...context,stage:'CHECK'});
- const system=calls[0].messages[0].content;
- assert.match(system,/FINAL STORY AND PROMISE/);
- assert.match(system,/outlet fit is genuine/);
- assert.match(system,/clearly framed uncertainties are legitimate article questions/);
- assert.match(system,/article promise is deliverable/);
- assert.match(system,/unsupported factual assertion/);
+test('final check emphasises narrative, legitimate uncertainty and deliverable promise',()=>{
+ assert.match(providerSource,/FINAL STORY AND PROMISE/);
+ assert.match(providerSource,/outlet fit is genuine/);
+ assert.match(providerSource,/clearly framed uncertainties are legitimate article questions/);
+ assert.match(providerSource,/article promise is deliverable/);
+ assert.match(providerSource,/unsupported factual assertion/);
 });
