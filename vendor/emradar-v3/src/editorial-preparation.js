@@ -94,7 +94,15 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
   const related=Object.values(state.assets).filter(({asset})=>first.story_record_id&&asset.story_record_id===first.story_record_id);
   const savedPages = [...priorOutcomes,...related.map(({asset})=>state.editorial_preparation?.outcomes?.[asset.destination_id]).filter(Boolean)].flatMap(outcome => outcome.sources ?? []);
   const relatedSources=related.flatMap(({asset})=>(state.proposal_verifications?.[asset.destination_id]??[]).flatMap(record=>record.sources??[]));
-  const sources = [...new Set([...evidence.map(item => item.source_url), ...previous.flatMap(record => record.sources?.map(source => source.url) ?? []), ...savedPages.map(page => page.url), ...relatedSources.map(source=>source.url), ...(campaignId === recoveryCampaignId ? recoverySources[first.story_record_id] ?? [] : [])].filter(Boolean))];
+  // Recover primary project sources for the held Alamedin X asset. These URLs
+  // are candidates for full-page retrieval, not verified evidence by themselves.
+  // The existing quoted-passage, exact-draft and visual checks still decide readiness.
+  const xRecoverySources = first.kind === 'X' && first.destination_id === 'x' &&
+    campaignId === recoveryCampaignId ? [
+      'https://www.ebrd.com/home/work-with-us/projects/psd/56011.html',
+      'https://www.adb.org/projects/59196-001/main'
+    ] : [];
+  const sources = [...new Set([...evidence.map(item => item.source_url), ...previous.flatMap(record => record.sources?.map(source => source.url) ?? []), ...savedPages.map(page => page.url), ...relatedSources.map(source=>source.url), ...xRecoverySources, ...(campaignId === recoveryCampaignId ? recoverySources[first.story_record_id] ?? [] : [])].filter(Boolean))];
   const pages = (await Promise.all(sources.map(async url => {
    if (!pageCache.has(url)) pageCache.set(url, Promise.resolve().then(() => readSource(url)).catch(() => null));
    const page = await pageCache.get(url);
