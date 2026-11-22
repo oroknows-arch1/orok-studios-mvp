@@ -130,7 +130,7 @@ export class CampaignStore {
     state.editorial_preparation ??= {outcomes:{}};
     const evidence = state.preparation_input.document.evidence ?? [];
     const changed = new Set();
-    for (const {id:destinationId, fingerprint, inputBinding, asset, record} of results) {
+    for (const {id:destinationId, fingerprint, inputBinding, asset, record, forceOutcome=false} of results) {
      const entry = state.assets[destinationId];
      const destination = state.destinations.find(item => item.id === destinationId);
      const previous = proposalBinding({asset:entry.asset,destination,evidence});
@@ -139,7 +139,7 @@ export class CampaignStore {
      const next = proposalBinding({asset,destination,evidence});
      if (Object.keys(next).some(key => next[key] !== record[key])) throw Error('INVALID_PROPOSAL_VERIFICATION_BINDING');
      const old = state.editorial_preparation.outcomes[destinationId];
-     if (old && Object.keys(previous).every(key => old[key] === previous[key]) && fingerprint === next.asset_sha256) continue;
+     if (!forceOutcome && old && Object.keys(previous).every(key => old[key] === previous[key]) && fingerprint === next.asset_sha256) continue;
      if (old) {
       state.editorial_preparation.history ??= [];
       state.editorial_preparation.history.push(old);
