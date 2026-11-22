@@ -10,7 +10,8 @@ test('V3 production request dispatcher forwards every authenticated review API r
  const match=runtime.match(/const REVIEW_PATHS=new Set\(\[([^\]]+)\]\)/);
  assert.ok(match,'production dispatcher must declare review paths');
  const paths=new Set([...match[1].matchAll(/'([^']+)'/g)].map(m=>m[1]));
- for(const name of ['verify','group-revise','group-member','view','decision','revise','release']){
+ assert(!paths.has('/api/review/verify'),'per-proposal repeat verification has been retired');
+ for(const name of ['group-revise','group-member','view','decision','revise','release']){
   const route='/api/review/'+name;
   assert.ok(http.includes("'"+route+"'"),'review backend must implement '+route);
   assert.ok(paths.has(route),'production dispatcher must forward '+route+' instead of serving HTML');

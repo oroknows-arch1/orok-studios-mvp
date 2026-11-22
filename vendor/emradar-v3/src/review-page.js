@@ -30,30 +30,6 @@ const api=async(path,payload)=>{
 const text=(tag,value)=>{
  const el=document.createElement(tag);el.textContent=String(value??'');return el;
 };
-function verificationFeedback(result){
- const state=result?.status||'UNKNOWN';
- const detail=result?.explanation||'The verification service did not return an explanation.';
- return (result?.reused?'Existing verified research reused · No new AI search · ':'New verification completed · ')+state+' · '+detail;
-}
-async function verifyCurrent(button,item){
- button.disabled=true;
- status.textContent='Investigating the exact current proposal…';
- try{
-  const result=await api('verify',{campaignId:campaign,destinationId:item.asset.destination_id,fingerprint:item.fingerprint});
-  await refresh();
-  status.textContent=verificationFeedback(result);
- }catch(error){
-  const reference=/^[a-f0-9-]{36}$/.test(error.reference||'')?' · Reference: '+error.reference:'';
-  status.textContent='Verify Again failed · '+(error.message||'REQUEST_FAILED')+reference+'. The owner review decision was not changed.';
-  button.disabled=false;
- }
-}
-const addVerification=(card,item)=>{
- const verification=item.verification,section=document.createElement('section');section.className='verification';section.append(text('h3','Proposal verification'));
- if(verification){const claims=verification.claims||[],verified=claims.filter(claim=>claim.material!==false&&claim.status==='VERIFIED').length,unresolved=claims.filter(claim=>claim.material!==false&&claim.status!=='VERIFIED').length;section.append(text('p',verification.status+' · '+verification.verified_at),text('p',claims.length+' claims checked · '+verified+' verified · '+unresolved+' unresolved · '+(verification.contradictions||[]).length+' contradictions'),text('p',verification.explanation));if(verification.revised_proposal?.body)section.append(text('h4','Suggested verified revision'),text('pre',verification.revised_proposal.body));const sources=document.createElement('ul');for(const source of verification.sources||[]){const row=document.createElement('li'),link=document.createElement('a');link.textContent=source.title||source.url||'Supporting source';try{const url=new URL(source.url);if(url.protocol==='https:'){link.href=url.href;link.target='_blank';link.rel='noopener noreferrer';}}catch{}row.append(link);sources.append(row);}if(sources.childNodes.length)section.append(sources);}
- else section.append(text('p','Not yet verified. Optional verification can be run without interrupting owner review.'));
- const verify=text('button','Verify Again');verify.addEventListener('click',()=>verifyCurrent(verify,item));section.append(verify);card.append(section);
-};
 function saveFailure(error){
  const messages={ACCESS_DENIED:'Your sign-in expired. Copy your text, then reopen your private review.',CSRF_DENIED:'The security check failed. Copy your text, then refresh the page.',ORIGIN_DENIED:'Open the review on its original secure site.',STALE_ASSET_REVISION:'This email changed since you opened it. Copy your text, then refresh and edit the latest version.',STALE_GROUP_VERSION:'This group changed since you opened it. Copy your text, then refresh and edit the latest version.',GROUP_REVISION_REQUIRED:'Edit this email using the shared-group controls.',GROUP_CONTENT_MISMATCH:'The shared content changed. Copy your text, then refresh the review.',REVISION_AFTER_DISTRIBUTION:'This email has a delivery record and can no longer be edited.',INVALID_REVISION_TEXT:'Enter non-empty text of at most 50,000 characters.',EMAIL_BRAND_TEXT_REQUIRED:'The signature or disclaimer is incomplete. Keep the complete footer and retry.',REQUEST_TOO_LARGE:'The edit exceeds the request size limit.',REVISION_SAVE_FAILED:'The server could not confirm persistence. Copy your text and refresh before retrying.'};
  const reference=/^[a-f0-9-]{36}$/.test(error.reference||'')?' Reference: '+error.reference+'.':'';
@@ -86,26 +62,36 @@ function openEditor({heading,initial,multiline=true,save}){
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
  main.replaceChildren();
- const automatic=view.automaticVerification;
- if(automatic){const summary=document.createElement('article');summary.append(text('h2','Automatic proposal verification'),text('p',automatic.status+' · '+automatic.verified+' verified · '+automatic.investigation_required+' requiring investigation · '+automatic.investigations_used+' of '+automatic.max_investigations+' investigation calls used · '+automatic.reused_successes+' successful results reused'));main.append(summary);}
- const counts={approved:0,rejected:0,undecided:0};
+ const counts={approved:0,rejected:0,undecided:0,held:0};
  for(const entry of view.entries){
+  if(entry.editorial_status==='INVESTIGATION_REQUIRED'){counts.held++;continue;}
   if(entry.decision?.decision==='APPROVE')counts.approved++;
   else if(entry.decision?.decision==='REJECT')counts.rejected++;
   else counts.undecided++;
  }
+ const actionable=item=>item.editorial_ready!==false&&item.asset.review_status!=='NEEDS_REVISION';
  const sharedGroups=new Map((view.groups??[]).filter(group=>group.destination_ids.length>1).map(group=>[group.id,group]));
  for(const group of sharedGroups.values()){
   const members=group.destination_ids.map(id=>view.entries.find(entry=>entry.asset.destination_id===id));
   const card=document.createElement('article');card.id='review-group-'+group.id;card.append(text('h2','Shared publication email · '+members.length+' recipients'),text('small','Version '+group.version+' · '+(group.approval?.decision||'Awaiting group decision')));
   if(group.subject)card.append(text('h3',group.subject));card.append(text('pre',group.body),text('p','Included verified publications:'));
   const list=document.createElement('ul');
+  const mixedReadiness=members.some(member=>!actionable(member)&&!member.delivery);
   for(const member of members){
    const row=document.createElement('li');row.append(text('span',(member.destination?.name||member.asset.destination_id)+' · '+member.asset.to));
-   row.append(text('small',' · Verification: '+(member.verification?.status||'NOT RUN')));if(!member.delivery){const verify=text('button','Verify Again');verify.addEventListener('click',()=>verifyCurrent(verify,member));row.append(verify);}
+   row.append(text('small',' · '+member.editorial_status));
    if(member.delivery)row.append(text('small',' · Delivery: '+member.delivery.status+(member.delivery.receipt?.provider_id?' · Receipt: '+member.delivery.receipt.provider_id:'')));
    if(!members.some(item=>item.delivery))for(const action of ['EXCLUDE','SPLIT']){const button=text('button',action==='EXCLUDE'?'Exclude recipient':'Split to individual');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group-member',{campaignId:campaign,groupId:group.id,destinationId:member.asset.destination_id,contentHash:group.content_hash,version:group.version,action});await refresh();}catch{status.textContent='Group membership was not changed. Reload and retry.';button.disabled=false;}});row.append(button);}
-   if(group.approval?.decision==='APPROVE'&&!member.delivery){const send=text('button','Send approved email');send.disabled=view.publishing?.email?.enabled===false;send.addEventListener('click',async()=>{if(!confirm('Send this exact approved email to '+member.asset.to+'?'))return;send.disabled=true;try{await api('release',{campaignId:campaign,destinationId:member.asset.destination_id});await refresh();}catch{await refresh();status.textContent='Release was blocked or uncertain. Check the saved delivery record.';}});row.append(send);}
+   if(mixedReadiness&&actionable(member)&&!member.delivery&&!member.decision){
+    const approve=text('button','Approve this recipient');
+    approve.addEventListener('click',async()=>{
+     approve.disabled=true;
+     try{await api('decision',{campaignId:campaign,destinationId:member.asset.destination_id,fingerprint:member.fingerprint,decision:'APPROVE'});await refresh();}
+     catch{status.textContent='The decision was not saved. Reload the review.';approve.disabled=false;}
+    });
+    row.append(approve);
+   }
+   if((group.approval?.decision==='APPROVE'||member.decision?.decision==='APPROVE')&&actionable(member)&&!member.delivery){const send=text('button','Send approved email');send.disabled=view.publishing?.email?.enabled===false;send.addEventListener('click',async()=>{if(!confirm('Send this exact approved email to '+member.asset.to+'?'))return;send.disabled=true;try{await api('release',{campaignId:campaign,destinationId:member.asset.destination_id});await refresh();}catch{await refresh();status.textContent='Release was blocked or uncertain. Check the saved delivery record.';}});row.append(send);}
    list.append(row);
   }
   card.append(list);
@@ -118,7 +104,7 @@ async function refresh(){
     }}));
     card.append(button);
    }
-   if(!group.approval)for(const decision of ['APPROVE','REJECT']){const button=text('button',decision==='APPROVE'?'Approve Group':'Reject Group');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,decision});await refresh();}catch{status.textContent='The group decision was not saved. Reload and retry.';button.disabled=false;}});card.append(button);}
+   if(!group.approval)for(const decision of ['APPROVE','REJECT']){const button=text('button',decision==='APPROVE'?'Approve Group':'Reject Group');button.disabled=decision==='APPROVE'&&members.some(member=>!actionable(member));button.addEventListener('click',async()=>{button.disabled=true;try{await api('group',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,decision});await refresh();}catch{status.textContent='The group decision was not saved. Reload and retry.';button.disabled=false;}});card.append(button);}
   }
   if(group.version>1||lastSaved==='group:'+group.id){const saved=text('p','Edited · Saved'+(group.approval?'':' · New approval required'));saved.className='saved';card.append(saved);}
   main.append(card);
@@ -130,7 +116,7 @@ async function refresh(){
   if(!historical)card.id='review-proposal-'+asset.destination_id;
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
   if(!historical&&(item.revision||lastSaved==='entry:'+asset.destination_id)){const saved=text('p',item.revision?'Edited · Saved · Revision '+item.revision.id+' · '+fingerprint:'Edited · Saved'+(decision?'':' · New approval required'));saved.className='saved';card.append(saved);}
-  card.append(text('p','Preparation: '+(asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
+  card.append(text('p','Preparation: '+(!historical&&item.editorial_status!=='LEGACY'?item.editorial_status:asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
   if(!historical&&item.review_action){
    const action=item.review_action;
    const labels={NEEDS_FEEDBACK:'Rejection saved — owner feedback is needed before regeneration.',PENDING:'Regeneration queued.',RUNNING:'Regeneration in progress.',OWNER_REVIEW_PENDING:'Revised content is ready; owner review notification is pending.',COMPLETE:'Revised content is ready for owner review.',FAILED:'Regeneration failed; the rejected draft remains unchanged.',NOTIFICATION_AMBIGUOUS:'Review notification outcome is uncertain; it will not be resent automatically.',CANCELLED:'Regeneration was cancelled by a later owner decision.'};
@@ -143,7 +129,7 @@ async function refresh(){
   if(delivery?.receipt)card.append(text('p',asset.kind==='X'?'X receipt: '+(delivery.receipt.provider_id||'unconfirmed'):'Mail receipt: '+(delivery.receipt.provider_id||'unconfirmed')+' · Sent folder: '+(delivery.receipt.sent_folder?.status||'no filing receipt')));
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
-  if(!historical)addVerification(card,item);
+  if(!historical&&item.editorial_reason)card.append(text('p',item.editorial_reason));
   if(asset.kind==='EMAIL' && asset.html){
    const preview=document.createElement('iframe');preview.title='Reviewed email with EMRADAR letterhead';preview.setAttribute('sandbox','');preview.style='width:100%;height:min(70vh,900px);border:1px solid #d9e2e7';preview.srcdoc=asset.html;
    const previewDetails=document.createElement('details');previewDetails.append(text('summary','Branded email preview'),preview);card.append(previewDetails);
@@ -195,6 +181,7 @@ async function refresh(){
   if(!historical){
    const isX=asset.kind==='X',capability=view.publishing?.[isX?'x':'email'];
    const unavailable=delivery?'A delivery has already been recorded. It will not be repeated.':
+    !actionable(item)?'The editorial check is required before release.':
     (!isX&&(!asset.to||item.recipient_ready===false))?'A verified recipient is required for delivery. Editorial review remains available.':
     capability?.enabled===false?(capability.reason||'Publishing is unavailable. Editorial review remains available.'):
     decision?.decision!=='APPROVE'?'Approve this draft before releasing it.':null;
@@ -212,7 +199,7 @@ async function refresh(){
   if(!historical)for(const choice of ['APPROVE','REJECT','REGENERATE','EXCLUDE']){
    const button=text('button',choice==='APPROVE'?'Approve':choice==='REJECT'?'Reject':choice==='REGENERATE'?'Regenerate':'Exclude');
    button.disabled=!!delivery;
-   if(choice==='APPROVE'&&asset.review_status==='NEEDS_REVISION')button.disabled=true;
+   if(choice==='APPROVE'&&!actionable(item))button.disabled=true;
    button.addEventListener('click',async()=>{
     let feedback='';
     if(choice==='REJECT'||choice==='REGENERATE'){
@@ -246,7 +233,7 @@ async function refresh(){
    if(target){const link=document.createElement('a');link.href='#'+encodeURIComponent(target);link.textContent='Back to current proposal and review controls';main.append(link);}
   }else main.append(card);
  }
- status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
+ status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision'+(counts.held?' · '+counts.held+' need investigation':'')+'.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
 }
 (async()=>{
  try{

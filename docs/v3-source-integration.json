@@ -6,13 +6,20 @@
   "path": "vendor/emradar-v3-authoritative",
   "runtime_overlay": "vendor/emradar-v3",
   "exact_shared_files": [
-    "src/discovery.js",
-    "src/review-access.js"
+    "src/discovery.js"
   ],
   "authoritative_standard_files": [
     "src/editorial-reference.js",
     "src/graphic-standard.js",
     "src/graphic-renderer.js",
     "src/discovery-coverage.js"
+  ],
+  "runtime_overrides": [
+    {
+      "path": "src/review-access.js",
+      "source_sha256": "844293aa70945064f04f8ec897d8ef851022a93a8189a4dcc34baee1b62b2ec1",
+      "overlay_sha256": "c84eafadc108da8f75b22658b49ea3313bb7f6a4a5fb68558068f9ce05b92c49",
+      "authorization": "Production PR #55 preserves permanent private owner invitations."
+    }
   ]
 }

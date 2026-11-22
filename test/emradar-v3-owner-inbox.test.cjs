@@ -5,19 +5,19 @@ const crypto=require('node:crypto');
 const {runOwnerInvitationOnce}=require('../src/emradar-v3-runtime.cjs');
 const {createV3Smtp}=require('../src/emradar-v3-smtp.cjs');
 
-test('one fresh invitation replaces consumed access, preserves campaign and is not resent on restart',async()=>{
+test('a consumed permanent invitation is checked without a duplicate send or campaign mutation',async()=>{
  const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
  const campaign={phase:'PUBLICATION_REVIEW',decisions:{journal:{decision:'REJECT'},x:{decision:'APPROVE'}},assets:{x:{asset:{body:'Preserved'}}}};
- const records=new Map([['campaign',{version:1,value:structuredClone(campaign)}],['review:campaign',{version:1,value:{campaign_id:'campaign',status:'CONSUMED',expires_at:2000,consumed_at:900,token_hash:'old',owner_session:{id:'old-session'},notification_receipt:{recipient:'oroknows@gmail.com'}}}]]);
+ const original={campaign_id:'campaign',status:'CONSUMED',expires_at:null,consumed_at:900,token_hash:'original-hash',owner_session:{id:'old-session'},notification_receipt:{recipient:'sean@emradar.net',provider_id:'owner-mail'}};
+ const records=new Map([['campaign',{version:1,value:structuredClone(campaign)}],['review:campaign',{version:1,value:structuredClone(original)}]]);
  const adapter={read:async key=>structuredClone(records.get(key)??null),compareAndSwap:async(key,version,value)=>{const old=records.get(key);if((old?.version??null)!==version)return false;records.set(key,{version:(version??0)+1,value:structuredClone(value)});return true;}};
- let sends=0,inspections=0,link;
- const workflow=new ReviewWorkflow({store:{adapter},adapter,baseUrl:'https://review.example.org',clock:()=>1000,notify:async input=>{sends++;link=input.link;assert.equal(input.recipient,'sean@emradar.net');return {accepted:true,provider_id:'owner-mail',recipient:input.recipient,campaign_id:input.campaignId};}});
- const run=()=>runOwnerInvitationOnce({adapter,workflow,campaignId:'campaign',reviewOrigin:'https://review.example.org',key:'invitation-once',inspectInbox:async input=>{inspections++;assert.equal(input.token_hash,crypto.createHash('sha256').update(new URLSearchParams(new URL(link).hash.slice(1)).get('token')).digest('hex'));return {status:'PASS',link_ready:true,inbox_uid:42};}});
- assert.equal((await run()).status,'OWNER_REVIEW_READY');assert.equal((await run()).status,'RELEASE_ALREADY_EXECUTED');assert.equal(sends,1);assert.equal(inspections,1);
- const review=(await adapter.read('review:campaign')).value;
- assert.equal(review.status,'NOTIFIED');assert.equal(review.consumed_at,null);assert.equal(review.owner_session,null);assert.equal(review.previous_reviews[0].status,'CONSUMED');
+ let inspections=0;
+ const workflow=new ReviewWorkflow({store:{adapter},adapter,baseUrl:'https://review.example.org',clock:()=>1000,notify:async()=>assert.fail('must reuse the existing invitation')});
+ const run=()=>runOwnerInvitationOnce({adapter,workflow,campaignId:'campaign',reviewOrigin:'https://review.example.org',key:'invitation-once',inspectInbox:async input=>{inspections++;assert.equal(input.token_hash,original.token_hash);return {status:'PASS',link_ready:true,inbox_uid:42};}});
+ assert.equal((await run()).status,'OWNER_REVIEW_READY');assert.equal((await run()).status,'RELEASE_ALREADY_EXECUTED');
+ assert.equal(inspections,1);
+ assert.deepEqual((await adapter.read('review:campaign')).value,original);
  assert.deepEqual((await adapter.read('campaign')).value,campaign);
- await assert.rejects(workflow.authenticate('campaign','old-session','old-secret'),/OWNER_SESSION_REQUIRED/);
 });
 
 test('IMAP confirms exact invitation and private token without consuming or following its link',async()=>{
@@ -48,13 +48,13 @@ test('unconfirmed recipient routing does not issue a fresh invitation',async()=>
  const result=await restoreOwnerReviewAccess({adapter,workflow:{issue:async()=>{throw Error('MUST_NOT_SEND');}},inspectMailbox:async()=>({status:'FAIL',reason:'INVITATION_NOT_IN_RECEIVING_MAILBOX',folders_checked:['INBOX','Junk']}),inspectInbox:async()=>{throw Error('NO_FRESH_MESSAGE');},campaignId:'campaign',reviewOrigin:'https://review.example',key:'restore'});
  assert.equal(result.emails_sent,0);assert.equal(records.get('restore').value.status,'BLOCKED');assert.equal(records.get('review:campaign').value.status,'CONSUMED');
 });
-test('confirmed inbox routing permits exactly one fresh invitation and durable verified completion',async()=>{
+test('confirmed inbox routing preserves the existing link and records durable completion',async()=>{
  const {restoreOwnerReviewAccess}=require('../src/emradar-v3-runtime.cjs');
  const records=new Map([['review:campaign',{version:1,value:{status:'CONSUMED',notification_receipt:{recipient:'sean@emradar.net',provider_id:'prior'},token_hash:'hash'}}]]);let sends=0;
  const adapter={read:async k=>records.get(k),compareAndSwap:async(k,v,value)=>{const p=records.get(k);if((p?.version??null)!==v)return false;records.set(k,{version:(v??0)+1,value});return true;}};
  const workflow={issue:async()=>{sends++;records.set('review:campaign',{version:2,value:{status:'NOTIFIED',notification_receipt:{recipient:'sean@emradar.net',provider_id:'fresh'},token_hash:'newhash'}});}};
  const run=()=>restoreOwnerReviewAccess({adapter,workflow,inspectMailbox:async()=>({status:'PASS',inbox:true,folder:'INBOX',link_ready:true}),inspectInbox:async input=>{assert.equal(input.provider_id,'fresh');return {status:'PASS',link_ready:true};},campaignId:'campaign',reviewOrigin:'https://review.example',key:'restore'});
- assert.equal((await run()).status,'OWNER_REVIEW_READY');await run();assert.equal(sends,1);assert.equal(records.get('restore').value.status,'COMPLETE');
+ assert.equal((await run()).status,'OWNER_REVIEW_READY');await run();assert.equal(sends,0);assert.equal(records.get('restore').value.status,'COMPLETE');
 });
 test('mailbox inspection finds exact private invitation despite a changed provider header, without consuming link',async()=>{
  const campaignId='campaign',token='private',link='https://review.example/review/access#token='+token+'&campaign='+campaignId;let reads=0;const locks=[];

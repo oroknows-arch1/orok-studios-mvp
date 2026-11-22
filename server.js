@@ -680,7 +680,7 @@ const PORT = process.env.PORT || 3000;
 if (require.main === module) {
   // Fail closed before listening if explicitly enabled V3 cannot initialise.
   const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
+  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({replacementPending,runReplacementReview,discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,runEditorialRecovery,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
   const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
@@ -734,8 +734,12 @@ if (require.main === module) {
     }
     // Always recover ready, unnotified campaigns at startup, regardless of historical maintenance jobs.
     // Campaign-level advisory locks and durable review records prevent duplicate invitations.
+    const recoverEditorial=()=>runEditorialRecovery?.().then(result=>{
+      if(result)console.log('V3_EDITORIAL_RECOVERY',JSON.stringify(result));
+    }).catch(error=>console.error('V3_EDITORIAL_RECOVERY_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_RECOVERY_FAILED'));
+    recoverEditorial();
     prepareLatest();
-    const v3IntakeTimer=setInterval(prepareLatest,60*60*1000);
+    const v3IntakeTimer=setInterval(()=>{recoverEditorial();prepareLatest();},60*60*1000);
     v3IntakeTimer.unref();
     require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
   });

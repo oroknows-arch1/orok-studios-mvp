@@ -11,7 +11,45 @@ function publicHttps(raw){try{const u=new URL(raw);return u.protocol==='https:'&
 function publicAddress(address){if(isIP(address)===4){const p=address.split('.').map(Number);return !(p[0]===0||p[0]===10||p[0]===127||p[0]>=224||(p[0]===169&&p[1]===254)||(p[0]===172&&p[1]>=16&&p[1]<=31)||(p[0]===192&&p[1]===168)||(p[0]===100&&p[1]>=64&&p[1]<=127)||(p[0]===192&&p[1]===0)||(p[0]===198&&p[1]>=18&&p[1]<=19));}return isIP(address)===6&&!/^(::|fc|fd|fe8|fe9|fea|feb|2001:db8)/i.test(address);}
 async function publiclyResolved(name,resolver){if(isIP(name))return false;try{const addresses=await resolver(name,{all:true,verbatim:true});return addresses.length>0&&addresses.every(({address})=>publicAddress(address));}catch{return false;}}
 export const pinnedLookup=address=>(_hostname,options,callback)=>options?.all===true?callback(null,[{address,family:isIP(address)}]):callback(null,address,isIP(address));
-export function pinnedHtml(url,resolver,timeoutMs=12000,maxBytes=1000000){return new Promise(async(resolve,reject)=>{let addresses;try{addresses=await resolver(url.hostname,{all:true,verbatim:true});}catch{return reject(Error('CONTACT_DNS_FAILED'));}if(!addresses?.length||!addresses.every(a=>publicAddress(a.address)))return reject(Error('CONTACT_ADDRESS_UNSAFE'));const address=addresses[0].address;const req=httpsRequest(url,{method:'GET',timeout:timeoutMs,maxRedirects:0,lookup:pinnedLookup(address),headers:{accept:'text/html'},rejectUnauthorized:true},res=>{if(res.statusCode!==200||!String(res.headers['content-type']??'').toLowerCase().includes('text/html')){res.destroy();return reject(Error(res.statusCode===403?'CONTACT_HTTP_403':'CONTACT_RESPONSE_INVALID'));}let size=0;const chunks=[];res.on('data',chunk=>{size+=chunk.length;if(size>maxBytes){res.destroy();reject(Error('CONTACT_TOO_LARGE'));}else chunks.push(chunk);});res.on('end',()=>resolve(Buffer.concat(chunks).toString('utf8')));res.on('error',reject);});req.on('timeout',()=>req.destroy(Error('CONTACT_TIMEOUT')));req.on('error',reject);req.end();});}
+export async function pinnedSource(url,resolver,{timeoutMs=12000,maxBytes=1000000,allowPdf=false,redirects=0}={}){
+ const urlIsPublic=publicHttps(url.href);
+ if(!urlIsPublic || isIP(url.hostname))throw Error('CONTACT_ADDRESS_UNSAFE');
+ const addresses=await resolver(url.hostname,{all:true,verbatim:true});
+ if(!addresses?.length||!addresses.every(item=>publicAddress(item.address)))throw Error('CONTACT_ADDRESS_UNSAFE');
+ return new Promise((resolve,reject)=>{
+  const req=httpsRequest(url,{method:'GET',lookup:pinnedLookup(addresses[0].address),headers:{accept:allowPdf?'text/html, application/pdf':'text/html'},rejectUnauthorized:true},res=>{
+   if(redirects>0&&[301,302,303,307,308].includes(res.statusCode)&&res.headers.location){
+    res.destroy();
+    try{resolve(pinnedSource(new URL(res.headers.location,url),resolver,{timeoutMs,maxBytes,allowPdf,redirects:redirects-1}));}
+    catch(error){reject(error);}
+    return;
+   }
+   const type=String(res.headers['content-type']??'').toLowerCase();
+   if(res.statusCode!==200||(!type.includes('text/html')&&!(allowPdf&&type.includes('application/pdf')))){
+    res.destroy();
+    reject(Error(res.statusCode===403?'CONTACT_HTTP_403':'CONTACT_RESPONSE_INVALID'));
+    return;
+   }
+   let size=0;
+   const chunks=[];
+   res.on('data',chunk=>{
+    size+=chunk.length;
+    if(size>maxBytes)res.destroy(Error('CONTACT_TOO_LARGE'));
+    else chunks.push(chunk);
+   });
+   res.on('end',()=>resolve({url:url.href,type,bytes:Buffer.concat(chunks)}));
+   res.on('error',reject);
+  });
+  const timer=setTimeout(()=>req.destroy(Error('CONTACT_TIMEOUT')),timeoutMs);
+  req.on('close',()=>clearTimeout(timer));
+  req.on('error',reject);
+  req.end();
+ });
+}
+export async function pinnedHtml(url,resolver,timeoutMs=12000,maxBytes=1000000){
+ const response=await pinnedSource(url,resolver,{timeoutMs,maxBytes});
+ return response.bytes.toString('utf8');
+}
 const plainText=response=>(response.output??[]).flatMap(item=>item.content??[]).filter(x=>x.type==='output_text').map(x=>x.text).join('');
 function safeResponseShape(response){const output=Array.isArray(response?.output)?response.output:[];return {response_type:Array.isArray(response)?'array':response===null?'null':typeof response,top_level_keys:response&&typeof response==='object'&&!Array.isArray(response)?Object.keys(response).sort():[],output_count:output.length,output_types:output.map(item=>typeof item?.type==='string'?item.type:null),content_counts:output.map(item=>Array.isArray(item?.content)?item.content.length:0),content_types:output.map(item=>(Array.isArray(item?.content)?item.content:[]).map(content=>typeof content?.type==='string'?content.type:null)),output_text_lengths:output.map(item=>(Array.isArray(item?.content)?item.content:[]).filter(content=>content?.type==='output_text').map(content=>typeof content?.text==='string'?content.text.length:null))};}
 

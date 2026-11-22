@@ -3,6 +3,7 @@ import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import emailBrand from '../../../src/email-brand.cjs';
 import { randomUUID } from 'node:crypto';
 import { assertScan, assertDestinations, assetFingerprint, assertApproval, assertSendable, identicalEmailGroupKey, sha256 } from './contracts.js';
+import {editorialApplies, editorialStatus, isEditorialReady} from './editorial-preparation.js';
 import {proposalBinding} from './proposal-verification.js';
 
 const groupIdFor=(campaignId,destinationIds)=>'email-group-'+sha256([campaignId,[...destinationIds].sort()]).slice(0,24);
@@ -106,6 +107,7 @@ export class CampaignStore {
       // verification remains mandatory in claimDelivery and transport checks.
       if (state.deliveries[destinationId]) throw Error('DECISION_AFTER_DISTRIBUTION');
       if(decision==='APPROVE'&&item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');
+      if(decision==='APPROVE'&&editorialApplies(state)&&!isEditorialReady(editorialStatus(state,destinationId)))throw Error('EDITORIAL_CHECK_REQUIRED');
       state.review_actions??={};
       state.decisions??={};
       if(['REJECT','REGENERATE'].includes(decision)){
@@ -122,11 +124,66 @@ export class CampaignStore {
       return state;
     });
   }
-  async recordProposalVerification(id,destinationId,fingerprint,verification){
-   return this.mutate(id,state=>{if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const entry=state.assets[destinationId],destination=state.destinations.find(item=>item.id===destinationId);if(!entry||entry.fingerprint!==fingerprint||!destination)throw Error('STALE_ASSET_VERIFICATION');const binding=proposalBinding({asset:entry.asset,destination,evidence:state.preparation_input?.document?.evidence??[]});for(const key of Object.keys(binding))if(verification?.[key]!==binding[key])throw Error('INVALID_PROPOSAL_VERIFICATION_BINDING');state.proposal_verifications??={};state.proposal_verifications[destinationId]??=[];if(!state.proposal_verifications[destinationId].some(item=>item.id===verification.id))state.proposal_verifications[destinationId].push(structuredClone(verification));state.events.push({type:'PROPOSAL_VERIFIED',destination_id:destinationId,id:randomUUID(),verification_id:verification.id,status:verification.status,asset_sha256:fingerprint});return state;});
-  }
-  async recordAutomaticVerificationRun(id,summary){
-   return this.mutate(id,state=>{if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');state.automatic_proposal_verification=structuredClone(summary);state.events??=[];state.events.push({type:'AUTOMATIC_PROPOSAL_VERIFICATION_COMPLETED',id:randomUUID(),status:summary.status,investigations_used:summary.investigations_used,distinct_proposals:summary.distinct_proposals});return state;});
+  async applyEditorialPreparation(id, results) {
+   return this.mutate(id, state => {
+    if (!isReviewPhase(state?.phase)) throw Error('REVIEW_NOT_OPEN');
+    state.editorial_preparation ??= {outcomes:{}};
+    const evidence = state.preparation_input.document.evidence ?? [];
+    const changed = new Set();
+    for (const {id:destinationId, fingerprint, inputBinding, asset, record} of results) {
+     const entry = state.assets[destinationId];
+     const destination = state.destinations.find(item => item.id === destinationId);
+     const previous = proposalBinding({asset:entry.asset,destination,evidence});
+     if (entry.fingerprint !== fingerprint || Object.keys(previous).some(key => previous[key] !== inputBinding[key])) throw Error('STALE_ASSET_REVISION');
+     if (state.deliveries[destinationId] || state.decisions[destinationId]?.decision === 'EXCLUDE') continue;
+     const next = proposalBinding({asset,destination,evidence});
+     if (Object.keys(next).some(key => next[key] !== record[key])) throw Error('INVALID_PROPOSAL_VERIFICATION_BINDING');
+     const old = state.editorial_preparation.outcomes[destinationId];
+     if (old && Object.keys(previous).every(key => old[key] === previous[key]) && fingerprint === next.asset_sha256) continue;
+     if (old) {
+      state.editorial_preparation.history ??= [];
+      state.editorial_preparation.history.push(old);
+     }
+     state.editorial_preparation.outcomes[destinationId] = record;
+     if (next.asset_sha256 === fingerprint) continue;
+     const priorDecision = state.decisions[destinationId] ?? null;
+     state.editorial_versions ??= {};
+     state.editorial_versions[destinationId] ??= [];
+     state.editorial_versions[destinationId].push({...entry, previous_decision:priorDecision});
+     state.assets[destinationId] = {asset, fingerprint:next.asset_sha256};
+     delete state.decisions[destinationId];
+     if (state.review_actions?.[destinationId]) {
+      const action = state.review_actions[destinationId];
+      state.review_actions[destinationId] = {...action,status:'CANCELLED',superseded_by:next.asset_sha256};
+     }
+     changed.add(destinationId);
+     state.events.push({type:'ASSET_REVISED',destination_id:destinationId,id:randomUUID(),previous_fingerprint:fingerprint,new_fingerprint:next.asset_sha256,previous_decision:priorDecision,authority:'EDITORIAL_PREPARATION',verification_id:record.id});
+    }
+    for (const group of Object.values(state.email_groups ?? {})) {
+     const revised = group.destination_ids.filter(member => changed.has(member));
+     if (!revised.length) continue;
+     const priorApproval = state.group_approvals?.[group.id] ?? null;
+     state.events.push({type:'EMAIL_GROUP_REVISED',id:randomUUID(),group_id:group.id,previous_group:structuredClone(group),previous_approval:priorApproval});
+     if (priorApproval) {
+      delete state.group_approvals[group.id];
+      for (const member of group.destination_ids) {
+       if (!state.deliveries[member] && state.decisions[member]?.group_id === group.id) {
+        state.events.push({type:'GROUP_DECISION_SUPERSEDED',destination_id:member,previous_decision:state.decisions[member]});
+        delete state.decisions[member];
+       }
+      }
+     }
+     const content = groupContent(state.assets[revised[0]].asset);
+     if (revised.length === group.destination_ids.length) Object.assign(group,content,{version:group.version+1});
+     else {
+      group.destination_ids = group.destination_ids.filter(member => !changed.has(member));
+      group.version++;
+      const groupId = groupIdFor(id,revised);
+      state.email_groups[groupId] = {...content,id:groupId,destination_ids:revised,version:1};
+     }
+    }
+    return state;
+   });
   }
   async revise(id,destinationId,fingerprint,changes,verifiedDestination=null,recipientCheck=null) {
     if (!changes || typeof changes!=='object' || Array.isArray(changes)) throw Error('INVALID_REVISION');
@@ -206,6 +263,7 @@ export class CampaignStore {
     if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const group=state.email_groups?.[groupId];
     if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');const members=[...group.destination_ids];if(!members.length)throw Error('EMPTY_GROUP');
     for(const destinationId of members){const entry=state.assets[destinationId];if(!destinationIsVerified(state,destinationId))throw Error('UNVERIFIED_RECIPIENT');if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');if(entry.asset.review_status==='NEEDS_REVISION'&&decision==='APPROVE')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');if(state.deliveries[destinationId])throw Error('DECISION_AFTER_DISTRIBUTION');if(state.decisions[destinationId]&&state.decisions[destinationId].decision!==decision)throw Error('GROUP_DECISION_CONFLICT');}
+    if(decision==='APPROVE'&&editorialApplies(state)&&members.some(member=>!isEditorialReady(editorialStatus(state,member))))throw Error('EDITORIAL_CHECK_REQUIRED');
     const recipientSetHash=sha256(members),prior=state.group_approvals?.[groupId];if(prior?.decision===decision&&prior.content_hash===contentHash&&prior.recipient_set_sha256===recipientSetHash)return state;
     for(const destinationId of members){const fingerprint=state.assets[destinationId].fingerprint;state.decisions[destinationId]={authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId,group_id:groupId,group_content_hash:contentHash};}
     state.group_approvals??={};state.group_approvals[groupId]={authority:'OWNER',decision,campaign_id:id,group_id:groupId,content_hash:contentHash,version:group.version,destination_ids:members,recipient_set_sha256:recipientSetHash};state.events.push({type:'EMAIL_GROUP_DECIDED',group_id:groupId,id:randomUUID(),decision,content_hash:contentHash,version:group.version,destination_ids:members});return state;
@@ -226,6 +284,7 @@ export class CampaignStore {
       const item = state.assets[destinationId];
       if (!item) throw Error('UNKNOWN_DESTINATION');
       if(item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_NOT_SENDABLE');
+      if(editorialApplies(state)&&!isEditorialReady(editorialStatus(state,destinationId)))throw Error('EDITORIAL_CHECK_REQUIRED');
       const prior = state.deliveries[destinationId];
       const ownerRecipientOverride=item.asset.kind==='EMAIL'&&item.asset.recipient_owner_override===true;
       if(item.asset.kind==='EMAIL'&&!ownerRecipientOverride)recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));
