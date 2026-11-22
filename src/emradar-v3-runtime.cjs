@@ -278,16 +278,20 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const {auditCampaignInShadow}=await import('../vendor/emradar-v3/src/campaign-editorial-shadow.js');
    const request=createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY});
    return runReleaseOnce({adapter:service.store.adapter,
-    key:'v3-google-smoke:2026-11-22-retry2:'+googleSmokeCampaignId,
+    key:'v3-google-connection-probe:2026-11-22:'+googleSmokeCampaignId,
     run:async()=>{
-     const state=(await service.store.adapter.read(googleSmokeCampaignId))?.value;
-     if(!state||state.phase!=='PUBLICATION_REVIEW')return {status:'NO_REVIEW_CAMPAIGN'};
-     const audit=await auditCampaignInShadow({state,request,model:'gemini-2.5-flash',timeoutMs:90000});
-     const counts={};
-     for(const row of audit.verdicts??[])counts[row.verdict]=(counts[row.verdict]??0)+1;
-     // Persist only usage-relevant summary; never write proposal edits or decisions.
-     return {status:audit.status,checked:audit.proposalCount??0,counts,model:'gemini-2.5-flash',
-      errorType:audit.errorType??null};
+     // Minimal, single Search-grounded request before further campaign-sized calls.
+     const payload={model:'gemini-2.5-flash',
+      input:'Using Google Search, identify whether EBRD project 56011 is approved. Reply with only this JSON: {"proposals":[]}.',
+      store:false,tools:[{type:'google_search'}]};
+     try{
+      const response=await request(payload,AbortSignal.timeout(45000));
+      return {status:'GOOGLE_CONNECTED',jsonReceived:Array.isArray(response?.proposals),model:payload.model};
+     }catch(error){
+      const message=String(error?.message??'');
+      return {status:'GOOGLE_CONNECTION_FAILED',errorType:/^GEMINI_AUDIT_(?:HTTP_[0-9]{3}|NOT_COMPLETED|EMPTY_OUTPUT|INVALID_JSON)$/.test(message)
+       ?message:(error?.name==='TimeoutError'?'TIMEOUT':error?.cause?.code==='ENOTFOUND'?'DNS_FAILED':'FETCH_OR_PROVIDER_ERROR'),model:payload.model};
+     }
     }});
   };
   const runRegeneration=async(campaignId,destinationId)=>{
