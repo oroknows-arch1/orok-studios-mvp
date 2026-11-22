@@ -44,3 +44,17 @@ test('Gemini 2.5 search request omits unsupported strict schema but retains 16 v
  assert.deepEqual(captured.tools,[{type:'google_search'}]);
  assert.match(captured.input,/Return ONLY a JSON object/);
 });
+
+test('free Gemini 3.5 editorial audit uses supplied evidence without paid search',async()=>{
+ let calls=0;
+ const result=await auditCampaignInShadow({state,model:'gemini-3.5-flash',googleSearch:false,request:async payload=>{
+  calls++;
+  assert.equal(payload.tools,undefined);
+  assert.equal(payload.response_format.mime_type,'application/json');
+  assert.equal(payload.store,false);
+  return valid;
+ }});
+ assert.equal(calls,1);
+ assert.equal(result.status,'ADVISORY');
+ assert.equal(result.verdicts.length,16);
+});
