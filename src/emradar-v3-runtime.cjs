@@ -265,7 +265,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    // preparation/owner-review pipeline. It never buys Google Search grounding
    // and cannot approve/send; V3 alone verifies original sources.
    shadowEditorialAudit:env.EMRADAR_V3_CAMPAIGN_GOOGLE_SHADOW==='true'&&env.GEMINI_API_KEY
-    ? {model:env.EMRADAR_V3_GOOGLE_MODEL||'gemini-3.5-flash',googleSearch:false,
+    ? {model:'gemini-3.5-flash',googleSearch:false,
        request:createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY})}
     : null
   });
