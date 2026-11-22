@@ -5,23 +5,27 @@ export function buildCampaignEditorialPacket(state) {
   const a=entry.asset,d=destinations.get(id),ids=new Set(d?.evidence?.ids??[]);
   const sourceUrls=[...new Set((state?.preparation_input?.document?.evidence??[])
    .filter(e=>ids.has(e.id)&&e.verified===true&&typeof e.source_url==='string').map(e=>e.source_url))];
-  return {id,fingerprint:entry.fingerprint,outlet:id==='x'?'X':d?.name??'Unknown outlet',subject:a.subject??'',body:a.body,sourceUrls};
+  const sourceFacts=(state?.preparation_input?.document?.evidence??[])
+   .filter(e=>ids.has(e.id)&&e.verified===true&&typeof e.fact==='string')
+   .slice(0,12).map(e=>e.fact.slice(0,350));
+  return {id,fingerprint:entry.fingerprint,outlet:id==='x'?'X':d?.name??'Unknown outlet',subject:a.subject??'',body:a.body,sourceUrls,sourceFacts};
  }).sort((a,b)=>a.id.localeCompare(b.id));
 }
 const verdicts=new Set(['READY','CORRECT','INVESTIGATE','DROP']);
-export async function auditCampaignInShadow({state,request,model,timeoutMs=45000}) {
+export async function auditCampaignInShadow({state,request,model,googleSearch=true,timeoutMs=45000}) {
  if(typeof request!=='function')return {status:'NOT_CONFIGURED'};
  const packet=buildCampaignEditorialPacket(state);
  if(!packet.length)return {status:'NO_PROPOSALS'};
  const fingerprints=new Map(packet.map(row=>[row.id,row.fingerprint]));
- const payload={model,input:'Independently audit this entire campaign as one package. Assess original sources, contradictory claims, duplicate pitches, recipient fit and writing. Do not approve or send. Return one result per ID.\n'+JSON.stringify(packet),
-  tools:[{type:'google_search'}],store:false,response_format:{type:'text',mime_type:'application/json',schema:{
+ const payload={model,input:'Independently audit this entire campaign as one package. Assess ONLY the verified source facts supplied, contradictory claims within those facts, duplicated pitches, outlet fit and wording. Do not claim to have opened any URL unless Google Search is enabled. If evidence is insufficient, say so. Do not approve or send. Return one result per ID.\n'+JSON.stringify(packet),
+  ...(googleSearch?{tools:[{type:'google_search'}]}:{}),store:false,response_format:{type:'text',mime_type:'application/json',schema:{
    type:'object',properties:{proposals:{type:'array',items:{type:'object',properties:{
     id:{type:'string'},verdict:{type:'string',enum:[...verdicts]},reason:{type:'string'},correction:{type:'string'},sourceUrls:{type:'array',items:{type:'string'}}
    },required:['id','verdict','reason','correction','sourceUrls']}}},required:['proposals']}}};
+ // Free Gemini 3.x review uses supplied evidence without Google Search; paid Search must be opted in.
  // Gemini 2.5 accepts Google Search grounding OR structured output, not both.
  // Request JSON in normal text mode and validate all returned IDs locally.
- if(/^gemini-2\.5-/.test(model??'')){
+ if(googleSearch&&/^gemini-2\.5-/.test(model??'')){
   delete payload.response_format;
   payload.input='Return ONLY a JSON object with a "proposals" array; each row must have id, verdict (READY/CORRECT/INVESTIGATE/DROP), reason, correction, sourceUrls (URL strings). Exactly one row per supplied id. No markdown. Search for contradictory primary evidence.\\n'+payload.input;
  }
