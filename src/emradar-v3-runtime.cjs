@@ -278,7 +278,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    const {auditCampaignInShadow}=await import('../vendor/emradar-v3/src/campaign-editorial-shadow.js');
    const request=createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY});
    return runReleaseOnce({adapter:service.store.adapter,
-    key:'v3-google-smoke:2026-11-22:'+googleSmokeCampaignId,
+    key:'v3-google-smoke:2026-11-22-retry2:'+googleSmokeCampaignId,
     run:async()=>{
      const state=(await service.store.adapter.read(googleSmokeCampaignId))?.value;
      if(!state||state.phase!=='PUBLICATION_REVIEW')return {status:'NO_REVIEW_CAMPAIGN'};
