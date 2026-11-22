@@ -379,9 +379,18 @@ export async function createPreparationReviewService({
   // Optional independent editorial experiment: run once on the whole prepared campaign,
   // after normal source checks and before owner notification. No mutations or blocking.
   // Disabled by default. The owner review proceeds even if the auditor is unavailable.
-  if(shadowEditorialAudit?.request){
+  if(shadowEditorialAudit?.request&&result.status!=='ALREADY_PREPARED'){
    const snapshot=(await adapter.read(result.campaignId))?.value;
-   if(snapshot)await auditCampaignInShadow({state:snapshot,...shadowEditorialAudit});
+   if(snapshot){
+    const audit=await auditCampaignInShadow({state:snapshot,...shadowEditorialAudit});
+    // Report only aggregate result, never private proposal text, reviewer links or credentials.
+    const counts={};
+    for(const row of audit.verdicts??[])counts[row.verdict]=(counts[row.verdict]??0)+1;
+    console.log('V3_GOOGLE_SHADOW_RESULT',JSON.stringify({
+     campaign_id:result.campaignId,status:audit.status,
+     checked:audit.proposalCount??0,counts
+    }));
+   }
   }
   return {...result,status:'PUBLICATION_REVIEW',...completion};
  },workflow:{issue:ensureOwnerReview}})};
