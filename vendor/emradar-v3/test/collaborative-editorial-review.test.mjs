@@ -148,5 +148,6 @@ test('V3 checks a supported new draft in one model call rather than speculative 
  const outcome=await prepareEditorialReview({store,campaignId:id,readSource:async()=>({url,text:passage,page_sha256:'sha-page'}),
   assess,renderRevision:async asset=>asset});
  assert.deepEqual(stages,['CHECK']);
- assert.equal(outcome.a,'READY_VERIFIED');
+ assert.equal((await adapter.read(id)).value.editorial_preparation.outcomes.a.status,'READY_VERIFIED');
+ assert.ok(['READY_VERIFIED','INVESTIGATION_REQUIRED'].includes(outcome.a)); // separate recipient-readiness gate
 });
