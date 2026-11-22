@@ -67,7 +67,7 @@ function reviseText(asset, proposed) {
 
 // Each exact draft and its outlet set shares one investigation. Persist outcomes
 // after each group so interruption does not discard completed work.
-export async function prepareEditorialReview({store, campaignId, readSource, assess, renderRevision, ids=null, checkOnly=false}) {
+export async function prepareEditorialReview({store, campaignId, readSource, assess, renderRevision, ids=null, checkOnly=false, forceRecheck=false, googleFeedback=null}) {
  const state = (await store.adapter.read(campaignId))?.value;
  if (!state?.preparation_input?.document) throw Error('EDITORIAL_PREPARATION_STATE_REQUIRED');
  const groups = new Map();
@@ -83,7 +83,7 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
  const orderedGroups = [...groups.values()].sort((a,b) => Number(hasSaved(b)) - Number(hasSaved(a)));
  for (const entries of orderedGroups) {
   if(ids&&!entries.some(({asset})=>ids.includes(asset.destination_id)))continue;
-  const pending = entries.filter(({asset}) => !hasEditorialOutcome(state, asset.destination_id));
+  const pending = entries.filter(({asset}) => (forceRecheck && ids?.includes(asset.destination_id)) || !hasEditorialOutcome(state, asset.destination_id));
   if (!pending.length) continue;
   const first = pending[0].asset;
   const evidence = evidenceFor(state).filter(item => first.evidence_ids?.includes(item.id));
@@ -104,12 +104,12 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
   }))).filter(Boolean);
   const destinations = entries.map(({asset}) => destinationFor(state, asset.destination_id))
    .map(({id,name,category,website,relationship,publication_type}) => ({id,name,category,website,relationship,publication_type}));
-  const context = {destinations, pages, savedPassages:savedPages, previous:previous.map(({claims, contradictions}) => ({claims, contradictions}))};
+  const context = {destinations, pages, savedPassages:savedPages, previous:previous.map(({claims, contradictions}) => ({claims, contradictions})),googleFeedback:entries.map(({asset})=>({destination_id:asset.destination_id,...(googleFeedback?.[asset.destination_id]??{})})).filter(item=>item.verdict)};
   let candidate = first, check = null, reason = 'PRIMARY_SOURCE_PASSAGE_UNAVAILABLE';
   if (pages.length) {
    try {
-    if (saved) candidate = reviseText(first, saved.revised_proposal) ?? first;
-    else if (checkOnly || first.editorial_source_grounded || priorOutcomes.some(outcome => isEditorialReady(outcome.status))) candidate = first;
+    if (saved && !forceRecheck) candidate = reviseText(first, saved.revised_proposal) ?? first;
+    else if (!forceRecheck && (checkOnly || first.editorial_source_grounded || priorOutcomes.some(outcome => isEditorialReady(outcome.status)))) candidate = first;
     else {
      const draft = await assess({...context, proposal:proposalText(first), stage:'CORRECT'});
      if (draft?.revision) candidate = reviseText(first, draft.revision) ?? first;
