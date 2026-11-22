@@ -108,7 +108,8 @@ export async function createPreparationReviewService({
  const fetchSource=async raw=>{
   const url=publicContactUrl(raw);
   if(!url)return null;
-  const source=await pinnedSource(url,lookup,{timeoutMs:10000,maxBytes:8000000,allowPdf:true,redirects:2});
+  const timeoutMs=/\.pdf$/i.test(url.pathname)?45000:10000;
+  const source=await pinnedSource(url,lookup,{timeoutMs,maxBytes:8000000,allowPdf:true,redirects:2});
   let text, passages_only=false;
   if(source.type.includes('application/pdf')){
    const pdf=await getDocumentProxy(new Uint8Array(source.bytes),{isEvalSupported:false,stopAtErrors:true});
