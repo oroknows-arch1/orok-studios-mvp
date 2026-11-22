@@ -146,7 +146,7 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
    const status = ready ? (assetFingerprint(asset) === entry.fingerprint ? 'READY_VERIFIED' : 'CORRECTED_READY') : 'INVESTIGATION_REQUIRED';
    const claims = Array.isArray(check?.claims) ? check.claims.filter(Boolean) : [];
    const passages = claims.flatMap(claim => Array.isArray(claim.passages) ? claim.passages.filter(Boolean) : []);
-   return {id, fingerprint:entry.fingerprint, inputBinding:bindingFor(state, entry.asset), asset, record:{
+   return {id, fingerprint:entry.fingerprint, forceOutcome:Boolean(forceRecheck), inputBinding:bindingFor(state, entry.asset), asset, record:{
     id:randomUUID(), ...bindingFor(state, asset), status, reason,
     claims, sources:passages.flatMap(({url,quote}) => {
      const page = pages.find(item => item.url === url && normalize(quote).length >= 24 && normalize(item.text).includes(normalize(quote)));
