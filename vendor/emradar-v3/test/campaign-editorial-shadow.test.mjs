@@ -18,7 +18,7 @@ test('one request returns 16 advisory results; saved campaign unchanged',async()
  let calls=0;const before=JSON.stringify(state);
  const result=await auditCampaignInShadow({state,model:'test-model',request:async input=>{
   calls++;assert.equal(input.store,false);assert.equal(input.tools[0].type,'google_search');
-  assert.equal(JSON.parse(input.input.split('\\n').at(-1)).length,16);return valid;
+  assert.equal(JSON.parse(input.input.slice(input.input.indexOf('['))).length,16);return valid;
  }});
  assert.equal(calls,1);assert.equal(result.status,'ADVISORY');assert.equal(result.verdicts.length,16);
  assert.equal(JSON.stringify(state),before);
