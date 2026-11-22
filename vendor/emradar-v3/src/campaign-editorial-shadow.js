@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 // Optional read-only whole-campaign editorial audit. Does not approve, edit, send or publish.
 export function buildCampaignEditorialPacket(state) {
  const destinations=new Map((state?.destinations??[]).map(d=>[d.id,d]));
@@ -46,4 +47,31 @@ export async function auditCampaignInShadow({state,request,model,googleSearch=tr
    ?message:(error?.name==='TimeoutError'?'TIMEOUT':'REQUEST_FAILED');
   return {status:'AUDITOR_UNAVAILABLE',errorType:classified};
  }
+}
+
+/**
+ * One independent editorial attempt per exact set of saved campaign assets.
+ * Stores advisory findings separately. Never changes approvals, assets or deliveries.
+ */
+export async function auditCampaignOnce({adapter,campaignId,state,request,model,googleSearch=false}) {
+ const packet=buildCampaignEditorialPacket(state);
+ if(!packet.length)return {status:'NO_PROPOSALS'};
+ const digest=createHash('sha256').update(JSON.stringify(packet.map(p=>[p.id,p.fingerprint]))).digest('hex');
+ const key='v3-google-shadow:'+campaignId+':'+digest;
+ const previous=await adapter.read(key);
+ if(previous)return {status:'ALREADY_ATTEMPTED',recordKey:key};
+ const reserved=await adapter.compareAndSwap(key,null,{
+  status:'STARTED',campaign_id:campaignId,asset_digest:digest,created_at:new Date().toISOString()
+ });
+ if(!reserved)return {status:'ALREADY_ATTEMPTED',recordKey:key};
+ const audit=await auditCampaignInShadow({state,request,model,googleSearch,timeoutMs:90000});
+ const counts={};
+ for(const row of audit.verdicts??[])counts[row.verdict]=(counts[row.verdict]??0)+1;
+ await adapter.compareAndSwap(key,1,{
+  status:audit.status,campaign_id:campaignId,asset_digest:digest,model,
+  google_search_enabled:googleSearch,checked:audit.proposalCount??0,counts,
+  outcomes:audit.verdicts??[],error_type:audit.errorType??null,
+  completed_at:new Date().toISOString()
+ });
+ return {status:audit.status,checked:audit.proposalCount??0,counts,recordKey:key};
 }
