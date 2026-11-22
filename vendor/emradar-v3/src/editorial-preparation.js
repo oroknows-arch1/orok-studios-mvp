@@ -108,20 +108,23 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
   let candidate = first, check = null, reason = 'PRIMARY_SOURCE_PASSAGE_UNAVAILABLE';
   if (pages.length) {
    try {
+    // One source-backed check first. Spend a V3 correction call only when
+    // the exact wording fails, or when Google identified a concrete objection.
     if (saved && !forceRecheck) candidate = reviseText(first, saved.revised_proposal) ?? first;
-    else if (!forceRecheck && (checkOnly || first.editorial_source_grounded || priorOutcomes.some(outcome => isEditorialReady(outcome.status)))) candidate = first;
-    else {
-     const draft = await assess({...context, proposal:proposalText(first), stage:'CORRECT'});
-     if (draft?.revision) candidate = reviseText(first, draft.revision) ?? first;
-     else if (!forceRecheck) check = draft;
+    if (forceRecheck && !checkOnly){
+     const challenged=await assess({...context,proposal:proposalText(candidate),stage:'CORRECT'});
+     const corrected=reviseText(candidate,challenged?.revision);
+     if(corrected)candidate=corrected;
     }
-    if (!check) check = await assess({...context, proposal:proposalText(candidate), stage:'CHECK'});
-    if (!checkOnly && (saved || first.editorial_source_grounded) && !entries.some(({asset}) => usableCheck(check, pages, asset.destination_id))) {
-     const narrowed = await assess({...context, previous:[...context.previous,{claims:check?.claims,contradictions:check?.contradictions}], proposal:proposalText(candidate), stage:'CORRECT'});
-     const revised = reviseText(candidate, narrowed?.revision);
-     if (revised && sha256(proposalText(revised)) !== sha256(proposalText(candidate))) {
-      candidate = revised;
-      check = await assess({...context, proposal:proposalText(candidate), stage:'CHECK'});
+    check = await assess({...context,proposal:proposalText(candidate),stage:'CHECK'});
+    if(!checkOnly&&!forceRecheck&&!entries.every(({asset})=>usableCheck(check,pages,asset.destination_id))){
+     const narrowed=await assess({...context,
+      previous:[...context.previous,{claims:check?.claims,contradictions:check?.contradictions}],
+      proposal:proposalText(candidate),stage:'CORRECT'});
+     const revised=reviseText(candidate,narrowed?.revision);
+     if(revised&&sha256(proposalText(revised))!==sha256(proposalText(candidate))){
+      candidate=revised;
+      check=await assess({...context,proposal:proposalText(candidate),stage:'CHECK'});
      }
     }
     reason = typeof check?.explanation === 'string' ? check.explanation.slice(0,500) : 'EDITORIAL_CHECK_UNRESOLVED';
