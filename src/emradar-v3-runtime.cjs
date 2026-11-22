@@ -264,7 +264,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    // Experimental, disabled unless explicitly enabled and a server-side API key exists.
    // A missing key never affects the existing marketing pipeline.
    shadowEditorialAudit:env.EMRADAR_V3_CAMPAIGN_GOOGLE_SHADOW==='true'&&env.GEMINI_API_KEY
-    ? {model:env.EMRADAR_V3_GOOGLE_MODEL||'gemini-3.8-flash',
+    ? {model:env.EMRADAR_V3_GOOGLE_MODEL||'gemini-2.5-flash',
        request:createGeminiEditorialRequest({apiKey:env.GEMINI_API_KEY})}
     : null
   });
