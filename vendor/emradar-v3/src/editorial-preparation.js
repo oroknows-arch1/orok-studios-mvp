@@ -117,16 +117,8 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
      if(corrected)candidate=corrected;
     }
     check = await assess({...context,proposal:proposalText(candidate),stage:'CHECK'});
-    if(!checkOnly&&!forceRecheck&&!entries.every(({asset})=>usableCheck(check,pages,asset.destination_id))){
-     const narrowed=await assess({...context,
-      previous:[...context.previous,{claims:check?.claims,contradictions:check?.contradictions}],
-      proposal:proposalText(candidate),stage:'CORRECT'});
-     const revised=reviseText(candidate,narrowed?.revision);
-     if(revised&&sha256(proposalText(revised))!==sha256(proposalText(candidate))){
-      candidate=revised;
-      check=await assess({...context,proposal:proposalText(candidate),stage:'CHECK'});
-     }
-    }
+    // Unresolved first checks are held. Google reviews the campaign once,
+    // then V3 only pays for source-backed correction of selected objections.
     reason = typeof check?.explanation === 'string' ? check.explanation.slice(0,500) : 'EDITORIAL_CHECK_UNRESOLVED';
     if (first.kind === 'X' && usableCheck(check, pages, first.destination_id) &&
         sha256(proposalText(candidate)) !== sha256(proposalText(first))) {
