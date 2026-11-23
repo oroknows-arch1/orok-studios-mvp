@@ -150,7 +150,7 @@ export async function createPreparationReviewService({
   // Only use separately verified formations from this same signed scan.
   // Every candidate still passes through the independent editorial check.
   if(input.destination.id==='x'){
-   const candidates=xFormationCandidates(input.document,ids,5);
+   const candidates=xFormationCandidates(input.document,ids,3);
    let lastError=null;
    for(const candidate of candidates){
     const sourcePages=(await Promise.all(candidate.sourceUrls.map(readSource))).filter(Boolean);
@@ -162,8 +162,9 @@ export async function createPreparationReviewService({
        asset.evidence_ids.some(id=>!candidate.evidenceIds.includes(id)))throw Error('X_FALLBACK_EVIDENCE_MISMATCH');
      return asset;
     }catch(error){
-     // The next distinct verified formation may be usable, but do not
-     // conceal provider or validation failure if the entire bounded set fails.
+     // Do not multiply paid calls when a provider is down or overloaded.
+     // Fallback is for formation-specific evidence/draft defects only.
+     if(!/^(?:X_FALLBACK_EVIDENCE_MISMATCH|V3_(?:UNSUPPORTED_EDITORIAL_CONNECTION|EDITORIAL_UNCERTAINTY_REQUIRED|ANALYTICAL_FINDING_REQUIRED|EDITORIAL_DRAFT_INVALID))$/.test(error?.message??''))throw error;
      lastError=error;
     }
    }
