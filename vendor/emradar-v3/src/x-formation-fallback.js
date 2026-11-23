@@ -18,3 +18,28 @@ export function xFormationCandidates(document, originalIds = [], limit = 5) {
     .slice(0, limit)
     .map(({recordId, evidenceIds, sourceUrls}) => ({recordId, evidenceIds, sourceUrls}));
 }
+
+const candidateSpecificError = error => /^(?:X_FALLBACK_EVIDENCE_MISMATCH|V3_(?:UNSUPPORTED_EDITORIAL_CONNECTION|EDITORIAL_UNCERTAINTY_REQUIRED|ANALYTICAL_FINDING_REQUIRED|EDITORIAL_DRAFT_INVALID))$/.test(error?.message ?? '');
+
+// Read actual attributable pages before attempting each distinct formation.
+// A provider-wide fault aborts immediately, avoiding repeated paid attempts.
+export async function writeXWithFormationFallback({input,readSource,write,limit=3}) {
+  const originalIds = input.destination.evidence?.ids ?? [];
+  let lastError = null;
+  for (const candidate of xFormationCandidates(input.document,originalIds,limit)) {
+    const sourcePages = (await Promise.all(candidate.sourceUrls.map(readSource))).filter(Boolean);
+    if (!sourcePages.length) continue;
+    const destination={...input.destination,evidence:{...input.destination.evidence,ids:candidate.evidenceIds}};
+    try {
+      const asset=await write({...input,destination,sourcePages});
+      if (asset?.story_record_id!==candidate.recordId || !asset.evidence_ids?.length ||
+        asset.evidence_ids.some(id=>!candidate.evidenceIds.includes(id))) throw Error('X_FALLBACK_EVIDENCE_MISMATCH');
+      return asset;
+    } catch(error) {
+      if (!candidateSpecificError(error)) throw error;
+      lastError=error;
+    }
+  }
+  if(lastError)throw lastError;
+  throw Error('PRIMARY_SOURCE_PASSAGE_UNAVAILABLE');
+}
