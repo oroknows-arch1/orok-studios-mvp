@@ -1,6 +1,6 @@
 import {createCoverageDiscovery,assessDiscoveryCoverage,coverageKey,isEditorialSourceInstitution} from '../../emradar-v3-authoritative/src/discovery-coverage.js';
 import {GRAPHIC_STANDARD} from './graphic-standard.js';
-import {xFormationCandidates} from './x-formation-fallback.js';
+import {writeXWithFormationFallback} from './x-formation-fallback.js';
 import {assetFingerprint} from './contracts.js';
 import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION,isEditorialDestination,selectEditorialEvidence} from './editorial-reference.js';
 import {cleanUnverifiedRecipients} from './verified-recipient-recovery.js';
@@ -150,26 +150,7 @@ export async function createPreparationReviewService({
   // Only use separately verified formations from this same signed scan.
   // Every candidate still passes through the independent editorial check.
   if(input.destination.id==='x'){
-   const candidates=xFormationCandidates(input.document,ids,3);
-   let lastError=null;
-   for(const candidate of candidates){
-    const sourcePages=(await Promise.all(candidate.sourceUrls.map(readSource))).filter(Boolean);
-    if(!sourcePages.length)continue;
-    const destination={...input.destination,evidence:{...input.destination.evidence,ids:candidate.evidenceIds}};
-    try{
-     const asset=await write({...input,destination,sourcePages});
-     if(asset?.story_record_id!==candidate.recordId || !asset.evidence_ids?.length ||
-       asset.evidence_ids.some(id=>!candidate.evidenceIds.includes(id)))throw Error('X_FALLBACK_EVIDENCE_MISMATCH');
-     return asset;
-    }catch(error){
-     // Do not multiply paid calls when a provider is down or overloaded.
-     // Fallback is for formation-specific evidence/draft defects only.
-     if(!/^(?:X_FALLBACK_EVIDENCE_MISMATCH|V3_(?:UNSUPPORTED_EDITORIAL_CONNECTION|EDITORIAL_UNCERTAINTY_REQUIRED|ANALYTICAL_FINDING_REQUIRED|EDITORIAL_DRAFT_INVALID))$/.test(error?.message??''))throw error;
-     lastError=error;
-    }
-   }
-   if(lastError)throw lastError;
-   throw Error('PRIMARY_SOURCE_PASSAGE_UNAVAILABLE');
+   return writeXWithFormationFallback({input,readSource,write,limit:3});
   }
   const evidence=isEditorialDestination(input.destination)?selectEditorialEvidence(input.document,ids).evidence:input.document.evidence.filter(item=>ids.includes(item.id));
   const urls=[...new Set(evidence.map(item=>item.source_url).filter(Boolean))];
