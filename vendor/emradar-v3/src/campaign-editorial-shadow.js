@@ -2,7 +2,13 @@ import {createHash} from 'node:crypto';
 // Optional read-only whole-campaign editorial audit. Does not approve, edit, send or publish.
 export function buildCampaignEditorialPacket(state) {
  const destinations=new Map((state?.destinations??[]).map(d=>[d.id,d]));
- return Object.entries(state?.assets??{}).filter(([id,entry])=>entry?.asset?.body&&!state?.deliveries?.[id]&&!state?.decisions?.[id]).map(([id,entry])=>{
+ // Unfinished preparation placeholders are tracked by V3 but are not written proposals.
+ // Auditing them wastes the bounded correction budget and crowds real stories out.
+ const isPlaceholder=asset=>/^Preparation incomplete:/i.test(asset?.subject??'') ||
+  /^Preparation did not complete for this item\./i.test(asset?.body??'') ||
+  (asset?.kind==='X' && /^(?:Editorial decision|Preparation|Delivery):/m.test(asset?.body??''));
+ return Object.entries(state?.assets??{}).filter(([id,entry])=>entry?.asset?.body&&
+  !isPlaceholder(entry.asset)&&!state?.deliveries?.[id]&&!state?.decisions?.[id]).map(([id,entry])=>{
   const a=entry.asset,d=destinations.get(id),ids=new Set(d?.evidence?.ids??[]);
   const sourceUrls=[...new Set((state?.preparation_input?.document?.evidence??[])
    .filter(e=>ids.has(e.id)&&e.verified===true&&typeof e.source_url==='string').map(e=>e.source_url))];
@@ -18,7 +24,7 @@ export async function auditCampaignInShadow({state,request,model,googleSearch=tr
  const packet=buildCampaignEditorialPacket(state);
  if(!packet.length)return {status:'NO_PROPOSALS'};
  const fingerprints=new Map(packet.map(row=>[row.id,row.fingerprint]));
- const payload={model,input:'Work as an independent upstream editor alongside EMRADAR V3. Review this full campaign using ONLY the provided verified source facts: challenge unsupported factual premises, incorrect milestones, duplication and mismatch between the proposed article and deliverable evidence. Distinguish a factual assertion lacking proof from a clearly qualified theory, open question or emerging formation; uncertainty is legitimate when its limits are explicit in the actual recipient-facing body. Judge whether the publication would receive an original, compelling EMRADAR angle and a sourced article that can fulfil precisely what the pitch promises. Recommend CORRECT when narrowing or qualifying language can rescue the story; INVESTIGATE when essential facts remain unresolved; DROP only when no useful evidence-backed article angle survives. Do not claim to have opened URLs unless Google Search is enabled. Do not approve or send. Return one result per ID, with a concrete proposed correction where needed.\n'+JSON.stringify(packet),
+ const payload={model,input:'Work as an independent upstream editor alongside EMRADAR V3. Review this full campaign using ONLY the provided verified source facts: challenge unsupported factual premises, incorrect milestones, repetitive or duplicated paragraphs, recipient/publication legitimacy, outlet fit, and mismatch between the proposed article and deliverable evidence. Require a distinctive EMRADAR structural/market-formation question rather than a press-release summary. Distinguish a factual assertion lacking proof from a clearly qualified theory, open question or emerging formation; uncertainty is legitimate when its limits are explicit in the actual recipient-facing body. Judge whether the publication would receive an original, compelling EMRADAR angle and a sourced article that can fulfil precisely what the pitch promises. Recommend CORRECT when narrowing or qualifying language can rescue the story; INVESTIGATE when essential facts remain unresolved; DROP only when no useful evidence-backed article angle survives. Do not claim to have opened URLs unless Google Search is enabled. Do not approve or send. Return one result per ID, with a concrete proposed correction where needed.\n'+JSON.stringify(packet),
   ...(googleSearch?{tools:[{type:'google_search'}]}:{}),store:false,response_format:{type:'text',mime_type:'application/json',schema:{
    type:'object',properties:{proposals:{type:'array',items:{type:'object',properties:{
     id:{type:'string'},verdict:{type:'string',enum:[...verdicts]},reason:{type:'string'},correction:{type:'string'},sourceUrls:{type:'array',items:{type:'string'}}

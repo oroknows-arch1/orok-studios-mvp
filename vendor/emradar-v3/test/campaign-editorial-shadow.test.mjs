@@ -14,6 +14,15 @@ test('one packet includes all 16 drafts, fingerprints and sources but no private
  assert.ok(!JSON.stringify(packet).includes('PRIVATE@EXAMPLE.COM'));
  assert.ok(!JSON.stringify(packet).includes('SECRET'));
 });
+test('unfinished X and email placeholders do not consume the Google correction budget',()=>{
+ const sample=structuredClone(state);
+ sample.assets['id-0'].asset={kind:'EMAIL',subject:'Preparation incomplete: An outlet',body:'Preparation did not complete for this item. Review the persisted warning and regenerate or exclude it.',review_status:'NEEDS_REVISION'};
+ sample.assets['id-1'].asset={kind:'X',subject:'X draft needs revision',body:'Editorial decision: REJECT\\nPreparation: INVESTIGATION_REQUIRED\\nDelivery: Not released',review_status:'NEEDS_REVISION'};
+ const result=buildCampaignEditorialPacket(sample);
+ assert.equal(result.length,14);
+ assert.ok(!result.some(item=>item.id==='id-0'||item.id==='id-1'));
+ assert.ok(result.some(item=>item.id==='id-2'));
+});
 test('one request returns 16 advisory results; saved campaign unchanged',async()=>{
  let calls=0;const before=JSON.stringify(state);
  const result=await auditCampaignInShadow({state,model:'test-model',request:async input=>{
