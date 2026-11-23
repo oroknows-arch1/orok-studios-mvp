@@ -1,5 +1,6 @@
 import {createCoverageDiscovery,assessDiscoveryCoverage,coverageKey,isEditorialSourceInstitution} from '../../emradar-v3-authoritative/src/discovery-coverage.js';
 import {GRAPHIC_STANDARD} from './graphic-standard.js';
+import {writeXWithFormationFallback} from './x-formation-fallback.js';
 import {assetFingerprint} from './contracts.js';
 import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION,isEditorialDestination,selectEditorialEvidence} from './editorial-reference.js';
 import {cleanUnverifiedRecipients} from './verified-recipient-recovery.js';
@@ -145,7 +146,13 @@ export async function createPreparationReviewService({
  const writeGrounded=async input=>{
   if(!assessEditorial)return write(input);
   const ids=input.destination.evidence?.ids??[];
-  const evidence=input.destination.id==='x'||isEditorialDestination(input.destination)?selectEditorialEvidence(input.document,ids).evidence:input.document.evidence.filter(item=>ids.includes(item.id));
+  // An inaccessible first-choice source must not monopolise the X channel.
+  // Only use separately verified formations from this same signed scan.
+  // Every candidate still passes through the independent editorial check.
+  if(input.destination.id==='x'){
+   return writeXWithFormationFallback({input,readSource,write,limit:3});
+  }
+  const evidence=isEditorialDestination(input.destination)?selectEditorialEvidence(input.document,ids).evidence:input.document.evidence.filter(item=>ids.includes(item.id));
   const urls=[...new Set(evidence.map(item=>item.source_url).filter(Boolean))];
   const sourcePages=(await Promise.all(urls.map(readSource))).filter(Boolean);
   if(!sourcePages.length)throw Error('PRIMARY_SOURCE_PASSAGE_UNAVAILABLE');
