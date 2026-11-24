@@ -1,5 +1,8 @@
 'use strict';
 const test=require('node:test');
+// This file uses mock transports only; enable simulated release checks without
+// changing the production-default emergency distribution pause.
+process.env.EMRADAR_V3_DISTRIBUTION_PAUSED='false';
 const assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
 const {createV3X,graphic}=require('../src/emradar-v3-x.cjs');

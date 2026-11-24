@@ -78,7 +78,8 @@ test('22 November recovery classifies all 16, independently checks four saved re
  assert.equal(outcomes.x,'CORRECTED_READY');
  assert.equal(outcomes[held],'INVESTIGATION_REQUIRED');
  assert.equal(calls.length,12);
- assert.equal(reads.length,1,'one full-source retrieval across shared evidence');
+ assert.equal(reads.length,3,'one shared source plus two bounded X recovery URLs');
+ assert.equal(reads.filter(source=>source===url).length,1,'shared primary source retrieved once');
  assert.deepEqual(calls.slice(0,4).map(call=>call[1]),['CHECK','CHECK','CHECK','CHECK']);
  const after=(await adapter.read(id)).value;
  assert.deepEqual(after.proposal_verifications,state.proposal_verifications);

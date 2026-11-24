@@ -13,7 +13,7 @@ test('VC harness pins and verifies the authorised V3 source checkout', () => {
   const result = verifyV3SourceIntegration();
   assert.equal(result.status, 'V3_SOURCE_INTEGRATED');
   assert.equal(result.repository, 'oroknows-arch1/emradar-marketing-engine-v3');
-  assert.equal(result.commit, 'bac1e0817e3bf4d8f30fd49341229545118c5281');
+  assert.equal(result.commit, '789b985eb06fd085796f9963d19b167f761fab04');
   assert.equal(result.authorised_submodules, 1);
   assert.deepEqual(Object.keys(result.shared).sort(), ['src/discovery.js']);
   assert.deepEqual(result.runtimeOverrides, {'src/review-access.js': {
