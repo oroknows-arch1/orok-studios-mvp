@@ -113,7 +113,7 @@ export async function prepareEditorialReview({store, campaignId, readSource, ass
   const destinations = entries.map(({asset}) => destinationFor(state, asset.destination_id))
    .map(({id,name,category,website,relationship,publication_type}) => ({id,name,category,website,relationship,publication_type}));
   const context = {destinations, pages, savedPassages:savedPages, previous:previous.map(({claims, contradictions}) => ({claims, contradictions})),googleFeedback:entries.map(({asset})=>({destination_id:asset.destination_id,...(googleFeedback?.[asset.destination_id]??{})})).filter(item=>item.verdict)};
-  let candidate = first, check = null, reason = 'PRIMARY_SOURCE_PASSAGE_UNAVAILABLE';
+  let candidate = first, check = null, reason = 'PRIMARY_SOURCE_NOT_RETRIEVED_MANUAL_VERIFICATION_REQUIRED';
   if (pages.length) {
    try {
     // One source-backed check first. Spend a V3 correction call only when
