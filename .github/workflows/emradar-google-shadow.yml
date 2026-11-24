@@ -8,6 +8,7 @@ on:
       - 'vendor/emradar-v3/src/collaborative-editorial-review.js'
       - 'vendor/emradar-v3/src/editorial-preparation.js'
       - 'vendor/emradar-v3/test/collaborative-editorial-review.test.mjs'
+      - 'test/emradar-v3-alamedin-replay.test.mjs'
       - 'vendor/emradar-v3/src/gemini-editorial-transport.js'
       - 'vendor/emradar-v3/src/preparation-review-service.js'
       - 'vendor/emradar-v3/src/openai-preparation-providers.js'
@@ -37,4 +38,4 @@ jobs:
           node --check server.js
       - name: Test the real Google request adapter offline (no Google key needed)
         run: |
-          node --test vendor/emradar-v3/test/campaign-editorial-shadow.test.mjs vendor/emradar-v3/test/gemini-editorial-transport.test.mjs vendor/emradar-v3/test/editorial-story-promise-instructions.test.mjs vendor/emradar-v3/test/collaborative-editorial-review.test.mjs
+          node --test vendor/emradar-v3/test/campaign-editorial-shadow.test.mjs vendor/emradar-v3/test/gemini-editorial-transport.test.mjs vendor/emradar-v3/test/editorial-story-promise-instructions.test.mjs vendor/emradar-v3/test/collaborative-editorial-review.test.mjs test/emradar-v3-alamedin-replay.test.mjs
