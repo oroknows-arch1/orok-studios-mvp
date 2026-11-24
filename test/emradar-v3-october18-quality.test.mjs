@@ -77,7 +77,7 @@ test('fixed graphic renders at 2048px without probabilistic visual approval',asy
  const png=Buffer.from(rendered.base64,'base64');
  assert.equal(png.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
  assert.equal(png.readUInt32BE(16),2048);assert.equal(png.readUInt32BE(20),2048);
- assert.equal(calls,0);assert.equal(rendered.diagnostics.template,'emradar-formation-card-v3');
+ assert.equal(calls,0);assert.equal(rendered.diagnostics.template,'emradar-formation-card-v4');
 });
 
 test('graphic callback receives deterministic layout diagnostics',async()=>{
