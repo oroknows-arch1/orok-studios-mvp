@@ -25,9 +25,13 @@ test('missing primary passage tries the next verified formation without mixing f
  });
  assert.equal(writes,1);assert.equal(asset.story_record_id,'b');
 });
-test('no accessible primary passage does not write unsupported X content',async()=>{
- const {writeXWithFormationFallback}=await load();
- await assert.rejects(writeXWithFormationFallback({input,readSource:async()=>null,write:async()=>{throw Error('SHOULD_NOT_WRITE');}}),/PRIMARY_SOURCE_PASSAGE_UNAVAILABLE/);
+test('no accessible primary page still prepares a scan-evidence-only X draft for manual review',async()=>{
+ const {writeXWithFormationFallback}=await load();let writes=0;
+ const asset=await writeXWithFormationFallback({input,readSource:async()=>null,write:async ({destination,sourcePages})=>{
+  writes++;assert.deepEqual(sourcePages,[]);assert.deepEqual(destination.evidence.ids,['a:1','a:2']);
+  return {kind:'X',story_record_id:'a',evidence_ids:['a:1']};
+ }});
+ assert.equal(writes,1);assert.equal(asset.story_record_id,'a');
 });
 test('provider failure does not generate repeated paid alternatives',async()=>{
  const {writeXWithFormationFallback}=await load();let writes=0;

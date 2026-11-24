@@ -41,5 +41,15 @@ export async function writeXWithFormationFallback({input,readSource,write,limit=
     }
   }
   if(lastError)throw lastError;
-  throw Error('PRIMARY_SOURCE_PASSAGE_UNAVAILABLE');
+  // No primary website was readable. Produce a reviewable, scan-evidence-only
+  // draft for the original eligible formation instead of a workflow placeholder.
+  // This is not independent source-passage verification; the separate editorial
+  // status must continue to disclose that limitation to the owner.
+  const candidate=xFormationCandidates(input.document,originalIds,limit)[0];
+  if(!candidate)throw Error('V3_VERIFIED_SOURCE_REQUIRED');
+  const destination={...input.destination,evidence:{...input.destination.evidence,ids:candidate.evidenceIds}};
+  const asset=await write({...input,destination,sourcePages:[]});
+  if(asset?.story_record_id!==candidate.recordId||!asset.evidence_ids?.length||
+    asset.evidence_ids.some(id=>!candidate.evidenceIds.includes(id)))throw Error('X_FALLBACK_EVIDENCE_MISMATCH');
+  return asset;
 }

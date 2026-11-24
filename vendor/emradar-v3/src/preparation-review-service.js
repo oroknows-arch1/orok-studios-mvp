@@ -155,7 +155,9 @@ export async function createPreparationReviewService({
   const evidence=isEditorialDestination(input.destination)?selectEditorialEvidence(input.document,ids).evidence:input.document.evidence.filter(item=>ids.includes(item.id));
   const urls=[...new Set(evidence.map(item=>item.source_url).filter(Boolean))];
   const sourcePages=(await Promise.all(urls.map(readSource))).filter(Boolean);
-  if(!sourcePages.length)throw Error('PRIMARY_SOURCE_PASSAGE_UNAVAILABLE');
+  // A source website outage must not replace an evidence-linked proposal with
+  // an internal placeholder. Use the signed scan's verified evidence for a draft.
+  // The separate editorial check still reports missing source passages.
   return write({...input,sourcePages});
  };
  const basePrepare=createPreparationRun({store,researchEvidence,discover,write:writeGrounded,renderVisual,fetcher});
