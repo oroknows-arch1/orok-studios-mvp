@@ -112,7 +112,7 @@ export async function createPreparationReviewService({
  });
  const prepare=async input=>{
   const result=await basePrepare(input),state=(await adapter.read(result.campaignId))?.value;
-  if(assessEditorial&&state&&isReviewPhase(state.phase))await editorialReview(result.campaignId);
+  // Editorial audits are available on demand; do not hold daily owner review for them.
   return result;
  };
  const renderVerifiedVisual=createVerifiedVisualRenderer(renderVisual);
@@ -342,7 +342,7 @@ export async function createPreparationReviewService({
    });
    if(autonomousDiscovery&&!assessEditorial)resumed.editorial_refresh=await refreshUnreviewedEditorialDrafts({store,write,campaignId});
   }finally{
-   if(assessEditorial)await editorialReview(campaignId);
+   // Keep source and editorial review optional, not an automatic downstream gate.
    completion=await saveCompletion(campaignId);
   }
   const notification=completion.complete&&notifyOwner?await ensureOwnerReview(campaignId):null;
@@ -395,7 +395,7 @@ export async function createPreparationReviewService({
   if(!completion.complete&&!completion.editorial_checked){
    if(result.status==='ALREADY_PREPARED')await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});
    else await resumeEditorialDrafts(result.campaignId,{verifiedPublicationsOnly:true});
-   if(assessEditorial)await editorialReview(result.campaignId);
+   // Drafts go to owner review even when no independent editorial audit has run.
    completion=await saveCompletion(result.campaignId);
   }
   if(!completion.complete){
@@ -413,7 +413,7 @@ export async function createPreparationReviewService({
   // One collaborative editorial pass: Google challenges, V3 checks sources and
   // corrects only the challenged assets, then Google checks changed wording once.
   // Existing V3 evidence and owner-approval safeguards remain authoritative.
-  if(shadowEditorialAudit?.request&&!(await adapter.read('review:'+result.campaignId))?.value){
+  if(shadowEditorialAudit?.runAutomatically===true&&shadowEditorialAudit?.request&&!(await adapter.read('review:'+result.campaignId))?.value){
    try{
     const google=state=>auditCampaignOnce({adapter,campaignId:result.campaignId,
      state,...shadowEditorialAudit});
