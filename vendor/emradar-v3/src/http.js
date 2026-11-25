@@ -120,7 +120,7 @@ export function createReviewServer({workflow,runDiscovery,runRegeneration,releas
    if(url.pathname==='/api/review/release'){
     if(typeof releaseEmail!=='function')return json(res,503,{error:'RELEASE_UNAVAILABLE'});
     await workflow.authenticate(input.campaignId,session.id,session.secret);
-    return json(res,200,await releaseEmail({campaignId:input.campaignId,destinationId:input.destinationId,sessionId:session.id,sessionSecret:session.secret}));
+    try{return json(res,200,await releaseEmail({campaignId:input.campaignId,destinationId:input.destinationId,sessionId:session.id,sessionSecret:session.secret}));}catch(error){const allowed=new Set(['V3_DISTRIBUTION_PAUSED','V3_RELEASE_NOT_APPROVED','V3_VERIFIED_RECIPIENT_REQUIRED','V3_VALID_RECIPIENT_REQUIRED','V3_RECIPIENT_OPTED_OUT','V3_OWNER_APPROVAL_REQUIRED','V3_DELIVERY_OUTCOME_AMBIGUOUS','EDITORIAL_CHECK_REQUIRED','INCOMPLETE_ASSET_NOT_SENDABLE','ACCESS_DENIED']);const code=allowed.has(error?.message)?error.message:'RELEASE_OUTCOME_UNCONFIRMED';return json(res,code==='ACCESS_DENIED'?403:409,{error:code});}
    }
    if(url.pathname==='/api/review/discover'){
     if(typeof runDiscovery!=='function')return json(res,503,{error:'DISCOVERY_UNAVAILABLE'});
