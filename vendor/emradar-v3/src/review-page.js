@@ -82,6 +82,29 @@ async function refresh(){
  }
  const actionable=item=>item.editorial_ready!==false&&item.asset.review_status!=='NEEDS_REVISION';
  const approvableRecipient=item=>actionable(item)&&item.recipient_ready!==false&&!item.delivery;
+ const progress=new Map();
+ function appendBatch(container,entries,label,minimum){
+  const approved=entries.filter(m=>m.asset.kind==='EMAIL' && m.decision?.decision==='APPROVE' && m.decision.asset_sha256===m.fingerprint && approvableRecipient(m));
+  if(approved.length<minimum)return;
+  const batch=text('button',label+' ('+approved.length+')');
+  batch.disabled=view.publishing?.email?.enabled===false;
+  batch.addEventListener('click',async()=>{
+   if(!confirm('Send these approved emails to '+approved.map(m=>m.asset.to).join(', ')+'?'))return;
+   main.querySelectorAll('button').forEach(button=>{button.disabled=true;});
+   for(const member of approved){
+    const id=member.asset.destination_id, feedback=progress.get(id);
+    feedback.textContent='Sending…';
+    try{
+     const result=await api('release',{campaignId:campaign,destinationId:id,fingerprint:member.fingerprint});
+     feedback.textContent=result.status==='ACCEPTED' && result.receipt_id?'Sent — provider acceptance confirmed · Receipt: '+result.receipt_id:'Delivery uncertain — reconciliation required before retry';
+    }catch(e){feedback.textContent='Release not confirmed: '+e.message;}
+   }
+   try{await refresh();}catch{status.textContent='Group processing finished. Refresh to see saved delivery records.';}
+  });
+  container.append(batch);
+ }
+ if(new Set(view.entries.filter(m=>m.decision?.decision==='APPROVE' && m.asset.kind==='EMAIL').map(m=>m.groupId||m.asset.destination_id)).size>1)
+  appendBatch(main,view.entries,'Send all approved emails',2);
  const sharedGroups=new Map((view.groups??[]).filter(group=>group.destination_ids.length>1).map(group=>[group.id,group]));
  for(const group of sharedGroups.values()){
   const members=group.destination_ids.map(id=>view.entries.find(entry=>entry.asset.destination_id===id));
@@ -89,7 +112,6 @@ async function refresh(){
   if(group.subject)card.append(text('h3',group.subject));card.append(text('pre',group.body),text('p','Included verified publications:'));
   if(view.publishing?.email?.enabled===false)card.append(text('p',view.publishing.email.reason||'Email sending is unavailable.'));
   const list=document.createElement('ul');
-  const progress=new Map();
   const mixedReadiness=members.some(member=>!approvableRecipient(member)&&!member.delivery);
   for(const member of members){
    const row=document.createElement('li');row.append(text('span',(member.destination?.name||member.asset.destination_id)+' · '+member.asset.to));
@@ -110,25 +132,7 @@ async function refresh(){
    list.append(row);
   }
   card.append(list);
-  const approved=members.filter(m=>m.decision?.decision==='APPROVE' && m.decision.asset_sha256===m.fingerprint && approvableRecipient(m));
-  if(approved.length){
-   const batch=text('button','Send approved group emails ('+approved.length+')');
-   batch.disabled=view.publishing?.email?.enabled===false;
-   batch.addEventListener('click',async()=>{
-    if(!confirm('Send these approved emails to '+approved.map(m=>m.asset.to).join(', ')+'?'))return;
-    card.querySelectorAll('button').forEach(button=>{button.disabled=true;});
-    for(const m of approved){
-     const feedback=progress.get(m.asset.destination_id);
-     feedback.textContent='Sending…';
-     try{
-      const result=await api('release',{campaignId:campaign,destinationId:m.asset.destination_id,fingerprint:m.fingerprint});
-      feedback.textContent=result.status==='ACCEPTED' && result.receipt_id?'Sent — provider acceptance confirmed · Receipt: '+result.receipt_id:'Delivery uncertain — reconciliation required before retry';
-     }catch(e){feedback.textContent='Release not confirmed: '+e.message;}
-    }
-    try{await refresh();}catch{status.textContent='Group processing finished. Refresh to see saved delivery records.';}
-   });
-   card.append(batch);
-  }
+  appendBatch(card,members,'Send approved group emails',1);
   if(!members.some(member=>member.delivery)){
    for(const [field,label] of [['subject','Edit shared subject'],['body','Edit shared body']]){
     const button=text('button',label);
@@ -150,7 +154,9 @@ async function refresh(){
   if(!historical)card.id='review-proposal-'+asset.destination_id;
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
   if(!historical&&(item.revision||lastSaved==='entry:'+asset.destination_id)){const saved=text('p',item.revision?'Edited · Saved · Revision '+item.revision.id+' · '+fingerprint:'Edited · Saved'+(decision?'':' · New approval required'));saved.className='saved';card.append(saved);}
-  card.append(text('p','Preparation: '+(!historical&&item.editorial_status!=='LEGACY'?item.editorial_status:asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':deliveryLabel(item))));
+  const deliveryStatus=text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':deliveryLabel(item)));
+  if(!historical)progress.set(asset.destination_id,deliveryStatus);
+  card.append(text('p','Preparation: '+(!historical&&item.editorial_status!=='LEGACY'?item.editorial_status:asset.review_status||'READY')),deliveryStatus);
   if(!historical&&item.review_action){
    const action=item.review_action;
    const labels={NEEDS_FEEDBACK:'Rejection saved — owner feedback is needed before regeneration.',PENDING:'Regeneration queued.',RUNNING:'Regeneration in progress.',OWNER_REVIEW_PENDING:'Revised content is ready; owner review notification is pending.',COMPLETE:'Revised content is ready for owner review.',FAILED:'Regeneration failed; the rejected draft remains unchanged.',NOTIFICATION_AMBIGUOUS:'Review notification outcome is uncertain; it will not be resent automatically.',CANCELLED:'Regeneration was cancelled by a later owner decision.'};

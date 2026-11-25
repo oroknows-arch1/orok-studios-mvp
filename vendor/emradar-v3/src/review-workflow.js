@@ -131,7 +131,7 @@ export class ReviewWorkflow {
     review_action:historical?null:campaign.review_actions?.[asset.destination_id]??null,
     rejection_feedback:historical?null:(campaign.review_feedback??[]).filter(item=>item.destination_id===asset.destination_id),
     decision:historical?decision:campaign.decisions[asset.destination_id]??null,
-    release_failure:!historical && campaign.release_failures?.[asset.destination_id]?.fingerprint===fingerprint?campaign.release_failures[asset.destination_id].reason:null,
+    release_failure:!historical && fingerprint && campaign.release_failures?.[asset.destination_id]?.fingerprint===fingerprint?campaign.release_failures[asset.destination_id].reason:null,
     delivery:historical?null:campaign.deliveries[asset.destination_id]??null,
     verification:historical?null:campaign.proposal_verifications?.[asset.destination_id]?.at(-1)??null};
   };

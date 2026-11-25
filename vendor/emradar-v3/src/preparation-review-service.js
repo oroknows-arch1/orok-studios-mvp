@@ -74,7 +74,14 @@ export function assessPublicationReview({state,candidates}) {
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
  const ready=asset=>!editorialApplies(state)||isEditorialReady(editorialStatus(state,asset.destination_id));
- const emailIds=new Set(assets.filter(asset=>ready(asset)&&asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&recipientPolicy.recipientAllowedForReview(asset,state.destinations.find(d=>d.id===asset.destination_id))&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
+ const selectedAddress=asset=>{
+  const destination=state.destinations.find(d=>d.id===asset.destination_id);
+  if(!recipientPolicy.recipientAllowedForReview(asset,destination))return false;
+  const decision=state.decisions?.[asset.destination_id];
+  return asset.to.toLowerCase()===destination?.contact?.email?.toLowerCase() ||
+   (decision?.decision==='APPROVE' && decision.authority==='OWNER' && decision.asset_sha256===assetFingerprint(asset));
+ };
+ const emailIds=new Set(assets.filter(asset=>ready(asset)&&asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&selectedAddress(asset)&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
  const missing=recipients.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
  const incomplete=assets.filter(asset=>asset.review_status==='NEEDS_REVISION'||(!state.deliveries?.[asset.destination_id]&&!ready(asset)));
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
