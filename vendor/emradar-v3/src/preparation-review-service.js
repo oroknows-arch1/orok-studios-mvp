@@ -221,7 +221,7 @@ export async function createPreparationReviewService({
   await directory.upsert(verified);
   return verified;
  };
- const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin,verifyRecipient,reviewEditorial:editorialReview});
+ const workflow=new ReviewWorkflow({store,adapter,notify,baseUrl:reviewOrigin,verifyRecipient,reviewEditorial:editorialReview,refreshXVisual:ensureBrandedX});
  const resumeEditorialDrafts=async (campaignId,{limit=MAX_DESTINATIONS,verifiedPublicationsOnly=false,existingDrafts={}}={})=>{
   const state=(await adapter.read(campaignId))?.value;
   if(!state||!isReviewPhase(state.phase)||!state.preparation_input?.document)throw Error('CAMPAIGN_NOT_READY');
