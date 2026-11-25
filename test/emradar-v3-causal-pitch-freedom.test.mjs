@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import verifiedRecipient from './fixtures/v3-verified-recipient.cjs';
 import {createOpenAiPreparationProviders} from '../vendor/emradar-v3/src/openai-preparation-providers.js';
-import {isEditorialReady} from '../vendor/emradar-v3/src/editorial-preparation.js';
+import {isEditorialReady,isEditorialOwnerReviewable} from '../vendor/emradar-v3/src/editorial-preparation.js';
 
 const evidence={id:'housing:source',record_id:'housing',verified:true,fact:'New housing finance programme announced',source_url:'https://example.org/official',source:'Development bank'};
 const record={id:'housing',status:'FORMING',location:'Bangladesh',theme:'Resilient housing finance',causal_chain:{world_change:'Finance announced',pressure:'Climate resilience',bottleneck_or_scarcity:'Affordable household repayments',formation:'Household scale housing finance',consequences:'Uptake depends on loan economics'},what_to_check_next:'Compare loan and building cost assumptions',missing_evidence:['Repayment affordability']};
@@ -22,7 +22,8 @@ test('question-led article pitch preserves causal bottleneck and uses one writer
 });
 
 test('editorial investigation is advisory and cannot veto an otherwise reviewable owner draft',()=>{
- assert.equal(isEditorialReady('INVESTIGATION_REQUIRED'),true);
+ assert.equal(isEditorialReady('INVESTIGATION_REQUIRED'),false);
+ assert.equal(isEditorialOwnerReviewable('INVESTIGATION_REQUIRED'),true);
  assert.equal(isEditorialReady('READY_VERIFIED'),true);
  assert.equal(isEditorialReady('CORRECTED_READY'),true);
 });
