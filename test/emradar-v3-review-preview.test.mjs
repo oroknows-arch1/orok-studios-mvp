@@ -168,7 +168,8 @@ test('one group click releases only exact approved members and retains each resu
  const members=['left','middle','right'].map(id=>({groupId:'group',asset:{destination_id:id,kind:'EMAIL',to:id+'@example.org'},
   fingerprint:id,decision:{decision:'APPROVE',asset_sha256:id}}));
  const view={entries:members,groups:[{id:'group',version:1,destination_ids:members.map(m=>m.fingerprint)}]};
- members[1].editorial_ready=false;
+ members[1].decision=null;
+ members[2].editorial_ready=false;
  const processed=[];
  const page=await render(view,null,async payload=>{
   assert.equal(payload.fingerprint,payload.destinationId);processed.push(payload.destinationId);

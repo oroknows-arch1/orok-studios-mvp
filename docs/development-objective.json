@@ -846,6 +846,7 @@
     "continuation": {
       "baseline": "PR 72 live. Current X has three verified AIIB claims and one unresolved claim. Group release offered individual buttons only.",
       "batch": "Recover exact saved claims, regenerate country/company PNG, reconcile two reported recipients, expose group send and persist release feedback. Reuse current review; no external test sends."
-    }
+    },
+    "owner_decision_update": "Editorial advice remains visible. Complete drafts can receive exact owner approval and release regardless of the editorial recommendation. X text identifies the location and participants from its own formation."
   }
 }

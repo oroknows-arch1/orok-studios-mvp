@@ -75,12 +75,12 @@ async function refresh(){
  main.replaceChildren();
  const counts={approved:0,rejected:0,undecided:0,held:0};
  for(const entry of view.entries){
-  if(entry.editorial_status==='INVESTIGATION_REQUIRED'){counts.held++;continue;}
+  if(entry.editorial_status==='INVESTIGATION_REQUIRED'){counts.held++;}
   if(entry.decision?.decision==='APPROVE')counts.approved++;
   else if(entry.decision?.decision==='REJECT')counts.rejected++;
   else counts.undecided++;
  }
- const actionable=item=>item.editorial_ready!==false&&item.asset.review_status!=='NEEDS_REVISION';
+ const actionable=item=>item.asset.review_status!=='NEEDS_REVISION';
  const approvableRecipient=item=>actionable(item)&&item.recipient_ready!==false&&!item.delivery;
  const progress=new Map();
  function appendBatch(container,entries,label,minimum){
@@ -116,7 +116,7 @@ async function refresh(){
   for(const member of members){
    const row=document.createElement('li');row.append(text('span',(member.destination?.name||member.asset.destination_id)+' · '+member.asset.to));
    row.append(text('small',' · '+member.editorial_status));
-   if(!actionable(member)&&member.editorial_reason)row.append(text('p',member.editorial_reason==='PRIMARY_SOURCE_NOT_RETRIEVED_MANUAL_VERIFICATION_REQUIRED'?'The source could not be retrieved for the editorial check.':member.editorial_reason));
+   if(member.editorial_reason)row.append(text('p',member.editorial_reason==='PRIMARY_SOURCE_NOT_RETRIEVED_MANUAL_VERIFICATION_REQUIRED'?'The source could not be retrieved for the editorial check.':member.editorial_reason));
    const receipt=text('p',deliveryLabel(member));receipt.setAttribute('role','status');row.append(receipt);progress.set(member.asset.destination_id,receipt);
    if(!members.some(item=>item.delivery))for(const action of ['EXCLUDE','SPLIT']){const button=text('button',action==='EXCLUDE'?'Exclude recipient':'Split to individual');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group-member',{campaignId:campaign,groupId:group.id,destinationId:member.asset.destination_id,contentHash:group.content_hash,version:group.version,action});await refresh();}catch{status.textContent='Group membership was not changed. Reload and retry.';button.disabled=false;}});row.append(button);}
    if((mixedReadiness||group.approval||members.some(item=>item.delivery))&&approvableRecipient(member)&&!member.decision){
@@ -223,7 +223,7 @@ async function refresh(){
    const isX=asset.kind==='X',capability=view.publishing?.[isX?'x':'email'];
    const unavailable=delivery?'A delivery has already been recorded. It will not be repeated.':
     (!isX&&item.recipient_ready===false)?'A valid, non-opted-out email address is required for delivery.':
-    !actionable(item)?'The editorial check is required before release.':
+    !actionable(item)?'There is no complete draft to release.':
     capability?.enabled===false?(capability.reason||'Publishing is unavailable. Editorial review remains available.'):
     decision?.decision!=='APPROVE'?'Approve this draft before releasing it.':null;
    if(unavailable)card.append(text('p',unavailable));
@@ -278,7 +278,7 @@ async function refresh(){
    if(target){const link=document.createElement('a');link.href='#'+encodeURIComponent(target);link.textContent='Back to current proposal and review controls';main.append(link);}
   }else main.append(card);
  }
- status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision'+(counts.held?' · '+counts.held+' need investigation':'')+'.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
+ status.textContent=(view.phase==='ASSETS_PREPARED'?'Preparation incomplete — all saved content remains available. ':'')+'Review: '+view.entries.length+' items · '+counts.approved+' approved · '+counts.rejected+' rejected · '+counts.undecided+' awaiting decision'+(counts.held?' · '+counts.held+' with editorial advice':'')+'.'+((view.history??[]).length?' Historical drafts: '+view.history.length+'.':'');
 }
 (async()=>{
  try{

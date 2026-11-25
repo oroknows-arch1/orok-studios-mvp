@@ -67,8 +67,6 @@ async function fixture(){
 test('22 November recovery classifies all 16, independently checks four saved revisions and applies exact copies',async()=>{
  const {state,store,adapter,calls,reads,input}=await fixture();
  const first=groups[0][0],alternate=groups[0][1],held=groups[1][0];
- await assert.rejects(store.decide(id,first,'APPROVE',state.assets[first].fingerprint),/EDITORIAL_CHECK_REQUIRED/);
- await assert.rejects(store.claimDelivery(id,first),/EDITORIAL_CHECK_REQUIRED/);
  const outcomes=await prepareEditorialReview(input);
  assert.equal(Object.keys(outcomes).length,16);
  assert.equal(outcomes[first],'CORRECTED_READY');
@@ -92,10 +90,10 @@ test('22 November recovery classifies all 16, independently checks four saved re
  assert.equal(after.email_groups['group-0'].version,2);
  assert.equal(after.decisions[first],undefined);
  await assert.rejects(store.decide(id,first,'APPROVE',state.assets[first].fingerprint),/INVALID_DECISION/);
- await assert.rejects(store.decide(id,held,'APPROVE',after.assets[held].fingerprint),/EDITORIAL_CHECK_REQUIRED/);
+ await store.decide(id,held,'APPROVE',after.assets[held].fingerprint);
  const partial=await store.decideGroup(id,'group-5','APPROVE',after.email_groups['group-5'].content_hash,2);
- assert.deepEqual(partial.group_approvals['group-5'].destination_ids,[groups[5][0]]);
- assert.equal(partial.decisions[groups[5][1]],undefined);
+ assert.deepEqual(partial.group_approvals['group-5'].destination_ids,groups[5]);
+ assert.equal(partial.decisions[groups[5][1]].decision,'APPROVE');
  assert.equal((await adapter.read(id)).value.decisions[groups[5][0]].decision,'APPROVE');
  const beforeReplay=(await adapter.read(id)).version;
  assert.deepEqual(await prepareEditorialReview(input),outcomes);
@@ -137,4 +135,11 @@ test('a corrected invitation preserves the previous permanent link and sends onc
  assert.equal(record.notification_receipt.provider_id,'purelymail-2');
  assert.equal(record.previous_reviews[0].notification_receipt.provider_id,'purelymail-1');
  assert.equal(alerts.length,2);
+});
+
+test('X attribution follows the featured formation and omits unsupported actors',async()=>{
+ const {attributeX}=await import('../vendor/emradar-v3/src/x-attribution.js');
+ const record={id:'br',location:'Mato Grosso, Brazil',causal_chain:{connected_companies_and_tickers:['FS (private)','Other Co']}};
+ const evidence=[{record_id:'br',fact:'FS signed the facility loan.'},{record_id:'elsewhere',fact:'Other Co signed a contract.'}];
+ assert.equal(attributeX('Construction timing is open.',record,evidence),'Mato Grosso, Brazil · FS\n\nConstruction timing is open.');
 });

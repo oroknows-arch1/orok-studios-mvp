@@ -1,3 +1,4 @@
+import {attributeX} from './x-attribution.js';
 import {randomUUID} from 'node:crypto';
 import {proposalBinding} from './proposal-verification.js';
 import {editorialStatus, isEditorialReady} from './editorial-preparation.js';
@@ -29,7 +30,7 @@ export async function recoverCheckedX({store,campaignId,renderRevision}){
   const ids=evidence.filter(item=>sources.some(s=>s.url===item.source_url)).map(item=>item.id);
   const paragraphs=[...new Set(claims.map(c=>c.text.trim()))];
   const links=[...new Set(sources.map(s=>s.url))];
-  const asset={...entry.asset,kind:'X',subject:paragraphs[0],body:[[record.location,record.status].filter(Boolean).join(' · '),paragraphs.join(' '),...links].filter(Boolean).join('\n\n'),
+  const asset={...entry.asset,kind:'X',subject:paragraphs[0],body:attributeX([[record.location,record.status].filter(Boolean).join(' · '),paragraphs.join(' '),...links].filter(Boolean).join('\n\n'),record,evidence),
    story_record_id:record.id,evidence_ids:ids,review_status:'READY',analytical_finding:paragraphs.at(-1),
    evidence_limitations:record.missing_evidence??[],editorial_source_grounded:true};
   delete asset.preparation_error;
