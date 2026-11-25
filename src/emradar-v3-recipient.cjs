@@ -81,21 +81,18 @@ function recipientReadyForReview(asset,destination){
   return true;
  }catch{return false;}
 }
+function recipientAllowedForReview(asset,destination){
+ try{assertRecipientAllowed(asset,destination);return true;}catch{return false;}
+}
 function assertSendableRecipient(asset,destination,approval){
- if(ownerRecipientOverride(asset,destination)){
-  if(approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.campaign_id!==asset.campaign_id||approval.destination_id!==asset.destination_id||approval.asset_sha256!==digest(asset))throw Error('V3_OWNER_APPROVAL_REQUIRED');
-  assertRecipientAllowed(asset,destination);return asset.to;
- }
- return assertVerifiedAsset(asset,destination);
+ if(approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.campaign_id!==asset.campaign_id||approval.destination_id!==asset.destination_id||approval.asset_sha256!==digest(asset))throw Error('V3_OWNER_APPROVAL_REQUIRED');
+ return assertRecipientAllowed(asset,destination);
 }
 async function checkPersistedRecipient(pool,asset,state){
  const destination=state?.destinations?.find(d=>d.id===asset.destination_id);
  const approval=state?.decisions?.[asset.destination_id];
  assertSendableRecipient(asset,destination,approval);
  const {rows}=await pool.query("SELECT record FROM v3_outlet_directory WHERE outlet_id=$1 OR lower(record->'contact'->>'email')=lower($2)",[asset.destination_id,asset.to]);
- if(ownerRecipientOverride(asset,destination))return assertRecipientAllowed(asset,destination,...rows.map(row=>row.record));
- const current=rows.find(row=>row.record.id===asset.destination_id)?.record;
- assertVerifiedAsset(asset,current);
  return assertRecipientAllowed(asset,destination,...rows.map(row=>row.record));
 }
-module.exports={isCommercialContactContext,isNonEditorialContactContext,isDirectoryIdentityText,validRecipient,assertRecipientAllowed,checkPersistedRecipient,verifiedPublication,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset,ownerRecipientOverride,recipientReadyForReview,assertSendableRecipient};
+module.exports={isCommercialContactContext,isNonEditorialContactContext,isDirectoryIdentityText,validRecipient,assertRecipientAllowed,recipientAllowedForReview,checkPersistedRecipient,verifiedPublication,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset,ownerRecipientOverride,recipientReadyForReview,assertSendableRecipient};

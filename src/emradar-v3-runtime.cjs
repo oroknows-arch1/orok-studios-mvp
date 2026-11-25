@@ -328,9 +328,15 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    }
    return {processed:results.length,results};
   };
-  console.info('V3_DISTRIBUTION_CAPABILITIES '+JSON.stringify({email_release:true,x_release:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true',x_client_id_present:Boolean(env.X_CLIENT_ID),x_client_secret_present:Boolean(env.X_CLIENT_SECRET),x_token_encryption_configured:Boolean(env.EMRADAR_V3_X_TOKEN_KEY)}));
+  const {createV3Release,distributionPaused}=require('./emradar-v3-release.cjs');
+  const paused=distributionPaused(env);
+  const xEnabled=env.EMRADAR_V3_X_PUBLISH_ENABLED==='true';
+  const pauseMessage='Distribution is paused. Owner decisions can still be saved.';
+  const publishing={email:{enabled:!paused,reason:paused?pauseMessage:null},
+   x:{enabled:!paused&&xEnabled,reason:paused?pauseMessage:xEnabled?null:'X publishing is disabled.'}};
+  console.info('V3_DISTRIBUTION_CAPABILITIES '+JSON.stringify({distribution_paused:paused,email_release:publishing.email.enabled,x_release:publishing.x.enabled}));
   let releaseApprovedEmail;
-  const reviewServer=createReviewServer({workflow:service.workflow,xAuth:integration.xAuth,publishing:{email:{enabled:true},x:{enabled:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true',reason:env.EMRADAR_V3_X_PUBLISH_ENABLED==='true'?null:'X publishing is disabled.'}},runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId),runRegeneration,releaseEmail:input=>releaseApprovedEmail(input)});
+  const reviewServer=createReviewServer({workflow:service.workflow,xAuth:integration.xAuth,publishing,runDiscovery:campaignId=>service.resumeIntelligentDiscovery(campaignId),runRegeneration,releaseEmail:input=>releaseApprovedEmail(input)});
   setReviewHandler((req,res,next)=>{
    if(!REVIEW_PATHS.has(req.url.split('?')[0]))return next();
    reviewServer.emit('request',req,res);
@@ -504,7 +510,7 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
    }finally{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[researchCampaignId]);client.release();}
   },isComplete:result=>result.discovery_coverage?.complete===true});
   // Explicit owner release; no automatic publication or ambiguous retries.
-  releaseApprovedEmail=require('./emradar-v3-release.cjs').createV3Release({service,integration,pool});
+  releaseApprovedEmail=createV3Release({service,integration,pool,env});
   app.post('/emradar/v3/release-email',async(req,res)=>{
    try{return res.status(200).json(await releaseApprovedEmail(req.body));}
    catch(error){return res.status(409).json({reason:/^V3_[A-Z0-9_]+$/.test(error.message)?error.message:'V3_RELEASE_FAILED'});}

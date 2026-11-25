@@ -120,7 +120,7 @@ export class ReviewWorkflow {
   const describe=(entry,{historical=false,label='',decision=null}={})=>{
    const {asset,fingerprint}=entry;
    const destination=campaign.destinations.find(d=>d.id===asset.destination_id);
-   const recipientReady=asset.kind!=='EMAIL'||recipientPolicy.recipientReadyForReview(asset,destination);
+   const recipientReady=asset.kind!=='EMAIL'||recipientPolicy.recipientAllowedForReview(asset,destination);
    const revision=!historical?(campaign.events??[]).findLast(event=>event.type==='ASSET_REVISED'&&event.destination_id===asset.destination_id&&event.new_fingerprint===fingerprint):null;
    const editorial_status=historical?'HISTORICAL':editorialStatus(campaign,asset.destination_id);
    const googleAdvice=advice.get(asset.destination_id);

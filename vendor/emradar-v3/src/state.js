@@ -2,17 +2,16 @@ import {isReviewPhase} from './contracts.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import emailBrand from '../../../src/email-brand.cjs';
 import { randomUUID } from 'node:crypto';
-import { assertScan, assertDestinations, assetFingerprint, assertApproval, assertSendable, identicalEmailGroupKey, sha256 } from './contracts.js';
+import { assertScan, assertDestinations, assetFingerprint, assertSendable, identicalEmailGroupKey, sha256 } from './contracts.js';
 import {editorialApplies, editorialStatus, isEditorialReady} from './editorial-preparation.js';
 import {proposalBinding} from './proposal-verification.js';
 
 const groupIdFor=(campaignId,destinationIds)=>'email-group-'+sha256([campaignId,[...destinationIds].sort()]).slice(0,24);
-const destinationIsVerified=(state,destinationId)=>state.destinations.some(destination=>destination.id===destinationId&&destination.contact_verified===true&&destination.delivery_eligible!==false);
 const groupContent=asset=>({subject:asset.subject,body:asset.body,content_hash:identicalEmailGroupKey(asset)});
 const createEmailGroups=(campaignId,state)=>{
  const byContent=new Map();
  for(const {asset} of Object.values(state.assets??{})){
-  if(asset.kind!=='EMAIL'||asset.review_status==='NEEDS_REVISION'||!destinationIsVerified(state,asset.destination_id))continue;
+  if(asset.kind!=='EMAIL'||asset.review_status==='NEEDS_REVISION'||!recipientPolicy.recipientAllowedForReview(asset,state.destinations.find(d=>d.id===asset.destination_id)))continue;
   const content=groupContent(asset);if(!byContent.has(content.content_hash))byContent.set(content.content_hash,{...content,destination_ids:[]});
   byContent.get(content.content_hash).destination_ids.push(asset.destination_id);
  }
@@ -103,8 +102,7 @@ export class CampaignStore {
       if (!state || !isReviewPhase(state.phase)) throw Error('REVIEW_NOT_OPEN');
       const item = state.assets[destinationId];
       if (!item || item.fingerprint !== fingerprint || !['APPROVE','REJECT','EXCLUDE','REGENERATE'].includes(decision)) throw Error('INVALID_DECISION');
-      // Editorial decisions are independent of delivery readiness. Recipient
-      // verification remains mandatory in claimDelivery and transport checks.
+      // Delivery still requires a valid address and an exact saved owner approval.
       if (state.deliveries[destinationId]) throw Error('DECISION_AFTER_DISTRIBUTION');
       if(decision==='APPROVE'&&item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');
       if(decision==='APPROVE'&&editorialApplies(state)&&!isEditorialReady(editorialStatus(state,destinationId)))throw Error('EDITORIAL_CHECK_REQUIRED');
@@ -261,7 +259,7 @@ export class CampaignStore {
    if(!['APPROVE','REJECT'].includes(decision))throw Error('INVALID_DECISION');
    return this.mutate(id,state=>{
     if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const group=state.email_groups?.[groupId];
-    if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');const members=decision==='APPROVE'?group.destination_ids.filter(destinationId=>{const entry=state.assets[destinationId];return entry&&entry.asset.review_status!=='NEEDS_REVISION'&&(!editorialApplies(state)||isEditorialReady(editorialStatus(state,destinationId)))&&!state.deliveries[destinationId]&&(!state.decisions[destinationId]||state.decisions[destinationId].decision==='APPROVE');}):[...group.destination_ids];if(!members.length)throw Error('EMPTY_GROUP');
+    if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');const members=decision==='APPROVE'?group.destination_ids.filter(destinationId=>{const entry=state.assets[destinationId];return entry&&entry.asset.review_status!=='NEEDS_REVISION'&&recipientPolicy.recipientAllowedForReview(entry.asset,state.destinations.find(d=>d.id===destinationId))&&(!editorialApplies(state)||isEditorialReady(editorialStatus(state,destinationId)))&&!state.deliveries[destinationId]&&(!state.decisions[destinationId]||state.decisions[destinationId].decision==='APPROVE');}):[...group.destination_ids];if(!members.length)throw Error('EMPTY_GROUP');
     for(const destinationId of members){const entry=state.assets[destinationId];if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');if(entry.asset.review_status==='NEEDS_REVISION'&&decision==='APPROVE')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');if(state.deliveries[destinationId])throw Error('DECISION_AFTER_DISTRIBUTION');if(state.decisions[destinationId]&&state.decisions[destinationId].decision!==decision)throw Error('GROUP_DECISION_CONFLICT');}
     if(decision==='APPROVE'&&editorialApplies(state)&&members.some(member=>!isEditorialReady(editorialStatus(state,member))))throw Error('EDITORIAL_CHECK_REQUIRED');
     const recipientSetHash=sha256(members),prior=state.group_approvals?.[groupId];if(prior?.decision===decision&&prior.content_hash===contentHash&&prior.recipient_set_sha256===recipientSetHash)return state;
@@ -278,19 +276,17 @@ export class CampaignStore {
     state.events.push({type:action==='EXCLUDE'?'EMAIL_GROUP_MEMBER_EXCLUDED':'EMAIL_GROUP_MEMBER_SPLIT',group_id:groupId,destination_id:destinationId,id:randomUUID(),content_hash:contentHash,new_version:group.version,previous_approval:priorApproval});return state;
    });
   }
-  async claimDelivery(id,destinationId) {
+  async claimDelivery(id,destinationId,expectedFingerprint) {
     return this.mutate(id, state => {
       if (!state || state.phase !== 'PUBLICATION_REVIEW') throw Error('REVIEW_NOT_OPEN');
       const item = state.assets[destinationId];
       if (!item) throw Error('UNKNOWN_DESTINATION');
+      if(expectedFingerprint!==undefined&&item.fingerprint!==expectedFingerprint)throw Error('STALE_ASSET_REVISION');
       if(item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_NOT_SENDABLE');
       if(editorialApplies(state)&&!isEditorialReady(editorialStatus(state,destinationId)))throw Error('EDITORIAL_CHECK_REQUIRED');
       const prior = state.deliveries[destinationId];
-      const ownerRecipientOverride=item.asset.kind==='EMAIL'&&item.asset.recipient_owner_override===true;
-      if(item.asset.kind==='EMAIL'&&!ownerRecipientOverride)recipientPolicy.assertVerifiedAsset(item.asset,state.destinations.find(d=>d.id===destinationId));
-      assertApproval(item.asset,state.decisions[destinationId]);
       const key = assertSendable({asset:item.asset,approval:state.decisions[destinationId],receipt:prior});
-      if(ownerRecipientOverride)recipientPolicy.assertSendableRecipient(item.asset,state.destinations.find(d=>d.id===destinationId),state.decisions[destinationId]);
+      if(item.asset.kind==='EMAIL')recipientPolicy.assertRecipientAllowed(item.asset,state.destinations.find(d=>d.id===destinationId));
       state.deliveries[destinationId] = {status:'ATTEMPTING',idempotency_key:key,claimed_at:new Date().toISOString()};
       return state;
     });

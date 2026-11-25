@@ -93,8 +93,9 @@ test('22 November recovery classifies all 16, independently checks four saved re
  assert.equal(after.decisions[first],undefined);
  await assert.rejects(store.decide(id,first,'APPROVE',state.assets[first].fingerprint),/INVALID_DECISION/);
  await assert.rejects(store.decide(id,held,'APPROVE',after.assets[held].fingerprint),/EDITORIAL_CHECK_REQUIRED/);
- await assert.rejects(store.decideGroup(id,'group-5','APPROVE',after.email_groups['group-5'].content_hash,2),/EDITORIAL_CHECK_REQUIRED/);
- await store.decide(id,groups[5][0],'APPROVE',after.assets[groups[5][0]].fingerprint);
+ const partial=await store.decideGroup(id,'group-5','APPROVE',after.email_groups['group-5'].content_hash,2);
+ assert.deepEqual(partial.group_approvals['group-5'].destination_ids,[groups[5][0]]);
+ assert.equal(partial.decisions[groups[5][1]],undefined);
  assert.equal((await adapter.read(id)).value.decisions[groups[5][0]].decision,'APPROVE');
  const beforeReplay=(await adapter.read(id)).version;
  assert.deepEqual(await prepareEditorialReview(input),outcomes);

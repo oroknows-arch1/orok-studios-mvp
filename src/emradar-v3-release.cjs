@@ -1,9 +1,10 @@
 'use strict';
 // One owner-authenticated release path, shared by EMAIL and X.
-function createV3Release({service,integration,pool}){
+const distributionPaused=(env=process.env)=>env.EMRADAR_V3_DISTRIBUTION_PAUSED!=='false';
+function createV3Release({service,integration,pool,env=process.env}){
  return async({campaignId,destinationId,sessionId,sessionSecret}={})=>{
   // Owner emergency hold: all EMAIL and X distribution stays disabled until explicitly re-enabled.
-  if(process.env.EMRADAR_V3_DISTRIBUTION_PAUSED!=='false')throw Error('V3_DISTRIBUTION_PAUSED');
+  if(distributionPaused(env))throw Error('V3_DISTRIBUTION_PAUSED');
   if([campaignId,destinationId,sessionId,sessionSecret].some(v=>typeof v!=='string'||!v))throw Error('V3_RELEASE_REQUEST_INVALID');
   await service.workflow.authenticate(campaignId,sessionId,sessionSecret);
   const state=(await service.store.adapter.read(campaignId))?.value;
@@ -15,7 +16,7 @@ function createV3Release({service,integration,pool}){
   let preparedX;
   if(entry.asset.kind==='X')preparedX=await integration.prepareApprovedX(payload);
   else await require('./emradar-v3-recipient.cjs').checkPersistedRecipient(pool,entry.asset,state);
-  const claimed=await service.store.claimDelivery(campaignId,destinationId);
+  const claimed=await service.store.claimDelivery(campaignId,destinationId,entry.fingerprint);
   payload.idempotency_key=claimed.deliveries[destinationId].idempotency_key;
   let receipt;
   try{
@@ -30,4 +31,4 @@ function createV3Release({service,integration,pool}){
   return {...receipt,status:'ACCEPTED',campaignId,destinationId};
  };
 }
-module.exports={createV3Release};
+module.exports={createV3Release,distributionPaused};

@@ -36,7 +36,7 @@ export function editorialStatus(state, id) {
  if (!entry || !matches(record, bindingFor(state, entry.asset))) return 'INVESTIGATION_REQUIRED';
  if (isEditorialReady(record.status) && (entry.asset.review_status === 'NEEDS_REVISION' ||
    (entry.asset.kind === 'X' && !(entry.asset.visual_url || entry.asset.visual_base64)) ||
-   (entry.asset.kind === 'EMAIL' && (entry.asset.contact_status !== 'VERIFIED' || !recipientPolicy.recipientReadyForReview(entry.asset, destinationFor(state, id)))))) return 'INVESTIGATION_REQUIRED';
+   (entry.asset.kind === 'EMAIL' && !recipientPolicy.recipientAllowedForReview(entry.asset, destinationFor(state, id))))) return 'INVESTIGATION_REQUIRED';
  return record.status;
 }
 

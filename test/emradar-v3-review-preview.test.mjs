@@ -96,16 +96,18 @@ test('HTTPS and saved data graphics render; unsafe graphic schemes do not',async
  }
 });
 test('review preserves decisions/history and permits editorial override while delivery still rejects unsupported recipients',async()=>{
- let state={phase:'PUBLICATION_REVIEW',scan:{},destinations:[{id:'journal'}],assets:{journal:{asset:{kind:'EMAIL',destination_id:'journal',subject:'Idea',body:'Saved body'},fingerprint:'saved'}},decisions:{journal:{decision:'REJECT'}},deliveries:{},events:[],editorial_versions:{journal:[{asset:{kind:'EMAIL',destination_id:'journal',body:'Previous body'},fingerprint:'previous'}]}};
+ let state={phase:'PUBLICATION_REVIEW',scan:{},destinations:[{id:'journal'}],assets:{journal:{asset:{kind:'EMAIL',campaign_id:'campaign',destination_id:'journal',subject:'Idea',body:'Saved body'},fingerprint:'saved'}},decisions:{journal:{decision:'REJECT'}},deliveries:{},events:[],editorial_versions:{journal:[{asset:{kind:'EMAIL',destination_id:'journal',body:'Previous body'},fingerprint:'previous'}]}};
+ const {assetFingerprint}=await import('../vendor/emradar-v3/src/contracts.js');
+ const fingerprint=state.assets.journal.fingerprint=assetFingerprint(state.assets.journal.asset);
  let version=1;
  const adapter={read:async()=>({version,value:structuredClone(state)}),compareAndSwap:async(_key,prior,next)=>{assert.equal(prior,version);version++;state=structuredClone(next);return true;}};
  const store=new CampaignStore(adapter),workflow=new ReviewWorkflow({store,adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:'https://review.example'});
  workflow.authenticate=async()=>true;
  const original=structuredClone(state),view=await workflow.view('campaign');
  assert.equal(view.entries.length,1);assert.equal(view.history[0].asset.body,'Previous body');assert.deepEqual(state.decisions,original.decisions);assert.deepEqual(state.assets,original.assets);assert.deepEqual(state.editorial_versions,original.editorial_versions);assert.deepEqual(state.deliveries,original.deliveries);assert.deepEqual(state.email_groups,{});assert.deepEqual(state.group_approvals,{});
- await workflow.decide('campaign',null,null,'journal','APPROVE','saved');assert.equal(state.decisions.journal.decision,'APPROVE');
- await assert.rejects(store.claimDelivery('campaign','journal'),/VERIFIED_RECIPIENT_REQUIRED/);assert.deepEqual(state.deliveries,{});
- await workflow.decide('campaign',null,null,'journal','REJECT','saved');assert.equal(state.decisions.journal.decision,'REJECT');assert.deepEqual(state.assets,original.assets);assert.deepEqual(state.editorial_versions,original.editorial_versions);
+ await workflow.decide('campaign',null,null,'journal','APPROVE',fingerprint);assert.equal(state.decisions.journal.decision,'APPROVE');
+ await assert.rejects(store.claimDelivery('campaign','journal'),/VALID_RECIPIENT_REQUIRED/);assert.deepEqual(state.deliveries,{});
+ await workflow.decide('campaign',null,null,'journal','REJECT',fingerprint);assert.equal(state.decisions.journal.decision,'REJECT');assert.deepEqual(state.assets,original.assets);assert.deepEqual(state.editorial_versions,original.editorial_versions);
 });
 
 test('saved revision confirmation survives a fresh page render and history stays distinct',async()=>{
