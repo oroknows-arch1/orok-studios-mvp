@@ -20,14 +20,14 @@ test('verbatim Gmail outreach is pinned by an independent literal SHA-256',()=>{
  assert.equal(EDITORIAL_REFERENCE.message_id,'1a0f640622c1fefe');
 });
 
-test('publication and information-channel pitches receive the exact original through the same writer',async()=>{
+test('publication and information-channel pitches receive independent flexible guidance through the same writer',async()=>{
  const requests=[],writer=providers(requests);
  for(const type of ['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL']){
   const asset=await writer.write({campaignId:'campaign',destination:destination(type,type),document:{evidence}});
   assert.equal(asset.correspondence_type,'EDITORIAL_OUTREACH');assert.deepEqual(asset.editorial_reference,EDITORIAL_REFERENCE);
   assert.equal(asset.story_record_id,'a');assert.deepEqual(asset.evidence_ids,['a:0','a:1']);
  }
- assert.equal(requests.length,2);assert(requests.every(request=>request.messages[0].content.includes(originalOutreach)));
+ assert.equal(requests.length,2);assert(requests.every(request=>request.messages[0].content.includes('Do not use a mandatory template')));
  assert(requests.every(request=>JSON.parse(request.messages[1].content).channel==='EDITORIAL_OUTREACH'));
 });
 
@@ -63,8 +63,11 @@ test('refresh regenerates only undecided pitches, preserves identifiers, X, deci
  assert.equal(saved.assets.pending.asset.destination_id,'pending');assert.equal(saved.editorial_versions.pending[0].fingerprint,'old-pending');assert.equal(saved.phase,'PUBLICATION_REVIEW');
 });
 
-test('an uncertainty field cannot hide a caveat missing from the actual email',async()=>{
- await assert.rejects(providers([],{subject:'Pitch',body:'Would an article interest you?',limitations:'The plans are not completed projects.',story_evidence_ids:['a:0']}).write({campaignId:'campaign',destination:destination('journal'),document:{evidence}}),/EDITORIAL_UNCERTAINTY_REQUIRED/);
+test('a caveat missing from the body remains visible as an editorial warning, not an automatic veto',async()=>{
+ const draft={subject:'Pitch',body:'A proposed programme raises a genuine question about financing, execution and which organisations will carry the costs. I can examine the implementation evidence in a sourced article.',limitations:'The plans are not completed projects.',story_evidence_ids:['a:0']};
+ const asset=await providers([],draft).write({campaignId:'campaign',destination:destination('journal'),document:{evidence}});
+ assert(asset.editorial_warnings.includes('EVIDENCE_LIMITATION_NEEDS_REVIEW'));
+ assert.equal(asset.review_status,undefined);
 });
 
 test('the existing alternatives route uses the same reference-backed provider',async()=>{
@@ -93,6 +96,6 @@ test('persisted-directory draft extension uses the production OpenAI writer and 
  const service=await createOpenAiPreparationReviewService({pool,reviewOrigin:'https://review.example.org',notify:async()=>{throw Error('NO_EMAILS');},reviewedLinks:[],openai,readPrimarySource:async url=>({url,text:'A primary-source announcement describes the combined programme of energy and vehicle proposals.',page_sha256:'a'.repeat(64)})});
  assert.equal((await service.resumeEditorialDrafts('campaign')).editorial_drafts,1);
  assert.equal(state.assets.journal.asset.preparation_error,undefined);
- assert.equal(state.assets.journal.asset.editorial_reference.sha256,EDITORIAL_REFERENCE.sha256);assert.equal(state.assets.x.fingerprint,'saved-x');assert.equal(state.decisions.x.decision,'APPROVE');assert(requests[0].messages[0].content.includes(originalOutreach));
+ assert.equal(state.assets.journal.asset.editorial_reference.sha256,EDITORIAL_REFERENCE.sha256);assert.equal(state.assets.x.fingerprint,'saved-x');assert.equal(state.decisions.x.decision,'APPROVE');assert(requests[0].messages[0].content.includes('Do not use a mandatory template'));
  assert.equal(JSON.parse(requests[0].messages[1].content).primary_source_pages.length,2);
 });

@@ -1,4 +1,4 @@
-import {editorialApplies, editorialStatus, isEditorialReady} from './editorial-preparation.js';
+import {editorialApplies, editorialStatus, isEditorialReady, isEditorialOwnerReviewable} from './editorial-preparation.js';
 import {isReviewPhase} from './contracts.js';
 import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import {randomUUID,createHash,timingSafeEqual} from 'node:crypto';
@@ -124,7 +124,7 @@ export class ReviewWorkflow {
    const revision=!historical?(campaign.events??[]).findLast(event=>event.type==='ASSET_REVISED'&&event.destination_id===asset.destination_id&&event.new_fingerprint===fingerprint):null;
    const editorial_status=historical?'HISTORICAL':editorialStatus(campaign,asset.destination_id);
    const googleAdvice=advice.get(asset.destination_id);
-   return {asset,fingerprint,historical,label,editorial_status,editorial_ready:editorial_status==='LEGACY'||isEditorialReady(editorial_status),editorial_reason:campaign.editorial_preparation?.outcomes?.[asset.destination_id]?.reason??null,collaborative_advice:!historical&&googleAdvice&&googleAdvice.fingerprint===fingerprint?{verdict:googleAdvice.verdict,reason:googleAdvice.reason,correction:googleAdvice.correction}:null,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
+   return {asset,fingerprint,historical,label,editorial_status,editorial_ready:asset.review_status!=='NEEDS_REVISION'&&(editorial_status==='LEGACY'||isEditorialOwnerReviewable(editorial_status)),editorial_reason:campaign.editorial_preparation?.outcomes?.[asset.destination_id]?.reason??null,collaborative_advice:!historical&&googleAdvice&&googleAdvice.fingerprint===fingerprint?{verdict:googleAdvice.verdict,reason:googleAdvice.reason,correction:googleAdvice.correction}:null,destination:{id:asset.destination_id,name:destination?.name||asset.destination_id},recipient_ready:recipientReady,
     revision:revision?{id:revision.id,fingerprint}:null,
     recipient_warning:asset.recipient_verification?.status==='OWNER_OVERRIDE'?asset.recipient_verification.warning_code:null,
     groupId:!historical?memberGroups.get(asset.destination_id)??null:null,recipientVerified:destination?.contact_verified===true,
@@ -159,13 +159,13 @@ export class ReviewWorkflow {
    }
   }
   const state=await this.store.revise(campaignId,destinationId,fingerprint,changes,verifiedDestination,recipientCheck);
-  if(editorialApplies(state))await this.reviewEditorial?.(campaignId,{ids:[destinationId],checkOnly:true}).catch(()=>{});
+  // Owner edits remain saved and reviewable without triggering another paid editorial check.
   return {saved:true,recipient_warning:recipientCheck?.warningCode??null};
  }
  async reviseGroup(campaignId,sessionId,secret,groupId,contentHash,version,changes){
   await this.authenticate(campaignId,sessionId,secret);
   const state=await this.store.reviseGroup(campaignId,groupId,contentHash,version,changes);
-  if(editorialApplies(state))await this.reviewEditorial?.(campaignId,{ids:state.email_groups[groupId].destination_ids,checkOnly:true}).catch(()=>{});
+  // Owner edits remain saved and reviewable without triggering another paid editorial check.
   return state;
  }
  async decideGroup(campaignId,sessionId,secret,groupId,decision,contentHash,version){
