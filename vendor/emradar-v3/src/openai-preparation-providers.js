@@ -10,11 +10,11 @@ const require=createRequire(import.meta.url);
 const brand=require('../../../src/email-brand.cjs');
 export const correspondenceType=destination=>isEditorialDestination(destination)?'EDITORIAL_OUTREACH':'SOURCE_ENQUIRY';
 function approvedEditorialEmail({campaignId,destination,evidence,draft,deliveryEligible}){
- if(typeof draft.subject!=='string'||!draft.subject.trim()||typeof draft.body!=='string'||!draft.body.trim()||typeof draft.limitations!=='string'||!draft.limitations.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
+ if(typeof draft.subject!=='string'||!draft.subject.trim()||typeof draft.body!=='string'||!draft.body.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
  const core=draft.body.trim();
  // An editor may be approached with a question-led or declarative analytical pitch.
  // No canned call-to-action grammar is required.
- const asset={campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',subject:draft.subject,body:['Hello,',core,'Regards,','Sean Walker\nEMRADAR'].join('\n\n'),from:brand.identity.address,to:deliveryEligible?destination.contact.email:null,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',delivery_eligible:deliveryEligible,evidence_ids:evidence.map(item=>item.id),evidence_limitations:draft.limitations};
+ const asset={campaign_id:campaignId,destination_id:destination.id,kind:'EMAIL',correspondence_type:'EDITORIAL_OUTREACH',subject:draft.subject,body:['Hello,',core,'Regards,','Sean Walker\nEMRADAR'].join('\n\n'),from:brand.identity.address,to:deliveryEligible?destination.contact.email:null,contact_status:deliveryEligible?'VERIFIED':'UNVERIFIED',delivery_eligible:deliveryEligible,evidence_ids:evidence.map(item=>item.id),evidence_limitations:typeof draft.limitations==='string'?draft.limitations:null};
  brand.brand(asset);
  return asset;
 }
@@ -80,24 +80,23 @@ export function createOpenAiPreparationProviders({openai,model='gpt-6-sol',image
    const requestedSystem=system+feedbackInstruction+grounding;
    let draft=await complete(requestedSystem,{...payload,...(sourcePages?.length?{primary_source_pages:sourcePages}:{}),...(ownerFeedback?{owner_feedback:ownerFeedback.trim()}: {})});
    if(onWriterDraft)await onWriterDraft({attempt:1,type,draft});
-   if(story){
-    // Keep factual attribution and uncertainty checks. Do not force an automatic
-    // stock rewrite merely because an otherwise usable pitch varies its structure.
-    validateEditorialStory(draft,story);
-    if(type==='EDITORIAL_OUTREACH')validateEditorialCorrespondence(draft);
-   }
+   const editorialWarnings=story?validateEditorialStory(draft,story).warnings:[];
+   // Keep source attribution, but record missing story metadata as an owner-review
+   // warning rather than rewriting a strong original pitch into a stock template.
+   if(type==='EDITORIAL_OUTREACH')validateEditorialCorrespondence(draft);
    const deliveryEligible=destination.contact_verified===true && destination.delivery_eligible!==false && Boolean(destination.contact?.email);
    if(type==='EDITORIAL_OUTREACH'){
     const asset=approvedEditorialEmail({campaignId,destination,evidence:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)),draft,deliveryEligible});
     asset.editorial_reference=EDITORIAL_REFERENCE;asset.editorial_enforcement=EDITORIAL_ENFORCEMENT_VERSION;asset.story_record_id=story.record_id;
     if(sourcePages?.length)asset.editorial_source_grounded=true;
     if(sharedDestinations)asset.shared_destination_ids=sharedDestinations.map(item=>item.id).sort();
+    if(editorialWarnings.length)asset.editorial_warnings=editorialWarnings;
     asset.recipient_verification=destination.contact;
     return asset;
    }
    if(type==='SOURCE_ENQUIRY')return {...sourceEnquiry({campaignId,destination,evidence,draft,deliveryEligible}),...(sourcePages?.length?{editorial_source_grounded:true}:{})};
    if(typeof draft.body!=='string'||!draft.body.trim()||typeof draft.subject!=='string'||!draft.subject.trim())throw Error('V3_EDITORIAL_DRAFT_INVALID');
-   return {campaign_id:campaignId,destination_id:destination.id,kind:'X',body:attributeX(draft.body,record,writerEvidence),subject:draft.subject,from:brand.identity.address,evidence_ids:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)).map(e=>e.id),story_record_id:story.record_id,analytical_finding:draft.analytical_finding,evidence_limitations:draft.limitations,...(sourcePages?.length?{editorial_source_grounded:true}:{})};
+   return {campaign_id:campaignId,destination_id:destination.id,kind:'X',body:attributeX(draft.body,record,writerEvidence),subject:draft.subject,from:brand.identity.address,evidence_ids:writerEvidence.filter(e=>draft.story_evidence_ids.includes(e.id)).map(e=>e.id),story_record_id:story.record_id,analytical_finding:draft.analytical_finding,evidence_limitations:typeof draft.limitations==='string'?draft.limitations:null,...(editorialWarnings.length?{editorial_warnings:editorialWarnings}:{}),...(sourcePages?.length?{editorial_source_grounded:true}:{})};
   },
   renderVisual:async({asset,document,scan})=>{
    const composed=composeGraphicSvg({asset,document,scan});
