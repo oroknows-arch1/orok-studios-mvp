@@ -1,0 +1,34 @@
+name: Read-only live owner review verification
+on:
+  push:
+    branches: ['verify/owner-review-live-20261125']
+    paths: ['.github/workflows/verify-live-owner-review.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check live health and exact deployed owner interface
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {reviewPage} from './vendor/emradar-v3/src/review-page.js';
+          const origin='https://orok-studios-api.onrender.com';
+          const health=await fetch(origin+'/health',{signal:AbortSignal.timeout(30000)});
+          assert.equal(health.status,200);const status=await health.json();
+          assert.equal(status.status,'ok');assert.equal(status.publishing.databaseReachable,true);
+          assert.equal(status.publishing.migrationsCurrent,true);
+          const review=await fetch(origin+'/review/access',{signal:AbortSignal.timeout(30000)});
+          assert.equal(review.status,200);assert.equal(await review.text(),reviewPage);
+          console.log('Live health, PostgreSQL, migrations and exact deployed interactive review HTML verified.');
+          NODE
+      - name: Open the live review in Chromium and verify private access
+        run: |
+          google-chrome --headless --disable-gpu --no-sandbox --virtual-time-budget=15000 --dump-dom 'https://orok-studios-api.onrender.com/review/access?campaign=v3-ae9ca0227fe23e1c807a80734dc1ae55' > "$RUNNER_TEMP/review.html"
+          grep -Eq '<p[^>]*id="status"[^>]*>Your saved sign-in has expired|id="status"[^>]*>Your saved sign-in has expired' "$RUNNER_TEMP/review.html"
+          echo 'A fresh browser loaded the review and the live API correctly required private sign-in.'
