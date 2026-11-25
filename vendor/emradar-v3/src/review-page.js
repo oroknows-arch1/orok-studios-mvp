@@ -80,7 +80,7 @@ async function refresh(){
   for(const member of members){
    const row=document.createElement('li');row.append(text('span',(member.destination?.name||member.asset.destination_id)+' · '+member.asset.to));
    row.append(text('small',' · '+member.editorial_status));
-   if(member.delivery)row.append(text('small',' · Delivery: '+member.delivery.status+(member.delivery.receipt?.provider_id?' · Receipt: '+member.delivery.receipt.provider_id:'')));
+   if(member.delivery){const delivered=['ACCEPTED','CONFIRMED'].includes(member.delivery.status);const receipt=text('p',delivered?'Mail accepted · Receipt: '+(member.delivery.receipt?.provider_id||'saved')+' · Sent folder: '+(member.delivery.receipt?.sent_folder?.status||'not confirmed'):'Delivery: '+member.delivery.status);receipt.setAttribute('role','status');if(delivered)receipt.className='saved';row.append(receipt);}
    if(!members.some(item=>item.delivery))for(const action of ['EXCLUDE','SPLIT']){const button=text('button',action==='EXCLUDE'?'Exclude recipient':'Split to individual');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group-member',{campaignId:campaign,groupId:group.id,destinationId:member.asset.destination_id,contentHash:group.content_hash,version:group.version,action});await refresh();}catch{status.textContent='Group membership was not changed. Reload and retry.';button.disabled=false;}});row.append(button);}
    if(mixedReadiness&&actionable(member)&&!member.delivery&&!member.decision){
     const approve=text('button','Approve this recipient');
@@ -91,7 +91,7 @@ async function refresh(){
     });
     row.append(approve);
    }
-   if((group.approval?.decision==='APPROVE'||member.decision?.decision==='APPROVE')&&actionable(member)&&!member.delivery){const send=text('button','Send approved email');send.disabled=view.publishing?.email?.enabled===false;send.addEventListener('click',async()=>{if(!confirm('Send this exact approved email to '+member.asset.to+'?'))return;send.disabled=true;try{await api('release',{campaignId:campaign,destinationId:member.asset.destination_id});await refresh();}catch{await refresh();status.textContent='Release was blocked or uncertain. Check the saved delivery record.';}});row.append(send);}
+   if(member.decision?.decision==='APPROVE'&&actionable(member)&&!member.delivery){const send=text('button','Send approved email');send.disabled=view.publishing?.email?.enabled===false;send.addEventListener('click',async()=>{if(!confirm('Send this exact approved email to '+member.asset.to+'?'))return;send.disabled=true;const feedback=text('p','Sending…');feedback.setAttribute('role','status');row.append(feedback);try{const result=await api('release',{campaignId:campaign,destinationId:member.asset.destination_id});feedback.textContent=result.status==='ACCEPTED'?'Mail accepted · Receipt: '+(result.receipt_id||'saved'):'Delivery status: '+result.status;try{await refresh();status.textContent=feedback.textContent;}catch{feedback.textContent+=' · Refresh the review to see the saved receipt.';}}catch(e){feedback.textContent='Release not confirmed: '+e.message+'. Check the saved delivery record before retrying.';status.textContent=feedback.textContent;}});row.append(send);}
    list.append(row);
   }
   card.append(list);
@@ -104,7 +104,7 @@ async function refresh(){
     }}));
     card.append(button);
    }
-   if(!group.approval)for(const decision of ['APPROVE','REJECT']){const button=text('button',decision==='APPROVE'?'Approve Group':'Reject Group');button.disabled=decision==='APPROVE'&&members.some(member=>!actionable(member));button.addEventListener('click',async()=>{button.disabled=true;try{await api('group',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,decision});await refresh();}catch{status.textContent='The group decision was not saved. Reload and retry.';button.disabled=false;}});card.append(button);}
+   if(!group.approval)for(const decision of ['APPROVE','REJECT']){const button=text('button',decision==='APPROVE'?'Approve Group':'Reject Group');button.disabled=decision==='APPROVE'&&!members.some(member=>actionable(member)&&!member.delivery&&(!member.decision||member.decision.decision==='APPROVE'));if(decision==='APPROVE'&&mixedReadiness)button.textContent='Approve ready recipients';button.addEventListener('click',async()=>{button.disabled=true;try{await api('group',{campaignId:campaign,groupId:group.id,contentHash:group.content_hash,version:group.version,decision});await refresh();}catch{status.textContent='The group decision was not saved. Reload and retry.';button.disabled=false;}});card.append(button);}
   }
   if(group.version>1||lastSaved==='group:'+group.id){const saved=text('p','Edited · Saved'+(group.approval?'':' · New approval required'));saved.className='saved';card.append(saved);}
   main.append(card);
