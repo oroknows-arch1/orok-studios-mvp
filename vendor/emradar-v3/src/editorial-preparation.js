@@ -6,7 +6,9 @@ import {proposalBinding} from './proposal-verification.js';
 
 export const recoveryCampaignId = 'v3-ee0ca7e9f07c03189d961df231589882';
 export const editorialApplies = state => Boolean(state?.editorial_preparation || state?.id === recoveryCampaignId);
-export const isEditorialReady = status => ['READY_VERIFIED', 'CORRECTED_READY'].includes(status);
+// Independent editorial findings remain owner-visible advice, not an approval veto.
+// Unfinished drafts and delivery safety are checked separately by CampaignStore.
+export const isEditorialReady = status => ['READY_VERIFIED', 'CORRECTED_READY', 'INVESTIGATION_REQUIRED'].includes(status);
 const recoverySources = {
  'vietnam-vung-ang-rental-factory-2026': [
   'https://xuctiendautu.hatinhso.vn/vi/bai-viet/ha-tinh-chap-thuan-dau-tu-du-an-khu-nha-xuong-cho-thue-vung-ang-voi-tong-von-75-ty-dong'
