@@ -36,7 +36,7 @@ test('October 18 Kenya draft preserves its original text and marks a missing mec
 
 test('the writer does not spend a second call repairing unusably short prose',async()=>{
  const destination={...verified('africa-confidential',evidence.filter(e=>kenyaIds.includes(e.id))),name:'Africa Confidential',evidence:{ids:kenyaIds}};
- const invalid={subject:'Counts',body:'Three of four cases were health workers.',limitations:'The route is unknown.',story_evidence_ids:kenyaIds};
+ const invalid={subject:'Counts',body:'Three cases.',limitations:'The route is unknown.',story_evidence_ids:kenyaIds};
  let calls=0;
  const openai={chat:{completions:{create:async()=>{calls++;return {choices:[{message:{content:JSON.stringify(invalid)}}]};}}},images:{generate:async()=>{throw Error('NOT_USED');}}};
  const provider=createOpenAiPreparationProviders({openai});
@@ -46,7 +46,7 @@ test('the writer does not spend a second call repairing unusably short prose',as
 
 test('an invalid short draft is diagnosed once and never promoted to a campaign asset',async()=>{
  const destination={...verified('africa-confidential',evidence.filter(e=>kenyaIds.includes(e.id))),name:'Africa Confidential',evidence:{ids:kenyaIds}};
- const invalid={subject:'Counts',body:'Three of four cases were health workers.',limitations:'The route is unknown.',story_evidence_ids:kenyaIds};
+ const invalid={subject:'Counts',body:'Three cases.',limitations:'The route is unknown.',story_evidence_ids:kenyaIds};
  const captured=[];
  const provider=createOpenAiPreparationProviders({openai:clientFor([invalid,invalid]),onWriterDraft:async value=>captured.push(structuredClone(value))});
  await assert.rejects(provider.write({campaignId:'oct18',destination,document}),/V3_EDITORIAL_DRAFT_INVALID/);
