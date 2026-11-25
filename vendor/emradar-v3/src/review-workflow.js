@@ -7,11 +7,11 @@ import {createOwnerSession,validateOwnerSession,OWNER_SESSION_TTL_MS} from './ow
 import {validateNotificationReceipt} from './owner-notification.js';
 
 export class ReviewWorkflow {
- constructor({store,adapter,notify,baseUrl,verifyRecipient,reviewEditorial,clock=()=>Date.now()}) {
+ constructor({store,adapter,notify,baseUrl,verifyRecipient,reviewEditorial,refreshXVisual,clock=()=>Date.now()}) {
   if(!store?.adapter || !adapter?.read || !adapter?.compareAndSwap || typeof notify!=='function') throw Error('REVIEW_DEPENDENCIES_REQUIRED');
   const url=new URL(baseUrl);
   if(url.protocol!=='https:' || url.username || url.password || url.search || url.hash) throw Error('SECURE_REVIEW_URL_REQUIRED');
-  this.store=store;this.adapter=adapter;this.notify=notify;this.baseUrl=url.origin;this.verifyRecipient=verifyRecipient;this.reviewEditorial=reviewEditorial;this.clock=clock;
+  this.store=store;this.adapter=adapter;this.notify=notify;this.baseUrl=url.origin;this.verifyRecipient=verifyRecipient;this.reviewEditorial=reviewEditorial;this.refreshXVisual=refreshXVisual;this.clock=clock;
  }
  async update(key,fn) {
   for(let attempt=0;attempt<8;attempt++){
@@ -109,6 +109,12 @@ export class ReviewWorkflow {
  }
  async view(campaignId,sessionId,secret) {
   await this.authenticate(campaignId,sessionId,secret);
+  // A saved graphic is an immutable image; re-render stale versions on an
+  // authenticated owner-review refresh. This is deterministic (no paid models),
+  // does not send X, and skips already approved or delivered assets.
+  if(this.refreshXVisual)await this.refreshXVisual(campaignId).catch(error=>{
+   console.error('V3_REVIEW_GRAPHIC_REFRESH_FAILED',error?.message??'UNKNOWN');
+  });
   const campaign=typeof this.store.ensureEmailGroups==='function'?await this.store.ensureEmailGroups(campaignId):(await this.adapter.read(campaignId))?.value;
   if(!campaign || !isReviewPhase(campaign.phase)) throw Error('REVIEW_NOT_OPEN');
   // Fetch the final campaign advice once, without performing another model call.
