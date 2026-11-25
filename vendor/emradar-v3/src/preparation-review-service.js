@@ -81,11 +81,11 @@ export function assessPublicationReview({state,candidates}) {
   return asset.to.toLowerCase()===destination?.contact?.email?.toLowerCase() ||
    (decision?.decision==='APPROVE' && decision.authority==='OWNER' && decision.asset_sha256===assetFingerprint(asset));
  };
- const emailIds=new Set(assets.filter(asset=>ready(asset)&&asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&selectedAddress(asset)&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
+ const emailIds=new Set(assets.filter(asset=>asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&selectedAddress(asset)&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
  const missing=recipients.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
  const incomplete=assets.filter(asset=>asset.review_status==='NEEDS_REVISION'||(!state.deliveries?.[asset.destination_id]&&!ready(asset)));
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
- const xReady=Boolean(x?.body&&ready(x)&&(x.visual_url||x.visual_base64));
+ const xReady=Boolean(x?.body&&x.review_status!=='NEEDS_REVISION'&&(x.visual_url||x.visual_base64));
  // Review availability is independent of unfinished editorial destinations. Only independently ready, verified assets may be approved or distributed.
  const visible=xReady||emailIds.size>0;
  const editorial_checked=editorialApplies(state)&&Boolean(state.editorial_preparation)&&assets.every(asset=>hasEditorialOutcome(state,asset.destination_id));

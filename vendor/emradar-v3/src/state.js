@@ -3,7 +3,6 @@ import recipientPolicy from '../../../src/emradar-v3-recipient.cjs';
 import emailBrand from '../../../src/email-brand.cjs';
 import { randomUUID } from 'node:crypto';
 import { assertScan, assertDestinations, assetFingerprint, assertSendable, identicalEmailGroupKey, sha256 } from './contracts.js';
-import {editorialApplies, editorialStatus, isEditorialReady} from './editorial-preparation.js';
 import {proposalBinding} from './proposal-verification.js';
 
 const groupIdFor=(campaignId,destinationIds)=>'email-group-'+sha256([campaignId,[...destinationIds].sort()]).slice(0,24);
@@ -105,7 +104,6 @@ export class CampaignStore {
       // Delivery still requires a valid address and an exact saved owner approval.
       if (state.deliveries[destinationId]) throw Error('DECISION_AFTER_DISTRIBUTION');
       if(decision==='APPROVE'&&item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');
-      if(decision==='APPROVE'&&editorialApplies(state)&&!isEditorialReady(editorialStatus(state,destinationId)))throw Error('EDITORIAL_CHECK_REQUIRED');
       state.review_actions??={};
       state.decisions??={};
       if(['REJECT','REGENERATE'].includes(decision)){
@@ -260,9 +258,8 @@ export class CampaignStore {
    if(!['APPROVE','REJECT'].includes(decision))throw Error('INVALID_DECISION');
    return this.mutate(id,state=>{
     if(!state||!isReviewPhase(state.phase))throw Error('REVIEW_NOT_OPEN');const group=state.email_groups?.[groupId];
-    if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');const members=decision==='APPROVE'?group.destination_ids.filter(destinationId=>{const entry=state.assets[destinationId];return entry&&entry.asset.review_status!=='NEEDS_REVISION'&&recipientPolicy.recipientAllowedForReview(entry.asset,state.destinations.find(d=>d.id===destinationId))&&(!editorialApplies(state)||isEditorialReady(editorialStatus(state,destinationId)))&&!state.deliveries[destinationId]&&(!state.decisions[destinationId]||state.decisions[destinationId].decision==='APPROVE');}):[...group.destination_ids];if(!members.length)throw Error('EMPTY_GROUP');
+    if(!group||group.content_hash!==contentHash||group.version!==version)throw Error('STALE_GROUP_VERSION');const members=decision==='APPROVE'?group.destination_ids.filter(destinationId=>{const entry=state.assets[destinationId];return entry&&entry.asset.review_status!=='NEEDS_REVISION'&&recipientPolicy.recipientAllowedForReview(entry.asset,state.destinations.find(d=>d.id===destinationId))&&!state.deliveries[destinationId]&&(!state.decisions[destinationId]||state.decisions[destinationId].decision==='APPROVE');}):[...group.destination_ids];if(!members.length)throw Error('EMPTY_GROUP');
     for(const destinationId of members){const entry=state.assets[destinationId];if(!entry||identicalEmailGroupKey(entry.asset)!==contentHash)throw Error('GROUP_CONTENT_MISMATCH');if(entry.asset.review_status==='NEEDS_REVISION'&&decision==='APPROVE')throw Error('INCOMPLETE_ASSET_CANNOT_BE_APPROVED');if(state.deliveries[destinationId])throw Error('DECISION_AFTER_DISTRIBUTION');if(state.decisions[destinationId]&&state.decisions[destinationId].decision!==decision)throw Error('GROUP_DECISION_CONFLICT');}
-    if(decision==='APPROVE'&&editorialApplies(state)&&members.some(member=>!isEditorialReady(editorialStatus(state,member))))throw Error('EDITORIAL_CHECK_REQUIRED');
     const recipientSetHash=sha256(members),prior=state.group_approvals?.[groupId];if(prior?.decision===decision&&prior.content_hash===contentHash&&prior.recipient_set_sha256===recipientSetHash)return state;
     for(const destinationId of members){const fingerprint=state.assets[destinationId].fingerprint;state.decisions[destinationId]={authority:'OWNER',decision,asset_sha256:fingerprint,campaign_id:id,destination_id:destinationId,group_id:groupId,group_content_hash:contentHash};}
     state.group_approvals??={};state.group_approvals[groupId]={authority:'OWNER',decision,campaign_id:id,group_id:groupId,content_hash:contentHash,version:group.version,destination_ids:members,recipient_set_sha256:recipientSetHash};state.events.push({type:'EMAIL_GROUP_DECIDED',group_id:groupId,id:randomUUID(),decision,content_hash:contentHash,version:group.version,destination_ids:members});return state;
@@ -284,7 +281,6 @@ export class CampaignStore {
       if (!item) throw Error('UNKNOWN_DESTINATION');
       if(expectedFingerprint!==undefined&&item.fingerprint!==expectedFingerprint)throw Error('STALE_ASSET_REVISION');
       if(item.asset.review_status==='NEEDS_REVISION')throw Error('INCOMPLETE_ASSET_NOT_SENDABLE');
-      if(editorialApplies(state)&&!isEditorialReady(editorialStatus(state,destinationId)))throw Error('EDITORIAL_CHECK_REQUIRED');
       const prior = state.deliveries[destinationId];
       const key = assertSendable({asset:item.asset,approval:state.decisions[destinationId],receipt:prior});
       if(item.asset.kind==='EMAIL')recipientPolicy.assertRecipientAllowed(item.asset,state.destinations.find(d=>d.id===destinationId));
