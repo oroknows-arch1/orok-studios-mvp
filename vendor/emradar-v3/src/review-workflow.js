@@ -159,13 +159,13 @@ export class ReviewWorkflow {
    }
   }
   const state=await this.store.revise(campaignId,destinationId,fingerprint,changes,verifiedDestination,recipientCheck);
-  if(editorialApplies(state))await this.reviewEditorial?.(campaignId,{ids:[destinationId],checkOnly:true}).catch(()=>{});
+  // Owner edits remain saved and reviewable without triggering another paid editorial check.
   return {saved:true,recipient_warning:recipientCheck?.warningCode??null};
  }
  async reviseGroup(campaignId,sessionId,secret,groupId,contentHash,version,changes){
   await this.authenticate(campaignId,sessionId,secret);
   const state=await this.store.reviseGroup(campaignId,groupId,contentHash,version,changes);
-  if(editorialApplies(state))await this.reviewEditorial?.(campaignId,{ids:state.email_groups[groupId].destination_ids,checkOnly:true}).catch(()=>{});
+  // Owner edits remain saved and reviewable without triggering another paid editorial check.
   return state;
  }
  async decideGroup(campaignId,sessionId,secret,groupId,decision,contentHash,version){
