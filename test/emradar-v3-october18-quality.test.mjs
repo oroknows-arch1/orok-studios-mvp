@@ -23,34 +23,35 @@ const records=[
 const document={evidence,records};
 const clientFor=drafts=>({chat:{completions:{create:async()=>({choices:[{message:{content:JSON.stringify(drafts.shift())}}]})}},images:{generate:async()=>({data:[{b64_json:'aW1hZ2U='}]})}});
 
-test('October 18 Kenya paraphrase is rejected until the pitch states a supported analytical finding',async()=>{
+test('October 18 Kenya draft preserves its original text and marks a missing mechanism as advisory',async()=>{
  const destination={...verified('africa-confidential',evidence.filter(e=>kenyaIds.includes(e.id))),name:'Africa Confidential',evidence:{ids:kenyaIds},relationship:{reason:'Covers African health crises.'}};
  const old={subject:'Kenya’s Ebola response beyond the case count',body:'Africa CDC reported seven cases. Those figures offer a way to examine tracing alongside health-worker cases. There is no evidence of community transmission.',limitations:'There is no evidence of community transmission.' ,story_evidence_ids:kenyaIds};
  const finding='The response is constrained not by case detection alone but by whether frontline protection can hold while tracing remains high.';
  const corrected={subject:'Kenya’s Ebola response: the frontline protection test',body:`I’m Sean Walker, working on EMRADAR.\n\nOur scan identified the frontline protection question in Kenya. ${finding} Three of four new cases were health workers even though all four were known, quarantined contacts. High tracing coverage therefore measures reach, not whether exposure inside care settings is controlled. The exposure route and PPE sufficiency remain unverified. We are developing an article on what tracing can establish about frontline protection. Would an evidence-backed article examining that operational gap interest Africa Confidential? If useful, I can send a concise draft with sources for review.`,analytical_finding:finding,limitations:'The exposure route and PPE sufficiency remain unverified.',story_evidence_ids:kenyaIds};
  const provider=createOpenAiPreparationProviders({openai:clientFor([old,corrected])});
  const asset=await provider.write({campaignId:'oct18',destination,document});
- assert.match(asset.body,/frontline protection can hold/);assert.match(asset.body,/measures reach, not whether exposure/);assert.deepEqual(asset.evidence_ids,kenyaIds);
+ assert.match(asset.body,/Africa CDC reported seven cases/);assert.deepEqual(asset.evidence_ids,kenyaIds);
+ assert(asset.editorial_warnings.includes('ANALYTICAL_FINDING_NEEDS_REVIEW'));
 });
 
-test('the writer makes at most one bounded repair and still fails closed',async()=>{
+test('the writer does not spend a second call repairing unusably short prose',async()=>{
  const destination={...verified('africa-confidential',evidence.filter(e=>kenyaIds.includes(e.id))),name:'Africa Confidential',evidence:{ids:kenyaIds}};
  const invalid={subject:'Counts',body:'Three of four cases were health workers.',limitations:'The route is unknown.',story_evidence_ids:kenyaIds};
  let calls=0;
  const openai={chat:{completions:{create:async()=>{calls++;return {choices:[{message:{content:JSON.stringify(invalid)}}]};}}},images:{generate:async()=>{throw Error('NOT_USED');}}};
  const provider=createOpenAiPreparationProviders({openai});
- await assert.rejects(provider.write({campaignId:'oct18',destination,document}),/V3_(?:EDITORIAL_UNCERTAINTY|ANALYTICAL_FINDING)_REQUIRED/);
- assert.equal(calls,2);
+ await assert.rejects(provider.write({campaignId:'oct18',destination,document}),/V3_EDITORIAL_DRAFT_INVALID/);
+ assert.equal(calls,1);
 });
 
-test('rejected drafts can be captured diagnostically without becoming campaign assets',async()=>{
+test('an invalid short draft is diagnosed once and never promoted to a campaign asset',async()=>{
  const destination={...verified('africa-confidential',evidence.filter(e=>kenyaIds.includes(e.id))),name:'Africa Confidential',evidence:{ids:kenyaIds}};
  const invalid={subject:'Counts',body:'Three of four cases were health workers.',limitations:'The route is unknown.',story_evidence_ids:kenyaIds};
  const captured=[];
  const provider=createOpenAiPreparationProviders({openai:clientFor([invalid,invalid]),onWriterDraft:async value=>captured.push(structuredClone(value))});
- await assert.rejects(provider.write({campaignId:'oct18',destination,document}),/V3_(?:EDITORIAL_UNCERTAINTY|ANALYTICAL_FINDING)_REQUIRED/);
- assert.deepEqual(captured.map(item=>item.attempt),[1,2]);
- assert.equal(captured[1].draft.body,invalid.body);
+ await assert.rejects(provider.write({campaignId:'oct18',destination,document}),/V3_EDITORIAL_DRAFT_INVALID/);
+ assert.deepEqual(captured.map(item=>item.attempt),[1]);
+ assert.equal(captured[0].draft.body,invalid.body);
 });
 test('validator accepts natural inflections observed in real provider mechanisms',()=>{
  const story={evidence:[{id:'e1'}]};
