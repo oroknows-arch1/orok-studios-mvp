@@ -17,7 +17,12 @@ function createV3Smtp({env=process.env,createTransport=nodemailer.createTranspor
  const send=async (mail,recipient=mail.to)=>{
   const transport=createTransport(config());
   try{
-   const info=await transport.sendMail(mail);
+   let info;
+   try{info=await transport.sendMail(mail);}
+   catch(error){
+    if(Number.isInteger(error.responseCode) && error.responseCode>=400 && error.responseCode<600)throw Error('V3_SMTP_REJECTED_'+error.responseCode);
+    throw error;
+   }
    if(!info?.messageId||!Array.isArray(info.accepted)||!info.accepted.includes(recipient))throw Error('V3_SMTP_OUTCOME_UNCONFIRMED');
    return info;
   }finally{transport.close();}
@@ -71,6 +76,20 @@ function createV3Smtp({env=process.env,createTransport=nodemailer.createTranspor
   }finally{lock.release();}
  };
  return {
+  inspectSentRecipient:async({to,since})=>{
+   let client;
+   try{
+    client=await openMailbox();
+    const path=await sentFolder(client);
+    if(!path)throw Error('V3_SENT_RECONCILIATION_REQUIRED');
+    const lock=await client.getMailboxLock(path,{readOnly:true});
+    try{
+     const ids=await client.search({to,since:new Date(since)},{uid:true});
+     if(!Array.isArray(ids))throw Error('V3_SENT_RECONCILIATION_REQUIRED');
+     return {matches:ids.length};
+    }finally{lock.release();}
+   }finally{await closeMailbox(client);}
+  },
   inspectOwnerMailbox:async input=>{
    let client;const folders_checked=[],failures=[];
    try{

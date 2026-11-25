@@ -2,7 +2,7 @@
 // One owner-authenticated release path, shared by EMAIL and X.
 const distributionPaused=(env=process.env)=>env.EMRADAR_V3_DISTRIBUTION_PAUSED!=='false';
 function createV3Release({service,integration,pool,env=process.env}){
- return async({campaignId,destinationId,sessionId,sessionSecret}={})=>{
+ return async({campaignId,destinationId,fingerprint,sessionId,sessionSecret}={})=>{
   // Owner emergency hold: all EMAIL and X distribution stays disabled until explicitly re-enabled.
   if(distributionPaused(env))throw Error('V3_DISTRIBUTION_PAUSED');
   if([campaignId,destinationId,sessionId,sessionSecret].some(v=>typeof v!=='string'||!v))throw Error('V3_RELEASE_REQUEST_INVALID');
@@ -10,18 +10,38 @@ function createV3Release({service,integration,pool,env=process.env}){
   const state=(await service.store.adapter.read(campaignId))?.value;
   const entry=state?.assets?.[destinationId],approval=state?.decisions?.[destinationId];
   if(state?.phase!=='PUBLICATION_REVIEW'||entry?.asset?.review_status==='NEEDS_REVISION'||!['EMAIL','X'].includes(entry?.asset?.kind)||approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.asset_sha256!==entry.fingerprint||state.deliveries?.[destinationId])throw Error('V3_RELEASE_NOT_APPROVED');
+  if(fingerprint!==undefined && fingerprint!==entry.fingerprint)throw Error('STALE_ASSET_REVISION');
   const payload={version:'EMRADAR_V3',kind:'APPROVED_DELIVERY',campaign_id:campaignId,destination_id:destinationId,asset:entry.asset,approval};
   // Disabled configuration, unknown publication history and invalid graphics
   // fail BEFORE a delivery claim. Preflight never uploads or posts anything.
   let preparedX;
-  if(entry.asset.kind==='X')preparedX=await integration.prepareApprovedX(payload);
-  else await require('./emradar-v3-recipient.cjs').checkPersistedRecipient(pool,entry.asset,state);
+  try{
+   if(entry.asset.kind==='X')preparedX=await integration.prepareApprovedX(payload);
+   else{
+    await require('./emradar-v3-recipient.cjs').checkPersistedRecipient(pool,entry.asset,state);
+    if(integration.reconcileReportedEmail)await integration.reconcileReportedEmail(service.store,state,destinationId);
+   }
+  }catch(error){
+   const reason=/^V3_[A-Z0-9_]+$/.test(error.message)?error.message:'RELEASE_PREFLIGHT_FAILED';
+   if(service.store.mutate)await service.store.mutate(campaignId,current=>{
+    if(current.assets[destinationId].fingerprint===entry.fingerprint&&!current.deliveries[destinationId]){
+     current.release_failures??={};current.release_failures[destinationId]={fingerprint:entry.fingerprint,reason};
+    }
+    return current;
+   });
+   throw error;
+  }
   const claimed=await service.store.claimDelivery(campaignId,destinationId,entry.fingerprint);
   payload.idempotency_key=claimed.deliveries[destinationId].idempotency_key;
   let receipt;
   try{
    receipt=await integration.handle({operation:'approved-delivery',payload,preparedX});
-  }catch{
+   if(receipt?.accepted!==true || !receipt.receipt_id)throw Error('V3_ACCEPTANCE_RECEIPT_REQUIRED');
+  }catch(error){
+   if(/^V3_SMTP_REJECTED_[45][0-9]{2}$/.test(error.message)){
+    await service.store.recordDelivery(campaignId,destinationId,'FAILED_DEFINITELY_UNSENT',{reason:error.message,independent_proof:'SMTP negative completion reply'});
+    throw error;
+   }
    await service.store.recordDelivery(campaignId,destinationId,'AMBIGUOUS',{reason:'TRANSPORT_OUTCOME_UNKNOWN'});
    throw Error('V3_DELIVERY_OUTCOME_AMBIGUOUS');
   }

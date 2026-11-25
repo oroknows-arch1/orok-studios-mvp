@@ -59,6 +59,17 @@ function openEditor({heading,initial,multiline=true,save}){
  dialog.addEventListener('close',()=>dialog.remove());
  actions.append(cancel,commit);dialog.append(title,field,feedback,actions);document.body.append(dialog);dialog.showModal();field.focus();
 }
+function deliveryLabel(item){
+ const delivery=item.delivery, receipt=delivery?.receipt;
+ if(delivery){
+  if(['ACCEPTED','CONFIRMED'].includes(delivery.status) && receipt?.provider_id)return 'Sent — provider acceptance confirmed · Receipt: '+receipt.provider_id;
+  if(delivery.status==='FAILED_DEFINITELY_UNSENT')return 'Failed — '+(receipt?.reason||'provider rejected delivery');
+  if(delivery.status==='ATTEMPTING' && Date.now()-Date.parse(delivery.claimed_at)<120000)return 'Sending…';
+  return 'Delivery uncertain — reconciliation required before retry'+(receipt?.reason?' · '+receipt.reason:'');
+ }
+ if(item.release_failure)return 'Failed — '+item.release_failure;
+ return item.decision?.decision==='APPROVE'?'Approved — ready to send':'Not released';
+}
 async function refresh(){
  const view=await api('view',{campaignId:campaign,});
  main.replaceChildren();
@@ -78,12 +89,13 @@ async function refresh(){
   if(group.subject)card.append(text('h3',group.subject));card.append(text('pre',group.body),text('p','Included verified publications:'));
   if(view.publishing?.email?.enabled===false)card.append(text('p',view.publishing.email.reason||'Email sending is unavailable.'));
   const list=document.createElement('ul');
+  const progress=new Map();
   const mixedReadiness=members.some(member=>!approvableRecipient(member)&&!member.delivery);
   for(const member of members){
    const row=document.createElement('li');row.append(text('span',(member.destination?.name||member.asset.destination_id)+' · '+member.asset.to));
    row.append(text('small',' · '+member.editorial_status));
    if(!actionable(member)&&member.editorial_reason)row.append(text('p',member.editorial_reason==='PRIMARY_SOURCE_NOT_RETRIEVED_MANUAL_VERIFICATION_REQUIRED'?'The source could not be retrieved for the editorial check.':member.editorial_reason));
-   if(member.delivery){const delivered=['ACCEPTED','CONFIRMED'].includes(member.delivery.status);const receipt=text('p',delivered?'Mail accepted · Receipt: '+(member.delivery.receipt?.provider_id||'saved')+' · Sent folder: '+(member.delivery.receipt?.sent_folder?.status||'not confirmed'):'Delivery: '+member.delivery.status);receipt.setAttribute('role','status');if(delivered)receipt.className='saved';row.append(receipt);}
+   const receipt=text('p',deliveryLabel(member));receipt.setAttribute('role','status');row.append(receipt);progress.set(member.asset.destination_id,receipt);
    if(!members.some(item=>item.delivery))for(const action of ['EXCLUDE','SPLIT']){const button=text('button',action==='EXCLUDE'?'Exclude recipient':'Split to individual');button.addEventListener('click',async()=>{button.disabled=true;try{await api('group-member',{campaignId:campaign,groupId:group.id,destinationId:member.asset.destination_id,contentHash:group.content_hash,version:group.version,action});await refresh();}catch{status.textContent='Group membership was not changed. Reload and retry.';button.disabled=false;}});row.append(button);}
    if((mixedReadiness||group.approval||members.some(item=>item.delivery))&&approvableRecipient(member)&&!member.decision){
     const approve=text('button','Approve this recipient');
@@ -94,10 +106,29 @@ async function refresh(){
     });
     row.append(approve);
    }
-   if(member.decision?.decision==='APPROVE'&&approvableRecipient(member)){const send=text('button','Send approved email');send.disabled=view.publishing?.email?.enabled===false;send.addEventListener('click',async()=>{if(!confirm('Send this exact approved email to '+member.asset.to+'?'))return;send.disabled=true;const feedback=text('p','Sending…');feedback.setAttribute('role','status');row.append(feedback);try{const result=await api('release',{campaignId:campaign,destinationId:member.asset.destination_id});feedback.textContent=result.status==='ACCEPTED'?'Mail accepted · Receipt: '+(result.receipt_id||'saved'):'Delivery status: '+result.status;try{await refresh();status.textContent=feedback.textContent;}catch{feedback.textContent+=' · Refresh the review to see the saved receipt.';}}catch(e){feedback.textContent='Release not confirmed: '+e.message+'. Check the saved delivery record before retrying.';status.textContent=feedback.textContent;}});row.append(send);}
+   if(member.decision?.decision==='APPROVE'&&approvableRecipient(member)){const send=text('button','Send approved email');send.disabled=view.publishing?.email?.enabled===false;send.addEventListener('click',async()=>{if(!confirm('Send this exact approved email to '+member.asset.to+'?'))return;send.disabled=true;const feedback=text('p','Sending…');feedback.setAttribute('role','status');row.append(feedback);try{const result=await api('release',{campaignId:campaign,destinationId:member.asset.destination_id,fingerprint:member.fingerprint});feedback.textContent=result.status==='ACCEPTED'?'Mail accepted · Receipt: '+(result.receipt_id||'saved'):'Delivery status: '+result.status;try{await refresh();status.textContent=feedback.textContent;}catch{feedback.textContent+=' · Refresh the review to see the saved receipt.';}}catch(e){feedback.textContent='Release not confirmed: '+e.message+'. Check the saved delivery record before retrying.';status.textContent=feedback.textContent;}});row.append(send);}
    list.append(row);
   }
   card.append(list);
+  const approved=members.filter(m=>m.decision?.decision==='APPROVE' && m.decision.asset_sha256===m.fingerprint && approvableRecipient(m));
+  if(approved.length){
+   const batch=text('button','Send approved group emails ('+approved.length+')');
+   batch.disabled=view.publishing?.email?.enabled===false;
+   batch.addEventListener('click',async()=>{
+    if(!confirm('Send these approved emails to '+approved.map(m=>m.asset.to).join(', ')+'?'))return;
+    card.querySelectorAll('button').forEach(button=>{button.disabled=true;});
+    for(const m of approved){
+     const feedback=progress.get(m.asset.destination_id);
+     feedback.textContent='Sending…';
+     try{
+      const result=await api('release',{campaignId:campaign,destinationId:m.asset.destination_id,fingerprint:m.fingerprint});
+      feedback.textContent=result.status==='ACCEPTED' && result.receipt_id?'Sent — provider acceptance confirmed · Receipt: '+result.receipt_id:'Delivery uncertain — reconciliation required before retry';
+     }catch(e){feedback.textContent='Release not confirmed: '+e.message;}
+    }
+    try{await refresh();}catch{status.textContent='Group processing finished. Refresh to see saved delivery records.';}
+   });
+   card.append(batch);
+  }
   if(!members.some(member=>member.delivery)){
    for(const [field,label] of [['subject','Edit shared subject'],['body','Edit shared body']]){
     const button=text('button',label);
@@ -119,7 +150,7 @@ async function refresh(){
   if(!historical)card.id='review-proposal-'+asset.destination_id;
   card.append(text('h2',item.destination?.name||asset.destination_id),text('small',historical?item.label:'Editorial decision: '+(decision?.decision||'Awaiting decision')));
   if(!historical&&(item.revision||lastSaved==='entry:'+asset.destination_id)){const saved=text('p',item.revision?'Edited · Saved · Revision '+item.revision.id+' · '+fingerprint:'Edited · Saved'+(decision?'':' · New approval required'));saved.className='saved';card.append(saved);}
-  card.append(text('p','Preparation: '+(!historical&&item.editorial_status!=='LEGACY'?item.editorial_status:asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':delivery?.status||'Not released')));
+  card.append(text('p','Preparation: '+(!historical&&item.editorial_status!=='LEGACY'?item.editorial_status:asset.review_status||'READY')),text('p','Delivery: '+(historical?'Historical content; current version is reviewed separately.':deliveryLabel(item))));
   if(!historical&&item.review_action){
    const action=item.review_action;
    const labels={NEEDS_FEEDBACK:'Rejection saved — owner feedback is needed before regeneration.',PENDING:'Regeneration queued.',RUNNING:'Regeneration in progress.',OWNER_REVIEW_PENDING:'Revised content is ready; owner review notification is pending.',COMPLETE:'Revised content is ready for owner review.',FAILED:'Regeneration failed; the rejected draft remains unchanged.',NOTIFICATION_AMBIGUOUS:'Review notification outcome is uncertain; it will not be resent automatically.',CANCELLED:'Regeneration was cancelled by a later owner decision.'};
@@ -130,6 +161,7 @@ async function refresh(){
   if(asset.kind==='EMAIL')card.append(text('p','Type: '+(asset.correspondence_type==='SOURCE_ENQUIRY'?'Source enquiry':asset.correspondence_type==='EDITORIAL_OUTREACH'?'Editorial outreach':'Legacy unclassified correspondence')),text('p',asset.to?'Recipient: '+asset.to+' · Verification: '+(asset.contact_status||'unknown'):'Recipient unavailable'),text('p',asset.brand_version==='connected-earth-v1'?'Presentation: EMRADAR connected-Earth letterhead · Sean Walker · Research & Editorial':'Presentation: legacy review asset'));
   if(item.recipient_warning)card.append(text('p','Automated verification warning: '+item.recipient_warning+'. The owner-saved address remains available for review; approve this exact email before release.'));
   if(delivery?.receipt)card.append(text('p',asset.kind==='X'?'X receipt: '+(delivery.receipt.provider_id||'unconfirmed'):'Mail receipt: '+(delivery.receipt.provider_id||'unconfirmed')+' · Sent folder: '+(delivery.receipt.sent_folder?.status||'no filing receipt')));
+  if(asset.kind==='X' && delivery?.receipt?.post_url && delivery.receipt.post_url.startsWith('https://x.com/')){const post=document.createElement('a');post.href=delivery.receipt.post_url;post.textContent='Open published X post';card.append(post);}
   if(asset.subject)card.append(text('h3',asset.subject));
   card.append(text('pre',asset.body));
   if(!historical&&item.editorial_reason)card.append(text('p',item.editorial_reason));
@@ -196,7 +228,7 @@ async function refresh(){
     send.disabled=true;
     const feedback=text('p',isX?'Publishing…':'Sending…');feedback.setAttribute('role','status');card.append(feedback);
     try{
-     const result=await api('release',{campaignId:campaign,destinationId:asset.destination_id});
+     const result=await api('release',{campaignId:campaign,destinationId:asset.destination_id,fingerprint});
      feedback.textContent=result.status==='ACCEPTED'?(isX?'X accepted · Receipt: ':'Mail accepted · Receipt: ')+(result.receipt_id||'saved'):'Delivery status: '+result.status;
      try{await refresh();status.textContent=feedback.textContent;}catch{feedback.textContent+=' · Refresh the review to see the saved receipt.';}
     }catch(e){feedback.textContent='Release not confirmed: '+e.message+'. Check the saved delivery record before retrying.';status.textContent=feedback.textContent;}

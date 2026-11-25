@@ -128,8 +128,9 @@ export class CampaignStore {
     state.editorial_preparation ??= {outcomes:{}};
     const evidence = state.preparation_input.document.evidence ?? [];
     const changed = new Set();
-    for (const {id:destinationId, fingerprint, inputBinding, asset, record, forceOutcome=false} of results) {
+    for (const {id:destinationId, fingerprint, inputBinding, asset, record, forceOutcome=false, preserveOwner=false} of results) {
      const entry = state.assets[destinationId];
+     if(preserveOwner && (state.decisions[destinationId] || state.review_actions?.[destinationId] || state.events.some(event=>event.destination_id===destinationId && event.changed_fields))) continue;
      const destination = state.destinations.find(item => item.id === destinationId);
      const previous = proposalBinding({asset:entry.asset,destination,evidence});
      if (entry.fingerprint !== fingerprint || Object.keys(previous).some(key => previous[key] !== inputBinding[key])) throw Error('STALE_ASSET_REVISION');

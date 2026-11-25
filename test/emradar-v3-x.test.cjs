@@ -134,7 +134,10 @@ test('disabled publishing and unknown prior publication leave campaign and claim
  for(const options of [{env:{}},{respond:async url=>url.includes('/users/123/tweets')?response({}):null}]){
   const f=await integrationFixture(options),before=structuredClone(f.state());
   await assert.rejects(f.release()(f.input),/PUBLISH_DISABLED|HISTORY_UNKNOWN/);
-  assert.deepEqual(f.state(),before);assert.equal(f.reservations.size,0);
+  const {release_failures,...unchanged}=f.state();
+  assert.match(release_failures.x.reason,/PUBLISH_DISABLED|HISTORY_UNKNOWN/);
+  assert.equal(release_failures.x.fingerprint,before.assets.x.fingerprint);
+  assert.deepEqual(unchanged,before);assert.equal(f.reservations.size,0);
  }
 });
 

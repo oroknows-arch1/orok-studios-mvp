@@ -842,6 +842,10 @@
     },
     "implementation": "Approve eligible group members independently, use exact saved owner approval and a valid non-opted-out address at release, preserve duplicate-send protection, and show each receipt or explicit release failure.",
     "verification": "33 focused tests passed locally with mocked mail and X transport. Full harness requires the private pinned submodule via GitHub CI.",
-    "status": "PENDING_CI_AND_PRODUCTION_VERIFICATION"
+    "status": "PENDING_CI_AND_PRODUCTION_VERIFICATION",
+    "continuation": {
+      "baseline": "PR 72 live. Current X has three verified AIIB claims and one unresolved claim. Group release offered individual buttons only.",
+      "batch": "Recover exact saved claims, regenerate country/company PNG, reconcile two reported recipients, expose group send and persist release feedback. Reuse current review; no external test sends."
+    }
   }
 }
