@@ -17,6 +17,6 @@ function createV3IsolatedWiring({pool,token,reviewOrigin,env,createTransport,fet
   sendOwnerReview:smtp.sendOwnerReview,
   sendApprovedEmail:smtp.sendApprovedEmail,prepareApprovedX
  });
- return {...integration,initialize:async()=>{await integration.initialize();await x.auth.initialize();},xAuth:x.auth,prepareApprovedX,assertXEnabled:x.assertEnabled,verifyXIdentity:x.verifyIdentity,verifyMailTransport:smtp.verifyTransport,inspectOwnerInvitation:smtp.inspectOwnerInvitation,inspectOwnerMailbox:smtp.inspectOwnerMailbox};
+ return {...integration,reconcileReportedEmail:(store,state,id)=>require('./emradar-v3-reported-delivery.cjs').reconcileReportedEmail({pool,store,state,id,inspect:smtp.inspectSentRecipient}),initialize:async()=>{await integration.initialize();await x.auth.initialize();},xAuth:x.auth,prepareApprovedX,assertXEnabled:x.assertEnabled,verifyXIdentity:x.verifyIdentity,verifyMailTransport:smtp.verifyTransport,inspectOwnerInvitation:smtp.inspectOwnerInvitation,inspectOwnerMailbox:smtp.inspectOwnerMailbox};
 }
 module.exports={createV3IsolatedWiring};

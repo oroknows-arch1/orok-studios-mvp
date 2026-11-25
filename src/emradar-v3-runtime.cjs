@@ -437,6 +437,32 @@ async function mountV3PreparationReview({app,env=process.env,openai,fetcher=fetc
   };
   const {recoveryCampaignId}=await import('../vendor/emradar-v3/src/editorial-preparation.js');
   const runEditorialRecovery=async()=>{
+   if(service.recoverX){
+    const incident=require('./emradar-v3-reported-delivery.cjs');
+    const marker='v3-release-recovery:'+incident.campaignId+':20261125-r1';
+    if(!(await service.store.adapter.read(marker))){
+     const state=(await service.store.adapter.read(incident.campaignId))?.value;
+     if(state?.phase==='PUBLICATION_REVIEW'){
+      const revised=await service.recoverX(incident.campaignId);
+      const diagnostics={revised,emails:{},x:'UNVERIFIED',inbox:'UNVERIFIED'};
+      for(const id of incident.reported){
+       try{await integration.reconcileReportedEmail(service.store,state,id);diagnostics.emails[id]='CHECKED';}
+       catch(error){diagnostics.emails[id]=error.message==='V3_SENT_RECONCILIATION_REQUIRED'?'RECONCILIATION_REQUIRED':'CHECK_FAILED';}
+      }
+      const after=(await service.store.adapter.read(incident.campaignId)).value;
+      try{await integration.prepareApprovedX({campaign_id:incident.campaignId,asset:after.assets.x.asset});diagnostics.x='IDENTITY_SCOPES_GRAPHIC_AND_HISTORY_VERIFIED';}
+      catch(error){diagnostics.x=/^V3_[A-Z0-9_]+$/.test(error.message)?error.message:'X_PREFLIGHT_UNAVAILABLE';}
+      const invitation=(await service.store.adapter.read('review:'+incident.campaignId))?.value;
+      if(invitation?.notification_receipt?.provider_id){
+       try{const result=await integration.inspectOwnerMailbox({campaignId:incident.campaignId,reviewOrigin:env.EMRADAR_V3_REVIEW_ORIGIN,token_hash:invitation.token_hash,provider_id:invitation.notification_receipt.provider_id});
+        diagnostics.inbox=result.link_ready?'EXISTING_LINK_MATCHED':result.reason;}
+       catch{diagnostics.inbox='MAILBOX_UNAVAILABLE';}
+      }
+      await service.store.adapter.compareAndSwap(marker,null,diagnostics);
+      console.info('V3_RELEASE_RECOVERY '+JSON.stringify(diagnostics));
+     }
+    }
+   }
    const state=(await service.store.adapter.read(recoveryCampaignId))?.value;
    if(state?.phase!=='PUBLICATION_REVIEW')return null;
    const client=await pool.connect();

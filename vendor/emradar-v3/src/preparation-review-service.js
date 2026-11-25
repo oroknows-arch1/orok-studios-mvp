@@ -1,5 +1,6 @@
 import {createCoverageDiscovery,assessDiscoveryCoverage,coverageKey,isEditorialSourceInstitution} from '../../emradar-v3-authoritative/src/discovery-coverage.js';
 import {GRAPHIC_STANDARD} from './graphic-standard.js';
+import {recoverCheckedX} from './checked-x-recovery.js';
 import {writeXWithFormationFallback} from './x-formation-fallback.js';
 import {assetFingerprint} from './contracts.js';
 import {EDITORIAL_REFERENCE,EDITORIAL_ENFORCEMENT_VERSION,isEditorialDestination,selectEditorialEvidence} from './editorial-reference.js';
@@ -73,7 +74,14 @@ export function assessPublicationReview({state,candidates}) {
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
  const ready=asset=>!editorialApplies(state)||isEditorialReady(editorialStatus(state,asset.destination_id));
- const emailIds=new Set(assets.filter(asset=>ready(asset)&&asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&asset.delivery_eligible===true&&recipientPolicy.recipientReadyForReview(asset,state.destinations.find(d=>d.id===asset.destination_id))&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
+ const selectedAddress=asset=>{
+  const destination=state.destinations.find(d=>d.id===asset.destination_id);
+  if(!recipientPolicy.recipientAllowedForReview(asset,destination))return false;
+  const decision=state.decisions?.[asset.destination_id];
+  return asset.to.toLowerCase()===destination?.contact?.email?.toLowerCase() ||
+   (decision?.decision==='APPROVE' && decision.authority==='OWNER' && decision.asset_sha256===assetFingerprint(asset));
+ };
+ const emailIds=new Set(assets.filter(asset=>ready(asset)&&asset.kind==='EMAIL'&&asset.review_status!=='NEEDS_REVISION'&&selectedAddress(asset)&&asset.subject?.trim()&&asset.body?.trim()).map(asset=>asset.destination_id));
  const missing=recipients.filter(item=>!state.decisions?.[item.id]&&!state.deliveries?.[item.id]).map(item=>item.id).filter(id=>!destinationIds.has(id)||!emailIds.has(id));
  const incomplete=assets.filter(asset=>asset.review_status==='NEEDS_REVISION'||(!state.deliveries?.[asset.destination_id]&&!ready(asset)));
  const x=assets.find(asset=>asset.kind==='X'&&asset.destination_id==='x');
@@ -164,6 +172,11 @@ export async function createPreparationReviewService({
  const renderRevision=async(asset,state)=>{
   const visual=await renderVerifiedVisual({asset,document:state.preparation_input.document,scan:state.scan});
   return {...asset,visual_sha256:visual.sha256,visual_url:visual.url};
+ };
+ const recoverX=async campaignId=>{
+  const changed=await recoverCheckedX({store,campaignId,renderRevision});
+  if(changed)await saveCompletion(campaignId);
+  return changed;
  };
  const editorialReview=async (campaignId,options={})=>{
   if(!assessEditorial)return null;
@@ -374,7 +387,7 @@ export async function createPreparationReviewService({
   const state=(await adapter.read(campaignId)).value;
   return {campaignId,status:'PUBLICATION_REVIEW',existing:false,groups:Object.values(state.email_groups??{}).filter(group=>group.destination_ids.length>1).length,recipients:verified.length};
  };
- return {store,directory,workflow,prepare,discover,recoverEditorialReview,editorialReview,excludeSourceInstitutions:async campaignId=>{const excluded=await excludeSourceInstitutionDestinations({store,directory,campaignId});if(excluded.length)await saveCompletion(campaignId);return excluded;},refreshUnreviewedXVisual:ensureBrandedX,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),prepareReplacementReview,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,regenerateRejectedAsset,updateRegenerationStatus,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
+ return {store,directory,workflow,prepare,discover,recoverX,recoverEditorialReview,editorialReview,excludeSourceInstitutions:async campaignId=>{const excluded=await excludeSourceInstitutionDestinations({store,directory,campaignId});if(excluded.length)await saveCompletion(campaignId);return excluded;},refreshUnreviewedXVisual:ensureBrandedX,cleanUnverifiedRecipients:campaignId=>cleanUnverifiedRecipients({pool,campaignId}),recoverVerifiedRecipients,testProductionContactAccess:()=>createEditorialContactResearch({read:url=>pinnedHtml(url,lookup),maxPages:4,maxMs:45000})({website:'https://www.australianmining.com.au/',publication:'Australian Mining',topics:['mining'],sourceUrls:['https://www.australianmining.com.au/contact-us/']}),refreshUnreviewedEditorialDrafts:campaignId=>refreshUnreviewedEditorialDrafts({store,write,campaignId}),prepareEditorialAlternatives:options=>prepareEditorialAlternatives({...options,store,write}),prepareReplacementReview,resumeEditorialDrafts,resumeIntelligentDiscovery,reviewCompletion,regenerateRejectedAsset,updateRegenerationStatus,prepareAndNotify:createPublicationReviewHandoff({prepare:async input=>{
   const result=await prepare(input);
   const prior=(await adapter.read(result.campaignId))?.value;
   if(result.status==='ALREADY_PREPARED'&&!prior?.review_completion)await resumeIntelligentDiscovery(result.campaignId,{notifyOwner:false});
@@ -444,6 +457,7 @@ export async function createPreparationReviewService({
     console.error('V3_COLLABORATIVE_EDITORIAL_UNAVAILABLE');
    }
   }
+  if(await recoverX(result.campaignId))completion=await reviewCompletion(result.campaignId);
   return {...result,status:'PUBLICATION_REVIEW',...completion};
  },workflow:{issue:ensureOwnerReview}})};
 }

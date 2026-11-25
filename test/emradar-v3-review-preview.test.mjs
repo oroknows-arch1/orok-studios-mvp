@@ -11,6 +11,7 @@ class Element {
  replaceChildren(...children){this.children=children;}
  setAttribute(key,value){this.attributes[key]=value;}
  addEventListener(name,handler){this.listeners[name]=handler;}
+ querySelectorAll(tag){return flatten(this).filter(node=>node.tag===tag);}
  focus(){}
  showModal(){}
  close(){this.listeners.close?.();}
@@ -18,11 +19,11 @@ class Element {
  remove(){}
 }
 const flatten=element=>[element,...element.children.flatMap(flatten)];
-async function render(view,onRevise){
+async function render(view,onRevise,onRelease){
  const elements=Object.fromEntries(['status','entries','discover','connect-x','check-x'].map(id=>[id,new Element(id)]));
  const calls=[],payloads=[];
  const body=new Element('body');
- const context={document:{body,cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
+ const context={document:{body,cookie:'',getElementById:id=>elements[id],createElement:tag=>new Element(tag)},location:{origin:'https://review.example',hash:'',search:'?campaign=campaign',pathname:'/review/access'},history:{replaceState(){}},URL,URLSearchParams,confirm:()=>true,prompt:()=> 'Make the analytical contribution clearer without changing the verified finding.',fetch:async(path,options={})=>{calls.push(path);if(options.body)payloads.push(JSON.parse(options.body));if(path==='/api/review/release'&&onRelease)return onRelease(payloads.at(-1));if(path==='/api/review/revise'&&onRevise)onRevise(payloads.at(-1));return {ok:true,json:async()=>path==='/api/review/decision'?{saved:true,regeneration_status:'PENDING'}:view};}};
  const script=reviewPage.match(/<script>([\s\S]*)<\/script>/)[1];
  await new vm.Script(script).runInNewContext(context);
  return {...elements,body,calls,payloads};
@@ -84,7 +85,7 @@ test('owner override warning is visible but does not block approval of the exact
 test('accepted email remains fully visible with receipt, with resend and post-delivery edits disabled',async()=>{
  const result=await render({entries:[{asset:{kind:'EMAIL',destination_id:'journal',to:'editor@example.org',subject:'Approved subject',body:'Already sent body'},decision:{decision:'APPROVE'},delivery:{status:'ACCEPTED',receipt:{provider_id:'message-id',sent_folder:{status:'FILED'}}}}]});
  const nodes=flatten(result.entries);
- for(const value of ['Already sent body','Editorial decision: APPROVE','Delivery: ACCEPTED','Mail receipt: message-id · Sent folder: FILED'])assert(nodes.some(n=>n.textContent===value));
+ for(const value of ['Already sent body','Editorial decision: APPROVE','Delivery: Sent — provider acceptance confirmed · Receipt: message-id','Mail receipt: message-id · Sent folder: FILED'])assert(nodes.some(n=>n.textContent===value));
  assert.equal(nodes.find(n=>n.textContent==='Send approved email').disabled,true);
  assert.equal(nodes.find(n=>n.textContent==='Approve').disabled,true);assert(!nodes.some(n=>n.textContent==='Edit draft'));
 });
@@ -161,4 +162,28 @@ test('historical group member returns to shared controls without offering indivi
  for(const label of ['Edit shared subject','Edit shared body','Approve Group','Reject Group'])assert(nodes.some(n=>n.tag==='button'&&n.textContent===label&&!n.disabled));
  assert(!nodes.some(n=>n.textContent==='Approve'));assert.equal(result.entries.children[2].href,'#review-group-shared');
  await nodes.find(n=>n.textContent==='Approve Group').listeners.click();const payload=result.payloads.find(p=>p.decision);assert.equal(payload.contentHash,'group-sha');assert.equal(payload.version,2);
+});
+
+test('one group click releases only exact approved members and retains each result on reload',async()=>{
+ const members=['left','middle','right'].map(id=>({groupId:'group',asset:{destination_id:id,kind:'EMAIL',to:id+'@example.org'},
+  fingerprint:id,decision:{decision:'APPROVE',asset_sha256:id}}));
+ const view={entries:members,groups:[{id:'group',version:1,destination_ids:members.map(m=>m.fingerprint)}]};
+ members[1].editorial_ready=false;
+ const processed=[];
+ const page=await render(view,null,async payload=>{
+  assert.equal(payload.fingerprint,payload.destinationId);processed.push(payload.destinationId);
+  const member=members.find(m=>m.fingerprint===payload.fingerprint);
+  if(payload.destinationId==='left'){
+   member.delivery={status:'AMBIGUOUS',receipt:{reason:'TRANSPORT_OUTCOME_UNKNOWN'}};
+   return {ok:false,json:async()=>({error:'V3_DELIVERY_OUTCOME_AMBIGUOUS'})};
+  }
+  member.delivery={status:'ACCEPTED',receipt:{provider_id:'confirmed-right'}};
+  return {ok:true,json:async()=>({status:'ACCEPTED',receipt_id:'confirmed-right'})};
+ });
+ await flatten(page.entries).find(n=>n.textContent==='Send approved group emails (2)').listeners.click();
+ assert.deepEqual(processed,['left','right']);
+ const reopened=await render(view),labels=flatten(reopened.entries).map(n=>n.textContent);
+ assert(labels.some(l=>l.includes('Delivery uncertain')));
+ assert(labels.some(l=>l.includes('Sent — provider acceptance confirmed · Receipt: confirmed-right')));
+ assert(!labels.some(l=>l.startsWith('Send approved group emails')));
 });
