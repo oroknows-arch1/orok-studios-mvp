@@ -149,3 +149,68 @@ test('edit save reload binds approval and distribution payload to the persisted 
  assert.equal(f.sentPayloads[0].asset.body,'Edited persisted body');assert.equal(f.sentPayloads[0].approval.asset_sha256,entry.fingerprint);
  assert.equal(f.sends(),1);
 });
+
+test('group approval survives reload and each exact recipient gets a separate persisted receipt',async()=>{
+ const {CampaignStore}=await import('../vendor/emradar-v3/src/state.js');
+ const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
+ const {createV3Release}=require('../src/emradar-v3-release.cjs');
+ const f=await fixture();
+ for(const id of ['editor','news','held'])f.add(id,null);
+ const state=f.states.get('campaign');
+ state.deliveries={};
+ state.events=[];
+ state.assets.held.asset.review_status='NEEDS_REVISION';
+ // Simulate a legacy saved group whose recipient proof has disappeared.
+ const {identicalEmailGroupKey}=await import('../vendor/emradar-v3/src/contracts.js');
+ const contentHash=identicalEmailGroupKey(state.assets.editor.asset);
+ state.email_groups={group:{id:'group',version:1,content_hash:contentHash,destination_ids:['editor','news','held']}};
+ state.destinations[0].contact_verified=false;
+ state.destinations[0].verification=null;
+ let version=1;
+ const adapter={
+  read:async id=>({version,value:structuredClone(f.states.get(id))}),
+  compareAndSwap:async(id,prior,next)=>{
+   if(prior!==version)return false;
+   version++;
+   f.states.set(id,structuredClone(next));
+   return true;
+  }
+ };
+ const open=()=>{
+  const store=new CampaignStore(adapter);
+  const workflow=new ReviewWorkflow({store,adapter,baseUrl:'https://review.example',notify:async()=>{throw Error('NO_REAL_SEND');}});
+  workflow.authenticate=async(_campaign,id,secret)=>{
+   assert.equal(id,'owner-session');
+   assert.equal(secret,'owner-secret');
+  };
+  return {store,workflow};
+ };
+ const input={campaignId:'campaign',sessionId:'owner-session',sessionSecret:'owner-secret'};
+ const initial=open();
+ await initial.workflow.decideGroup('campaign','owner-session','owner-secret','group','APPROVE',contentHash,1);
+ const reloaded=open();
+ const before=await reloaded.workflow.view('campaign','owner-session','owner-secret');
+ assert.deepEqual(before.groups[0].approval.destination_ids,['editor','news']);
+ assert.equal(before.entries.find(e=>e.asset.destination_id==='held').decision,null);
+ const pool={query:async sql=>{
+  assert.match(sql,/v3_outlet_directory/);
+  return {rows:[]};
+ }};
+ const release=env=>createV3Release({service:open(),integration:f.integration(),pool,env});
+ await assert.rejects(release({})({...input,destinationId:'editor'}),/V3_DISTRIBUTION_PAUSED/);
+ assert.equal(f.sends(),0);
+ const send=release({EMRADAR_V3_DISTRIBUTION_PAUSED:'false'});
+ for(const destinationId of ['editor','news']){
+  const result=await send({...input,destinationId});
+  assert.equal(result.status,'ACCEPTED');
+  assert.equal(result.receipt_id,'receipt-'+destinationId);
+ }
+ const after=await open().workflow.view('campaign','owner-session','owner-secret');
+ for(const destinationId of ['editor','news']){
+  const entry=after.entries.find(e=>e.asset.destination_id===destinationId);
+  assert.equal(entry.delivery.receipt.provider_id,'receipt-'+destinationId);
+  assert.equal(entry.delivery.receipt.sent_folder.status,'APPENDED');
+  await assert.rejects(send({...input,destinationId}),/V3_RELEASE_NOT_APPROVED/);
+ }
+ assert.equal(f.sends(),2);
+});
