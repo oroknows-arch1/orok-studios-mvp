@@ -26,7 +26,7 @@ import {createPublicationReviewHandoff} from './publication-review-handoff.js';
 import {sha256,MAX_DESTINATIONS,isReviewPhase} from './contracts.js';
 import {verifyEditorialAsset} from './destination-selection.js';
 import {envelopeSharedEmail,planPreparationBatches} from './group-first-preparation.js';
-import {editorialApplies, editorialStatus, hasEditorialOutcome, isEditorialReady, prepareEditorialReview} from './editorial-preparation.js';
+import {editorialApplies, editorialStatus, hasEditorialOutcome, isEditorialReady, isEditorialOwnerReviewable, prepareEditorialReview} from './editorial-preparation.js';
 import {convert} from 'html-to-text';
 import {auditCampaignOnce} from './campaign-editorial-shadow.js';
 import {reconcileCollaborativeEditorial} from './collaborative-editorial-review.js';
@@ -73,7 +73,7 @@ export function assessPublicationReview({state,candidates}) {
  const recipients=publications.filter(recipientPolicy.verifiedDestination);
  const destinationIds=new Set(state.destinations.map(item=>item.id));
  const assets=Object.values(state.assets??{}).map(item=>item?.asset).filter(Boolean);
- const ready=asset=>!editorialApplies(state)||isEditorialReady(editorialStatus(state,asset.destination_id));
+ const ready=asset=>!editorialApplies(state)||isEditorialOwnerReviewable(editorialStatus(state,asset.destination_id));
  const selectedAddress=asset=>{
   const destination=state.destinations.find(d=>d.id===asset.destination_id);
   if(!recipientPolicy.recipientAllowedForReview(asset,destination))return false;
