@@ -15,75 +15,6 @@ function assertRecipientAllowed(asset,...records){
  if([asset,...records].filter(Boolean).some(record=>record.opted_out===true||record.do_not_contact===true||record.contact?.opted_out===true||record.contact?.do_not_contact===true))throw Error('V3_RECIPIENT_OPTED_OUT');
  return asset.to;
 }
-function authoritativeUrl(value,website){
- try{const u=new URL(value),site=new URL(website);return u.protocol==='https:'&&site.protocol==='https:'&&!u.username&&!u.password&&!u.port&&u.hostname.replace(/^www\./,'')===site.hostname.replace(/^www\./,'');}catch{return false;}
-}
-function authoritativeContact(record){
- if(authoritativeUrl(record?.contact?.source_url,record?.website))return true;
- const path=record?.contact?.publisher_attribution;if(!Array.isArray(path)||!path.length||path.length>2)return false;
- let previous=record.website;
- for(const edge of path){
-  if(!authoritativeUrl(edge.from_url,previous)||!/^[a-f0-9]{64}$/.test(edge.page_sha256??'')||!/contact|editor|publisher|about/i.test(edge.link_text??''))return false;
-  try{const u=new URL(edge.to_url);if(u.protocol!=='https:'||u.username||u.password||u.port)return false;}catch{return false;}
-  previous=edge.to_url;
- }
- return previous===record.contact.source_url;
-}
-function isDirectoryIdentityText(text){return typeof text==='string'&&/\bpublisher\b|\bpublishing\b|\b(?:press|media|editorial|newspaper|magazine)\s+(?:association|council|group|company|directory)\b/i.test(text)&&!/email marketing|lead generation|buy (?:contact|email)|data broker/i.test(text);}
-function directoryContact(record){
- const c=record?.contact,p=c?.directory_attribution,v=record?.verification;
- if(v?.method!=='published_editorial_directory'||!p)return false;
- return authoritativeUrl(p.publication_url,record.website)&&p.publication_name===record.name&&
-  authoritativeUrl(p.identity_url,c.source_url)&&v.publication_proof_url===c.source_url&&
-  v.publication_page_sha256===c.page_sha256&&/^[a-f0-9]{64}$/.test(p.identity_sha256??'')&&
-  typeof p.entry_excerpt==='string'&&p.entry_excerpt.toLowerCase().includes(c.email?.toLowerCase())&&p.entry_excerpt.toLowerCase().includes(record.name?.toLowerCase())&&
-  isDirectoryIdentityText(p.identity_excerpt);
-}
-function isCommercialContactContext(text){return typeof text==='string'&&/\bfor commodity offers\b|\b(?:sales|trading|supplier) (?:enquiries|inquiries)\b|\brequest (?:a )?(?:quote|quotation)\b/i.test(text);}
-function isNonEditorialContactContext(text){return typeof text==='string'&&(/\b(?:donat(?:e|ion|ions)|fundrais(?:e|ing))\b/i.test(text)||isCommercialContactContext(text));}
-function verifiedPublication(record){
- const v=record?.verification;
- let website,proof;
- try{website=new URL(record?.website);proof=new URL(v?.publication_proof_url);}catch{return false;}
- const sameHost=website.hostname.replace(/^www\./,'')===proof.hostname.replace(/^www\./,'');
- const directoryProof=(v?.publication_method==='published_editorial_directory'||v?.method==='published_editorial_directory')&&record?.contact?.directory_attribution?.publication_url&&authoritativeUrl(record.contact.directory_attribution.publication_url,record.website);
- const legacy=record?.publication_verified!==true&&(record?.contact_verified===true||record?.recipient_owner_override===true)&&v?.status==='VERIFIED';
- const explicit=record?.publication_verified===true&&v?.publication_status==='VERIFIED'&&/^[a-f0-9]{64}$/.test(v?.publication_page_sha256??'')&&
-  Array.isArray(record?.relationship?.formation_ids)&&record.relationship.formation_ids.length>0&&Array.isArray(record?.relationship?.industries)&&record.relationship.industries.length>0&&typeof record?.relationship?.reason==='string'&&record.relationship.reason.trim().length>0;
- return record?.active===true&&record.editorial_fit_verified===true&&['EDITORIAL_PUBLICATION','INFORMATION_CHANNEL'].includes(record.destination_class)&&website.protocol==='https:'&&
-  (legacy||explicit)&&(sameHost||directoryProof)&&Array.isArray(v?.evidence_ids)&&v.evidence_ids.length>0&&/^[a-f0-9]{64}$/.test(v?.scan_evidence_digest??'');
-}
-function verifiedDestination(record){
- const c=record?.contact,v=record?.verification;
- return verifiedPublication(record)&&record.contact_verified===true&&validRecipient(c?.email)&&
- ((v?.method==='live_editorial_contact_page'&&authoritativeContact(record)&&authoritativeUrl(v?.publication_proof_url,record.website))||directoryContact(record))&&v?.status==='VERIFIED'&&
- ['editorial','submissions','named_editor','general'].includes(c.purpose)&&
- typeof c.published_excerpt==='string'&&c.published_excerpt.toLowerCase().includes(c.email.toLowerCase())&&/^[a-f0-9]{64}$/.test(c.page_sha256??'')&&
- Array.isArray(v.evidence_ids)&&v.evidence_ids.length>0&&/^[a-f0-9]{64}$/.test(v.scan_evidence_digest??'')&&
- !isNonEditorialContactContext(c.published_excerpt)&&!record.opted_out&&!record.do_not_contact&&!c.opted_out&&!c.do_not_contact;
-}
-function assertVerifiedDestination(record){if(!verifiedDestination(record))throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');return record;}
-function assertVerifiedAsset(asset,destination){
- assertVerifiedDestination(destination);assertRecipientAllowed(asset,destination);
- if(asset.to.toLowerCase()!==destination.contact.email.toLowerCase()||asset.contact_status!=='VERIFIED'||asset.delivery_eligible!==true||
- !asset.evidence_ids?.length||!asset.evidence_ids.some(id=>(destination.evidence?.ids??destination.verification.evidence_ids).includes(id)))throw Error('V3_VERIFIED_RECIPIENT_REQUIRED');
- return asset.to;
-}
-function ownerRecipientOverride(asset,destination){
- return asset?.recipient_owner_override===true&&asset?.recipient_verification?.status==='OWNER_OVERRIDE'&&
-  destination?.recipient_owner_override===true&&destination.contact_status==='OWNER_OVERRIDE'&&
-  validRecipient(asset.to)&&destination.contact?.email?.toLowerCase()===asset.to.toLowerCase();
-}
-function recipientReadyForReview(asset,destination){
- try{
-  if(ownerRecipientOverride(asset,destination))assertRecipientAllowed(asset,destination);
-  else assertVerifiedAsset(asset,destination);
-  return true;
- }catch{return false;}
-}
-function recipientAllowedForReview(asset,destination){
- try{assertRecipientAllowed(asset,destination);return true;}catch{return false;}
-}
 function assertSendableRecipient(asset,destination,approval){
  if(approval?.authority!=='OWNER'||approval?.decision!=='APPROVE'||approval.campaign_id!==asset.campaign_id||approval.destination_id!==asset.destination_id||approval.asset_sha256!==digest(asset))throw Error('V3_OWNER_APPROVAL_REQUIRED');
  return assertRecipientAllowed(asset,destination);
@@ -95,4 +26,4 @@ async function checkPersistedRecipient(pool,asset,state){
  const {rows}=await pool.query("SELECT record FROM v3_outlet_directory WHERE outlet_id=$1 OR lower(record->'contact'->>'email')=lower($2)",[asset.destination_id,asset.to]);
  return assertRecipientAllowed(asset,destination,...rows.map(row=>row.record));
 }
-module.exports={isCommercialContactContext,isNonEditorialContactContext,isDirectoryIdentityText,validRecipient,assertRecipientAllowed,recipientAllowedForReview,checkPersistedRecipient,verifiedPublication,verifiedDestination,assertVerifiedDestination,assertVerifiedAsset,ownerRecipientOverride,recipientReadyForReview,assertSendableRecipient};
+module.exports={validRecipient,assertRecipientAllowed,assertSendableRecipient,checkPersistedRecipient};

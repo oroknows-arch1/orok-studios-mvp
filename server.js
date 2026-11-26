@@ -24,8 +24,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 // Existing approved model connection; no credentials or sending capability are exposed.
-const {createHarnessRelay}=require('./src/emradar-harness');
-app.post('/emradar/harness/:operation',createHarnessRelay({openai}));
+
 
 // Publishing capability — ledger, review, Long Game, draft preparation.
 // Mounted as API capability of this app (not a separate product).
@@ -678,68 +677,21 @@ app.post("/generate-image", createImageHandler(openai));
 const PORT = process.env.PORT || 3000;
 
 if (require.main === module) {
-  // Fail closed before listening if explicitly enabled V3 cannot initialise.
-  const {mountV3PreparationReview}=require('./src/emradar-v3-runtime.cjs');
-  mountV3PreparationReview({app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}}).then(({discoveryResearchPending,runDiscoveryResearchTest,ownerAccessPending,runOwnerAccess,engineRepairPending,runEngineRepair,recipientRecoveryPending,runRecipientRecovery,pool,runCampaign,runEditorialRecovery,runPendingRegenerations,refreshDirectory,editorialWritingReviewPending,runEditorialWritingReview,distributionPreflightPending,runDistributionPreflight,ownerInvitationPending,runOwnerInvitation,editorialStandardPending,runEditorialStandard}) => {
-  const server = app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log('V3_ACTIVATION_PREFLIGHT',JSON.stringify({
-      database_configured:Boolean(process.env.EMRADAR_V3_DATABASE_URL||process.env.DATABASE_URL),
-      openai_configured:Boolean(process.env.OPENAI_API_KEY),
-      smtp_host_configured:Boolean(process.env.EDITORIAL_SMTP_HOST),
-      smtp_user_canonical:process.env.EDITORIAL_SMTP_USER==='sean@emradar.net',
-      smtp_password_configured:Boolean(process.env.EDITORIAL_SMTP_PASSWORD),
-      v3_enabled:process.env.EMRADAR_V3_PREPARATION_ENABLED==='true'
-    }));
-    // Refresh daily intake without a redeployment. Never overlap local attempts;
-    // cross-process exclusion is held by the campaign's database session lock.
-    let preparing=false;
-    const prepareLatest=async()=>{
-      if(preparing||typeof runCampaign!=='function')return;
-      preparing=true;
-      try{
-        if(typeof runPendingRegenerations==='function')console.log('V3_REGENERATION_QUEUE_RESULT',JSON.stringify(await runPendingRegenerations()));
-        console.log('V3_PREPARATION_RESULT',JSON.stringify(await runCampaign()));
-      }
-      catch(error){console.error('V3_PREPARATION_BLOCKED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'V3_PREPARATION_FAILED');}
-      finally{preparing=false;}
+  import('./src/marketing/runtime.mjs').then(({mountMarketing})=>mountMarketing({
+    app,openai,setReviewHandler:handler=>{v3ReviewHandler=handler;}
+  })).then(marketing=>{
+    let timer,inProgress=false;
+    const tick=async()=>{
+      if(inProgress||!marketing.runCampaign)return;
+      inProgress=true;
+      try {console.info('MARKETING_INTAKE',await marketing.runCampaign());}
+      catch(e){console.error('MARKETING_INTAKE',/^[A-Z0-9_]+$/.test(e.message)?e.message:'PREPARATION_UNAVAILABLE');}
+      finally{inProgress=false;}
     };
-    if(discoveryResearchPending){
-      runDiscoveryResearchTest().then(result=>console.log('V3_DISCOVERY_RESEARCH_TEST',JSON.stringify(result)))
-        .catch(error=>console.error('V3_DISCOVERY_RESEARCH_TEST_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'DISCOVERY_TEST_FAILED'));
-    }else if(ownerAccessPending){
-      runOwnerAccess().then(result=>console.log('V3_OWNER_ACCESS_RESULT',JSON.stringify(result)))
-        .catch(()=>console.error('V3_OWNER_ACCESS_FAILED','MAILBOX_OR_NOTIFICATION_UNCONFIRMED'));
-    }else if(engineRepairPending){
-      runEngineRepair().then(result=>console.log('V3_ENGINE_REPAIR_RESULT',JSON.stringify(result)))
-        .catch(error=>console.error('V3_ENGINE_REPAIR_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'ENGINE_RESEARCH_FAILED'));
-    }else if(recipientRecoveryPending){
-      runRecipientRecovery().then(result=>console.log('V3_VERIFIED_RECIPIENT_RECOVERY',JSON.stringify(result)))
-        .catch(error=>console.error('V3_VERIFIED_RECIPIENT_RECOVERY_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'RECIPIENT_RECOVERY_FAILED'));
-    }else if(editorialStandardPending){
-      runEditorialStandard().then(result=>console.log('V3_EDITORIAL_STANDARD_RESULT',JSON.stringify(result)))
-        .catch(error=>console.error('V3_EDITORIAL_STANDARD_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_PROVIDER_FAILED'));
-    }else if(ownerInvitationPending){
-      runOwnerInvitation().then(result=>console.log('V3_OWNER_INVITATION_RESULT',JSON.stringify(result)))
-        .catch(()=>console.error('V3_OWNER_INVITATION_FAILED','INVITATION_OR_INBOX_UNCONFIRMED'));
-    }else if(distributionPreflightPending){
-      runDistributionPreflight().then(result=>console.log('V3_EMAIL_DISTRIBUTION_PREFLIGHT',JSON.stringify(result)))
-        .catch(error=>console.error('V3_EMAIL_DISTRIBUTION_PREFLIGHT_FAILED','TRANSPORT_CHECK_FAILED'));
-    }else if(editorialWritingReviewPending){
-      runEditorialWritingReview().then(result=>console.log('V3_EDITORIAL_WRITING_REVIEW',JSON.stringify(result)))
-        .catch(error=>console.error('V3_EDITORIAL_WRITING_REVIEW_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_PROVIDER_FAILED'));
-    }
-    // Always recover ready, unnotified campaigns at startup, regardless of historical maintenance jobs.
-    // Campaign-level advisory locks and durable review records prevent duplicate invitations.
-    const recoverEditorial=()=>runEditorialRecovery?.().then(result=>{
-      if(result)console.log('V3_EDITORIAL_RECOVERY',JSON.stringify(result));
-    }).catch(error=>console.error('V3_EDITORIAL_RECOVERY_FAILED',/^[A-Z0-9_]+$/.test(error.message)?error.message:'EDITORIAL_RECOVERY_FAILED'));
-    recoverEditorial();
-    prepareLatest();
-    const v3IntakeTimer=setInterval(()=>{recoverEditorial();prepareLatest();},60*60*1000);
-    v3IntakeTimer.unref();
-    require("./src/emradar-auth-probe").runAuthenticationProbe().catch(() => console.log('EMRADAR_MAILBOX_AUTH {"smtp":"FAIL","imap":"FAIL","reason":"DIAGNOSTIC_FAILED","emails_sent":0,"external_actions":0}'));
-  });
+    const server=app.listen(PORT,()=>{
+      console.info('Server running on port '+PORT);
+      if(marketing.runCampaign){tick();timer=setInterval(tick,60*60*1000);timer.unref();}
+    });
 
   // Graceful shutdown: stop accepting connections, then close the publishing
   // storage (database pool) so deploys/restarts release resources cleanly.
@@ -747,9 +699,10 @@ if (require.main === module) {
   const shutdown = (signal) => {
     if (shuttingDown) return;
     shuttingDown = true;
+    clearInterval(timer);
     console.log(`Received ${signal}, shutting down gracefully...`);
     server.close(() => {
-      Promise.resolve(publishing.close())
+      Promise.all([publishing.close(), marketing.close?.()])
         .catch(() => {})
         .finally(() => {
           console.log("Shutdown complete.");

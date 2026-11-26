@@ -103,15 +103,15 @@ test('expired read-only inspection never refreshes; ambiguous renewal remains gu
 });
 
 async function httpFixture(t,options={}){
- const {ReviewWorkflow}=await import('../vendor/emradar-v3/src/review-workflow.js');
- const {createOwnerSession}=await import('../vendor/emradar-v3/src/owner-sessions.js');
- const {createReviewServer}=await import('../vendor/emradar-v3/src/http.js');
+ const {OwnerAccess:ReviewWorkflow}=await import('../vendor/emradar-v3-authoritative/clean/access.js');
+ const {createOwnerSession}=await import('../vendor/emradar-v3-authoritative/clean/owner-sessions.js');
+ const {createReviewServer}=await import('../vendor/emradar-v3-authoritative/clean/http.js');
  const f=fixture(options),diagnostics=[],owner=createOwnerSession('campaign',{now:f.clock()});
  const campaign={phase:'PUBLICATION_REVIEW',assets:{x:{approved:'preserved'}},decisions:{x:{decision:'APPROVE'}},deliveries:{email:{status:'ACCEPTED'}}};
  const record={owner_session:{id:'owner-session',...owner.record}};
  const adapter={read:async key=>({value:structuredClone(key==='review:campaign'?record:campaign)}),compareAndSwap:async()=>{throw Error('NO_CAMPAIGN_WRITES');}};
  const workflow=new ReviewWorkflow({store:{adapter},adapter,notify:async()=>{throw Error('NO_EMAILS');},baseUrl:f.env.EMRADAR_V3_REVIEW_ORIGIN,clock:f.clock});
- const server=createReviewServer({workflow,xAuth:f.auth,logOAuthDiagnostic:line=>diagnostics.push(line),releaseEmail:async()=>{throw Error('NO_RELEASE');}});
+ const server=createReviewServer({workflow,ownerAction:()=>{throw Error('UNEXPECTED_ACTION')},xAuth:f.auth,logOAuthDiagnostic:line=>diagnostics.push(line),releaseEmail:async()=>{throw Error('NO_RELEASE');}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
  const base='http://127.0.0.1:'+server.address().port;
  const suffix=createHash('sha256').update('campaign').digest('hex').slice(0,16);
