@@ -24,12 +24,12 @@ test('search reuses a completed request and reserves a concurrent attempt only o
  const adapter={read:async()=>({value:structuredClone(campaign)})};
  const workspace={mutate:async(id,fn)=>{fn(campaign);return campaign}};
  const openai={responses:{create:async()=>{calls++;return {id:'test',output_text:'{"facts":[]}',usage:{total_tokens:10},output:[]}}}};
- const ask=campaignAsk({adapter,workspace,openai,campaignId:'c'});
+ const ask=campaignAsk({adapter,workspace,openai,campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{}}});
  await Promise.allSettled([ask('formation','test',{}),ask('formation','test',{})]);await ask('formation','test',{});
  assert.equal(calls,1);assert.equal(Object.values(campaign.research_calls)[0].usage.total_tokens,10);
 });
 test('outlet discovery uses actual contact text, honours opt-outs, and keeps saved directory identity',async()=>{
- const pool={query:async()=>({rows:[{outlet_id:'saved',record:{name:'Existing publication',contact:{email:'editor@example.org'}}}]})};
+ const pool={query:async sql=>({rows:sql.startsWith('SELECT 1')?[]:[{outlet_id:'saved',record:{name:'Existing publication',contact:{email:'editor@example.org'}}}]})};
  const match={record_id:'f',fit:'Trade readership',readership:'Industrial operators'};
  const result=await matchOutlets({pool,formations:[{record_id:'f',facts:[{statement:'a fact'}]}],
  ask:async()=>({matches:[{...match,directory_id:'saved'},{...match,name:'Unknown',email:'invented@example.org',website:'https://example.org',contact_url:'https://example.org/contact'}]}),read:async()=>'No address here'});

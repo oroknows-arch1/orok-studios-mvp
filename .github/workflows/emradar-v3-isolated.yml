@@ -44,18 +44,6 @@ jobs:
         shell: bash
       - run: npm install --prefix "$RUNNER_TEMP/mobile-driver" --no-save playwright-core@1.56.1
       - run: MARKETING_PLAYWRIGHT="$RUNNER_TEMP/mobile-driver/node_modules/playwright-core" node test/marketing-mobile.cjs
-  archive-baseline:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/rebuild/clean-marketing-20261126'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: archive/pre-clean-rebuild-20261126
-          fetch-depth: 1
-      - name: Preserve deployment baseline tag
-        run: |
-          test "$(git rev-parse HEAD)" = "5e8fa86268dc9dc8e48e484a6133699401be453c"
-          git tag pre-clean-rebuild-20261126 HEAD
-          git push origin refs/tags/pre-clean-rebuild-20261126
+      - name: Read signed historical and current public handoffs
+        if: github.ref == 'refs/heads/rebuild/clean-marketing-20261126' && always()
+        run: node scripts/check-marketing-handoff.mjs 2026-11-25 2026-11-26

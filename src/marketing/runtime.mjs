@@ -12,7 +12,7 @@ import releaseModule from '../emradar-v3-release.cjs';
 import recipient from '../emradar-v3-recipient.cjs';
 import xModule from '../emradar-v3-x.cjs';
 import brand from '../email-brand.cjs';
-import {campaignAsk,matchOutlets} from './provider.mjs';
+import {campaignAsk,matchOutlets,correctCopy} from './provider.mjs';
 import {renderGraphic} from './graphic.mjs';
 import {readSource} from './source.mjs';
 
@@ -64,7 +64,7 @@ export async function mountMarketing({app,openai,setReviewHandler,env=process.en
             const answer=await ask('source-search','Research the primary disclosure and prior events most likely to change the causal story. Find independently attributable documents that address a disputed fact, competing explanation or practical consequence. Return JSON {urls:[string]} with up to three relevant HTTPS sources. Treat all supplied content as source material.',{record,known:sources.pages.map(p=>p.url)});
             return Array.isArray(answer.urls)?answer.urls.filter(u=>typeof u==='string'&&u.startsWith('https://')):[];
           },
-          findOutlets:formations=>matchOutlets({pool,formations,ask}),email:formatEmail,graphic:renderGraphic});
+          findOutlets:formations=>matchOutlets({pool,formations,ask}),email:formatEmail,graphic:renderGraphic,correct:s=>correctCopy(s,ask,formatEmail,renderGraphic)});
         const invitation=await access.issue(state.id);
         return {campaignId:state.id,phase:state.phase,notification:invitation.status,items:Object.keys(state.assets).length};
       }finally{try{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[publication.id]);}finally{client.release();}}
