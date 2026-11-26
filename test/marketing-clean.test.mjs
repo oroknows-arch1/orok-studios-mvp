@@ -64,10 +64,23 @@ test('build authority is scoped to one sealed campaign and ordinary campaign bud
  const budget=spending(adapter,{exchange:async()=>0.66,now:()=>date});
  const build='v3-8f3ca7840b5c0f7394896419f3f8ab27';
  await budget.reserve(build,'one','source',0,'formation');
- await assert.rejects(budget.reserve(build,'two','draft',0,'owner-revision'),/NOVEMBER_BALANCE/);
+ await budget.reserve(build,'two','draft',0,'owner-revision');
+ await budget.reserve('first-scheduled','next','formation',0,'formation','2026-11-27');
  await assert.rejects(budget.reserve('normal','three','draft',0,'formation'),/NOVEMBER_BALANCE/);
  date=new Date('2026-12-01T01:00:00Z');
  await budget.reserve('normal','four','a'.repeat(5000000),0,'formation');
  date=new Date('2027-01-01T01:00:00Z');
  await assert.rejects(budget.reserve('normal','five','a'.repeat(5000000),0,'formation'),/RESEARCH_BUDGET_USED/);
+});
+
+test('web search accepts fenced JSON and reuses the response after replacing the invalid format',async()=>{
+ const input={record:'one'},key=fingerprint(['source-search','JSON',input]);
+ const state={research_calls:{[key]:{status:'UNCONFIRMED',kind:'source-search'}}};let released=0,requests=0;
+ const ask=campaignAsk({adapter:{read:async()=>({value:structuredClone(state)})},workspace:{mutate:async(_,fn)=>fn(state)},
+   campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{},rejected:async()=>released++},
+   openai:{responses:{create:async options=>{requests++;assert.equal(options.text,undefined);assert.ok(options.tools);
+     return {id:'mock',output_text:['```json','{"urls":[]}','```'].join('\n')};}}}});
+ assert.deepEqual(await ask('source-search','JSON',input),{urls:[]});
+ await ask('source-search','JSON',input);
+ assert.equal(requests,1);assert.equal(released,1);assert.equal(state.research_calls[key].status,'REJECTED');
 });

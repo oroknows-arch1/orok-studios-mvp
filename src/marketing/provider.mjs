@@ -7,23 +7,34 @@ import recipient from '../emradar-v3-recipient.cjs';
 // consumes its slot. An identical completed call reuses its original response.
 export function campaignAsk({adapter,workspace,openai,campaignId,budget=spending(adapter)}) {
   return async function ask(kind,instructions,data) {
-    const requestKey=fingerprint([kind,instructions,data]);
+    const search=['outlets','source-search'].includes(kind);
+    const previousKey=fingerprint([kind,instructions,data]);
+    const requestKey=search?fingerprint(['search-text-json-v1',kind,instructions,data]):previousKey;
     const current=(await adapter.read(campaignId))?.value;
     const old=current?.research_calls?.[requestKey];
     if(old?.status==='COMPLETE') return old.result;
-    if(old) throw Error('RESEARCH_REQUEST_ALREADY_RESERVED');
+    if(old && !(old.status==='REJECTED'&&old.reason==='RESEARCH_PROVIDER_HTTP_429'&&
+        Date.now()-Date.parse(old.at)>3600000))throw Error(old.reason||'RESEARCH_REQUEST_ALREADY_RESERVED');
     const limits={formation:8,pitch:30,editorial:1,'owner-revision':8,outlets:8,'source-search':8};
     if(!Object.hasOwn(limits,kind)) throw Error('UNKNOWN_RESEARCH_OPERATION');
-    const search=['outlets','source-search'].includes(kind);
+    // The old web-search plus JSON-mode combination is rejected by the API before execution.
+    // Preserve the failed request and replace just this unsupported wire format.
+    if(search && current?.research_calls?.[previousKey]?.status==='UNCONFIRMED'){
+      await budget.rejected?.(campaignId,previousKey);
+      await workspace.mutate(campaignId,s=>{
+        if(s.research_calls[previousKey]?.status==='UNCONFIRMED')
+          Object.assign(s.research_calls[previousKey],{status:'REJECTED',reason:'UNSUPPORTED_SEARCH_FORMAT'});
+      });
+    }
     await workspace.mutate(campaignId,s=>{
       const calls=s.research_calls??={};
-      if(Object.hasOwn(calls,requestKey)) throw Error('RESEARCH_REQUEST_ALREADY_RESERVED');
-      if(Object.values(calls).filter(c=>c.kind===kind).length>=limits[kind]) throw Error('RESEARCH_BUDGET_USED');
+      if(Object.hasOwn(calls,requestKey)&&!(old?.status==='REJECTED'&&calls[requestKey].status==='REJECTED'&&calls[requestKey].at===old.at)) throw Error('RESEARCH_REQUEST_ALREADY_RESERVED');
+      if(Object.values(calls).filter(c=>c.kind===kind&&c.status!=='REJECTED').length>=limits[kind]) throw Error('RESEARCH_BUDGET_USED');
       calls[requestKey]={kind,status:'RESERVED',at:new Date().toISOString()};
     });
     let reservation;
     try {
-      reservation=await budget.reserve(campaignId,requestKey,instructions+JSON.stringify(data),search?3:0,kind);
+      reservation=await budget.reserve(campaignId,requestKey,instructions+JSON.stringify(data),search?3:0,kind,current?.scan?.snapshot_date);
     } catch(error){
       await workspace.mutate(campaignId,s=>{delete s.research_calls[requestKey];});
       throw error;
@@ -31,17 +42,21 @@ export function campaignAsk({adapter,workspace,openai,campaignId,budget=spending
     try {
       const response=await openai.responses.create({model:'gpt-4.1-mini',instructions,input:JSON.stringify(data),
         ...(search?{tools:[{type:'web_search',search_context_size:'low'}],max_tool_calls:3}:{}),
-        text:{format:{type:'json_object'}},max_output_tokens:4000,store:false},{maxRetries:0,timeout:90000});
+        ...(search?{}:{text:{format:{type:'json_object'}}}),max_output_tokens:4000,store:false},{maxRetries:0,timeout:90000});
       await budget.settle(reservation,response.usage,response.output?.filter(x=>x.type==='web_search_call').length??0);
       const content=response.output_text??response.output?.flatMap(x=>x.content??[]).map(x=>x.text??'').join('');
-      const result=JSON.parse(content);
+      const result=JSON.parse(content.trim().replace(/^```(?:json)?\s*|\s*```$/gi,''));
       if(!result||typeof result!=='object'||Array.isArray(result)) throw Error('INVALID_RESEARCH_RESULT');
       await workspace.mutate(campaignId,s=>{Object.assign(s.research_calls[requestKey],{status:'COMPLETE',response_id:response.id,
         usage:response.usage,search_calls:response.output?.filter(x=>x.type==='web_search_call').length??0,result});});
       return result;
     } catch(error){
-      await workspace.mutate(campaignId,s=>{s.research_calls[requestKey].status='UNCONFIRMED';});
-      throw Error('RESEARCH_PROVIDER_UNAVAILABLE');
+      const definite=[400,401,403,404,422,429].includes(error.status);
+      const reason=definite?'RESEARCH_PROVIDER_HTTP_'+error.status:'RESEARCH_PROVIDER_UNAVAILABLE';
+      if(definite)await budget.rejected?.(campaignId,requestKey);
+      await workspace.mutate(campaignId,s=>{Object.assign(s.research_calls[requestKey],{
+        status:definite?'REJECTED':'UNCONFIRMED',reason,at:new Date().toISOString()});});
+      throw Error(reason);
     }
   };
 }
