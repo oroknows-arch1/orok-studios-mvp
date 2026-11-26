@@ -92,3 +92,12 @@ test('search citations survive a prose response and an empty SDK text shortcut',
   campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{}}});
  assert.deepEqual(await ask('source-search','JSON',{test:1}),{urls:[url]});
 });
+test('a definitively rejected JSON-mode call can recover once using an explicit user-input instruction',async()=>{
+ const data={record:1},kind='formation',instructions='Return JSON';
+ const key=fingerprint([kind,instructions,data]),state={research_calls:{[key]:{kind,status:'REJECTED',reason:'RESEARCH_PROVIDER_HTTP_400',at:'2026-11-26T00:00:00Z'}}};
+ const ask=campaignAsk({adapter:{read:async()=>({value:structuredClone(state)})},workspace:{mutate:async(_,fn)=>fn(state)},
+  campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{}},openai:{responses:{create:async args=>{
+   assert.match(args.input,/JSON/);return {output_text:'{"facts":[]}',id:'mock'};
+  }}}});
+ assert.deepEqual(await ask(kind,instructions,data),{facts:[]});assert.equal(state.research_calls[key].prior_attempts[0].status,'REJECTED');
+});

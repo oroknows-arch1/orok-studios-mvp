@@ -38,8 +38,10 @@ export function campaignAsk({adapter,workspace,openai,campaignId,budget=spending
     const current=(await adapter.read(campaignId))?.value;
     const old=current?.research_calls?.[requestKey];
     if(old?.status==='COMPLETE') return old.result;
-    if(old && !(old.status==='REJECTED'&&old.reason==='RESEARCH_PROVIDER_HTTP_429'&&
-        Date.now()-Date.parse(old.at)>3600000))throw Error(old.reason||'RESEARCH_REQUEST_ALREADY_RESERVED');
+    const retryRejected=old?.status==='REJECTED' && (
+      (old.reason==='RESEARCH_PROVIDER_HTTP_429'&&Date.now()-Date.parse(old.at)>3600000) ||
+      (!search&&old.reason==='RESEARCH_PROVIDER_HTTP_400'&&!old.wire_version));
+    if(old && !retryRejected)throw Error(old.reason||'RESEARCH_REQUEST_ALREADY_RESERVED');
     const limits={formation:8,pitch:30,editorial:1,'owner-revision':8,outlets:8,'source-search':8};
     if(!Object.hasOwn(limits,kind)) throw Error('UNKNOWN_RESEARCH_OPERATION');
     // The old web-search plus JSON-mode combination is rejected by the API before execution.
@@ -55,7 +57,8 @@ export function campaignAsk({adapter,workspace,openai,campaignId,budget=spending
       const calls=s.research_calls??={};
       if(Object.hasOwn(calls,requestKey)&&!(old?.status==='REJECTED'&&calls[requestKey].status==='REJECTED'&&calls[requestKey].at===old.at)) throw Error('RESEARCH_REQUEST_ALREADY_RESERVED');
       if(Object.values(calls).filter(c=>c.kind===kind&&c.status!=='REJECTED').length>=limits[kind]) throw Error('RESEARCH_BUDGET_USED');
-      calls[requestKey]={kind,status:'RESERVED',at:new Date().toISOString()};
+      calls[requestKey]={kind,status:'RESERVED',wire_version:'json-input-v2',at:new Date().toISOString(),
+        ...(old?{prior_attempts:[...(old.prior_attempts??[]),{status:old.status,reason:old.reason,at:old.at}]}:{})};
     });
     let reservation;
     try {
@@ -65,7 +68,7 @@ export function campaignAsk({adapter,workspace,openai,campaignId,budget=spending
       throw error;
     }
     try {
-      const response=await openai.responses.create({model:'gpt-4.1-mini',instructions,input:JSON.stringify(data),
+      const response=await openai.responses.create({model:'gpt-4.1-mini',instructions,input:'Return a JSON object.\n'+JSON.stringify(data),
         ...(search?{tools:[{type:'web_search',search_context_size:'low'}],max_tool_calls:3,include:['web_search_call.action.sources']}:{}),
         ...(search?{}:{text:{format:{type:'json_object'}}}),max_output_tokens:4000,store:false},{maxRetries:0,timeout:90000});
       await budget.settle(reservation,response.usage,response.output?.filter(x=>x.type==='web_search_call').length??0);
