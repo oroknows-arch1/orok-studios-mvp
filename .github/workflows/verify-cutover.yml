@@ -1,0 +1,47 @@
+name: Verify live Marketing transition
+on:
+  push:
+    branches: [verify/clean-cutover-20261126]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.EMRADAR_V3_READ_TOKEN }}
+          persist-credentials: false
+      - name: Verify deployed reader, database, signed scan and exchange rate
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFile} from 'node:fs/promises';
+          import {fetchPublication} from './vendor/emradar-v3-authoritative/clean/intake.js';
+          import {usdPerAud} from './src/marketing/budget.mjs';
+          const origin='https://orok-studios-api.onrender.com';
+          const health=await (await fetch(origin+'/health')).json();
+          assert.equal(health.status,'ok');assert.equal(health.publishing.databaseReachable,true);
+          assert.equal(health.publishing.migrationsCurrent,true);
+          const page=await (await fetch(origin+'/review/access')).text();
+          assert.equal(page,await readFile('vendor/emradar-v3-authoritative/clean/review.html','utf8'));
+          const scan=await fetchPublication('2026-11-26');
+          assert.equal(scan.id,'v3-8f3ca7840b5c0f7394896419f3f8ab27');
+          console.log('Database, migrations, exact private review document and signed scan verified.');
+          console.log('AUD conversion',await usdPerAud());
+          NODE
+      - name: Resume one verified scan with the existing Marketing service credential when available
+        env:
+          MARKETING_TOKEN: ${{ secrets.EMRADAR_V3_API_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          if(!process.env.MARKETING_TOKEN){console.log('No hosted service credential. Scheduled production intake will handle this scan.');process.exit(0)}
+          const response=await fetch('https://orok-studios-api.onrender.com/emradar/v3/prepare',{
+            method:'POST',redirect:'error',signal:AbortSignal.timeout(1100000),
+            headers:{authorization:'Bearer '+process.env.MARKETING_TOKEN,'content-type':'application/json'},
+            body:JSON.stringify({snapshotDate:'2026-11-26'})});
+          const r=await response.json();console.log(response.status,r.status,r.phase,r.items,r.notification,r.reason);
+          if(!response.ok)process.exitCode=1;
+          NODE
