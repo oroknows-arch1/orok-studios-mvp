@@ -25,23 +25,26 @@ export function spending(adapter,{exchange=usdPerAud,now=()=>new Date()}={}){
     throw Error('BUDGET_CONCURRENT_UPDATE');
   }
   return {
-    async reserve(campaignId,requestKey,input,searchCalls,kind){
+    async reserve(campaignId,requestKey,input,searchCalls,kind,scanDate){
       const date=now(),month=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit'}).format(date);
       const rate=await exchange();
       const bound=modelCostUsd(Buffer.byteLength(input,'utf8')+4096,4000,searchCalls)/rate;
       const key='clean-marketing-spend', id=campaignId+':'+requestKey;
       await change(key,ledger=>{
-        if(ledger.reservations[id])throw Error('COST_ALREADY_RESERVED');
+        if(ledger.reservations[id]&&ledger.reservations[id].status!=='REJECTED')throw Error('COST_ALREADY_RESERVED');
         const records=Object.values(ledger.reservations);
         const total=records.filter(r=>r.month===month&&!r.build_verification).reduce((sum,r)=>sum+r.amount_aud,0);
         const campaign=records.filter(r=>r.campaign_id===campaignId&&!r.build_verification).reduce((sum,r)=>sum+r.amount_aud,0);
         // The preceding production system had already incurred November charges. A reconciled
         // remaining allowance can be set once in the durable ledger without changing later months.
         const remaining=month==='2026-11'?ledger.november_remaining_aud:50;
-        // The owner separately authorised the first cutover verification on this exact sealed scan.
-        // Later campaigns and owner-initiated revisions use the ordinary allowance.
-        const build=month==='2026-11'&&campaignId==='v3-8f3ca7840b5c0f7394896419f3f8ab27'
-          &&['source-search','formation','pitch','outlets','editorial'].includes(kind);
+        // Only the repaired sealed scan and the three ordinary acceptance dates are covered
+        // by the owner's separate build authority. Each scheduled run keeps its own normal cap.
+        const firstVerification=campaignId==='v3-8f3ca7840b5c0f7394896419f3f8ab27';
+        const scheduledVerification=['2026-11-27','2026-11-28','2026-11-29'].includes(scanDate);
+        const build=month==='2026-11'&&(firstVerification||scheduledVerification);
+        if(scheduledVerification&&records.filter(r=>r.campaign_id===campaignId)
+          .reduce((sum,r)=>sum+r.amount_aud,0)+bound>5)throw Error('RESEARCH_BUDGET_USED');
         if(!build){
           if(!Number.isFinite(remaining)||remaining<0||remaining>50)throw Error('NOVEMBER_BALANCE_UNRECONCILED');
           if(total+bound>remaining||campaign+bound>5)throw Error('RESEARCH_BUDGET_USED');
@@ -49,6 +52,12 @@ export function spending(adapter,{exchange=usdPerAud,now=()=>new Date()}={}){
         ledger.reservations[id]={month,build_verification:build,campaign_id:campaignId,status:'RESERVED',amount_aud:bound,usd_per_aud:rate,at:date.toISOString()};
       });
       return {key,id,rate};
+    },
+    async rejected(campaignId,requestKey){
+      await change('clean-marketing-spend',ledger=>{
+        const row=ledger.reservations[campaignId+':'+requestKey];
+        if(row?.status==='RESERVED'){row.status='REJECTED';row.amount_aud=0;}
+      });
     },
     async settle({key,id,rate},usage,searchCalls){
       if(!Number.isSafeInteger(usage?.input_tokens)||!Number.isSafeInteger(usage?.output_tokens))return;
