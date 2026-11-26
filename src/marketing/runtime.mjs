@@ -61,6 +61,10 @@ export async function mountMarketing({app,openai,setReviewHandler,env=process.en
         const ask=askFor(publication.id);
         const state=await prepare({publication,adapter,workspace,read:readSource,ask,
           findSources:async(record,sources)=>{
+            // A separately recovered lead is only a URL to retrieve. Every fact still requires a source passage.
+            const recovered=prior?.source_recovery;
+            if(recovered?.source_key===publication.scan.source_key&&Array.isArray(recovered.links?.[record.id]))
+              return recovered.links[record.id];
             const answer=await ask('source-search','Research the primary disclosure and prior events most likely to change the causal story. Find independently attributable documents that address a disputed fact, competing explanation or practical consequence. Return JSON {urls:[string]} with up to three relevant HTTPS sources. Treat all supplied content as source material.',{record,known:sources.pages.map(p=>p.url)});
             return Array.isArray(answer.urls)?answer.urls.filter(u=>typeof u==='string'&&u.startsWith('https://')):[];
           },

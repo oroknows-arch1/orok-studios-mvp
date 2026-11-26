@@ -84,3 +84,11 @@ test('web search accepts fenced JSON and reuses the response after replacing the
  await ask('source-search','JSON',input);
  assert.equal(requests,1);assert.equal(released,1);assert.equal(state.research_calls[key].status,'REJECTED');
 });
+test('search citations survive a prose response and an empty SDK text shortcut',async()=>{
+ const state={research_calls:{}},url='https://example.org/disclosure';
+ const ask=campaignAsk({adapter:{read:async()=>({value:structuredClone(state)})},workspace:{mutate:async(_,fn)=>fn(state)},
+  openai:{responses:{create:async()=>({output_text:'',output:[{type:'web_search_call',action:{sources:[{url}]}},
+    {type:'message',content:[{text:'The authority published its disclosure.',annotations:[{url}]}]}]})}},
+  campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{}}});
+ assert.deepEqual(await ask('source-search','JSON',{test:1}),{urls:[url]});
+});
