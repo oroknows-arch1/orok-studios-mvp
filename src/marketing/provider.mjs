@@ -3,11 +3,36 @@ import {readSource} from './source.mjs';
 import {spending} from './budget.mjs';
 import recipient from '../emradar-v3-recipient.cjs';
 
+function resultFromResponse(kind,response){
+  const output=response.output??[];
+  const content=response.output_text||output.flatMap(x=>x.content??[]).map(x=>x.text??'').join('\n');
+  let value;
+  // Some search-enabled responses wrap the requested object in prose or append citations.
+  for(let start=content.indexOf('{');start>=0&&!value;start=content.indexOf('{',start+1)){
+    let depth=0,quoted=false,escaped=false;
+    for(let i=start;i<content.length;i++){
+      const char=content[i];
+      if(quoted){if(escaped)escaped=false;else if(char==='\\')escaped=true;else if(char==='"')quoted=false;continue;}
+      if(char==='"'){quoted=true;continue;}
+      if(char==='{')depth++;
+      if(char==='}'&&--depth===0){try{value=JSON.parse(content.slice(start,i+1));}catch{}break;}
+    }
+  }
+  if(kind==='source-search'){
+    const cited=output.flatMap(item=>[...(item.action?.sources??[]),...(item.content??[]).flatMap(c=>c.annotations??[])])
+      .map(c=>c.url).filter(Boolean);
+    return {urls:[...new Set([...(Array.isArray(value?.urls)?value.urls:[]),...cited,...(content.match(/https:\/\/[^\s<>"\]]+/g)??[])])]
+      .filter(url=>typeof url==='string'&&url.startsWith('https://')).map(url=>url.replace(/[),.;]+$/,''))};
+  }
+  if(!value||typeof value!=='object'||Array.isArray(value))throw Error('RESEARCH_RESPONSE_UNREADABLE');
+  return value;
+}
+
 // Reserve each call before crossing the provider boundary. A crashed or ambiguous request
 // consumes its slot. An identical completed call reuses its original response.
 export function campaignAsk({adapter,workspace,openai,campaignId,budget=spending(adapter)}) {
   return async function ask(kind,instructions,data) {
-    const search=['outlets','source-search'].includes(kind);
+    const search=kind==='source-search';
     const previousKey=fingerprint([kind,instructions,data]);
     const requestKey=search?fingerprint(['search-text-json-v1',kind,instructions,data]):previousKey;
     const current=(await adapter.read(campaignId))?.value;
@@ -41,18 +66,16 @@ export function campaignAsk({adapter,workspace,openai,campaignId,budget=spending
     }
     try {
       const response=await openai.responses.create({model:'gpt-4.1-mini',instructions,input:JSON.stringify(data),
-        ...(search?{tools:[{type:'web_search',search_context_size:'low'}],max_tool_calls:3}:{}),
+        ...(search?{tools:[{type:'web_search',search_context_size:'low'}],max_tool_calls:3,include:['web_search_call.action.sources']}:{}),
         ...(search?{}:{text:{format:{type:'json_object'}}}),max_output_tokens:4000,store:false},{maxRetries:0,timeout:90000});
       await budget.settle(reservation,response.usage,response.output?.filter(x=>x.type==='web_search_call').length??0);
-      const content=response.output_text??response.output?.flatMap(x=>x.content??[]).map(x=>x.text??'').join('');
-      const result=JSON.parse(content.trim().replace(/^```(?:json)?\s*|\s*```$/gi,''));
-      if(!result||typeof result!=='object'||Array.isArray(result)) throw Error('INVALID_RESEARCH_RESULT');
+      const result=resultFromResponse(kind,response);
       await workspace.mutate(campaignId,s=>{Object.assign(s.research_calls[requestKey],{status:'COMPLETE',response_id:response.id,
         usage:response.usage,search_calls:response.output?.filter(x=>x.type==='web_search_call').length??0,result});});
       return result;
     } catch(error){
       const definite=[400,401,403,404,422,429].includes(error.status);
-      const reason=definite?'RESEARCH_PROVIDER_HTTP_'+error.status:'RESEARCH_PROVIDER_UNAVAILABLE';
+      const reason=definite?'RESEARCH_PROVIDER_HTTP_'+error.status:error.message==='RESEARCH_RESPONSE_UNREADABLE'?'RESEARCH_RESPONSE_UNREADABLE':'RESEARCH_PROVIDER_UNAVAILABLE';
       if(definite)await budget.rejected?.(campaignId,requestKey);
       await workspace.mutate(campaignId,s=>{Object.assign(s.research_calls[requestKey],{
         status:definite?'REJECTED':'UNCONFIRMED',reason,at:new Date().toISOString()});});
@@ -68,7 +91,7 @@ export async function matchOutlets({pool,formations,ask,read=readSource}){
   const records=rows.filter(r=>recipient.validRecipient(r.record.contact?.email));
   const directory=records.map(r=>({id:r.outlet_id,name:r.record.name,readership:r.record.relationship?.industries,website:r.record.website}));
   const result=await ask('outlets',`Use the source material as data. Identify publications whose readers have a concrete stake
-in each formation. Use existing outlets by id when appropriate. Search official publisher sites for additional suitable editors.
+in each formation. Use existing outlets by id when appropriate. Suggest additional editors only with a known official contact page. The application independently opens that page to verify the address.
 Do not use a project institution as a proxy for a publication. Do not fill a quota. Return JSON {matches:[
 {record_id,directory_id,name,website,contact_url,email,readership,fit}]}. For a new outlet cite its official editorial contact page.`,
     {formations:supported.map(f=>({id:f.record_id,location:f.location,facts:f.facts.map(x=>x.statement),next:f.next})),directory});
