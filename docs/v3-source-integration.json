@@ -1,25 +1,6 @@
 {
-  "schema_version": 1,
   "repository": "oroknows-arch1/emradar-marketing-engine-v3",
-  "url": "https://github.com/oroknows-arch1/emradar-marketing-engine-v3.git",
-  "commit": "097a2993bb1a8246dac61e46b056a99406585769",
+  "commit": "90e1846318c792c3fb981bb61379fa212680371c",
   "path": "vendor/emradar-v3-authoritative",
-  "runtime_overlay": "vendor/emradar-v3",
-  "exact_shared_files": [
-    "src/discovery.js"
-  ],
-  "authoritative_standard_files": [
-    "src/editorial-reference.js",
-    "src/graphic-standard.js",
-    "src/graphic-renderer.js",
-    "src/discovery-coverage.js"
-  ],
-  "runtime_overrides": [
-    {
-      "path": "src/review-access.js",
-      "source_sha256": "844293aa70945064f04f8ec897d8ef851022a93a8189a4dcc34baee1b62b2ec1",
-      "overlay_sha256": "c84eafadc108da8f75b22658b49ea3313bb7f6a4a5fb68558068f9ce05b92c49",
-      "authorization": "Production PR #55 preserves permanent private owner invitations."
-    }
-  ]
+  "entry": "clean"
 }

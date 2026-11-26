@@ -848,5 +848,14 @@
       "batch": "Recover exact saved claims, regenerate country/company PNG, reconcile two reported recipients, expose group send and persist release feedback. Reuse current review; no external test sends."
     },
     "owner_decision_update": "Editorial advice remains visible. Complete drafts can receive exact owner approval and release regardless of the editorial recommendation. X text identifies the location and participants from its own formation."
+  },
+  "clean_rebuild_20261126": {
+    "stage": "INTEGRATION_TEST",
+    "production_baseline": "5e8fa86268dc9dc8e48e484a6133699401be453c",
+    "source_baseline": "097a2993bb1a8246dac61e46b056a99406585769",
+    "source_pin": "90e1846318c792c3fb981bb61379fa212680371c",
+    "governing_specification": "https://app.notion.com/p/41c63f5ff9368132b688e2eaaa0dc80c",
+    "rollback": "Redeploy the recorded production baseline on the existing service. Preserve the database, invitations and reservations. No automatic fallback.",
+    "live_transition": false
   }
 }

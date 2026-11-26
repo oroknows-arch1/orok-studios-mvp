@@ -1,38 +1,8 @@
-name: EMRADAR V3 isolated paid API tests
+name: EMRADAR Marketing integration
 on:
   push:
-    paths:
-      - 'src/emradar-v3-*.cjs'
-      - 'server.js'
-      - 'package.json'
-      - 'AGENTS.md'
-      - 'docs/development-objective.json'
-      - 'scripts/verify-development-harness.cjs'
-      - 'test/development-harness.test.cjs'
-      - 'test/v3-source-integration.test.cjs'
-      - 'docs/v3-source-integration.json'
-      - 'scripts/verify-v3-source-integration.cjs'
-      - '.gitmodules'
-      - 'vendor/emradar-v3-authoritative'
-      - 'vendor/emradar-v3/**'
-      - 'test/emradar-v3-*.test.cjs'
-      - 'test/emradar-v3-*.test.mjs'
-      - '.github/workflows/emradar-v3-isolated.yml'
+    branches: [main, rebuild/clean-marketing-20261126]
   pull_request:
-    paths:
-      - 'src/emradar-v3-*.cjs'
-      - 'AGENTS.md'
-      - 'docs/development-objective.json'
-      - 'scripts/verify-development-harness.cjs'
-      - 'test/development-harness.test.cjs'
-      - 'test/v3-source-integration.test.cjs'
-      - 'docs/v3-source-integration.json'
-      - 'scripts/verify-v3-source-integration.cjs'
-      - '.gitmodules'
-      - 'vendor/emradar-v3-authoritative'
-      - 'test/emradar-v3-*.test.cjs'
-      - 'test/emradar-v3-*.test.mjs'
-      - '.github/workflows/emradar-v3-isolated.yml'
   workflow_dispatch:
 jobs:
   v3-isolated:
@@ -70,4 +40,27 @@ jobs:
       - run: npm run harness:v3
       - run: node --test test/development-harness.test.cjs
       - run: node test/setup-v3-postgres.cjs
-      - run: node --test test/emradar-v3-*.test.cjs test/emradar-v3-*.test.mjs test/rediscovery-preserves-verified.test.mjs
+      - run: node --test test/emradar-v3-*.test.cjs
+        shell: bash
+      - name: Service regression suite
+        run: TEST_DATABASE_URL="$V3_TEST_DATABASE_URL" node --test --test-concurrency=1 test/*.test.* tests/*.test.*
+      - name: Restore the tagged production baseline in a separate checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/pre-clean-rebuild-20261126
+          path: rollback-drill
+          submodules: true
+          token: ${{ secrets.EMRADAR_V3_READ_TOKEN }}
+      - name: Verify archived entry point, pinned engine and reservation safeguards
+        working-directory: rollback-drill
+        run: |
+          test "$(git rev-parse HEAD)" = "5e8fa86268dc9dc8e48e484a6133699401be453c"
+          test "$(git -C vendor/emradar-v3-authoritative rev-parse HEAD)" = "097a2993bb1a8246dac61e46b056a99406585769"
+          npm ci
+          npm run harness:verify
+          node --test test/emradar-v3-reservations.test.cjs test/emradar-v3-ambiguous-postgres.integration.test.cjs
+      - run: npm install --prefix "$RUNNER_TEMP/mobile-driver" --no-save playwright-core@1.56.1
+      - run: MARKETING_PLAYWRIGHT="$RUNNER_TEMP/mobile-driver/node_modules/playwright-core" node test/marketing-mobile.cjs
+      - name: Read signed historical and current public handoffs
+        if: github.ref == 'refs/heads/rebuild/clean-marketing-20261126' && always()
+        run: node scripts/check-marketing-handoff.mjs 2026-11-25 2026-11-26
