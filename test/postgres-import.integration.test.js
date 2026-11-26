@@ -59,7 +59,7 @@ async function count() {
 
 /* 9. file import dry run */
 test("dry-run import commits nothing", { skip }, async () => {
-  await pool.query("TRUNCATE publishing_items");
+  await pool.query("DELETE FROM publishing_items");
   const file = writeTempFile([validRecord({ id: "imp-dry-1" }), validRecord({ id: "imp-dry-2" })]);
   const result = await importFile({ pool, filePath: file, dryRun: true });
   assert.equal(result.imported, 2);
@@ -70,7 +70,7 @@ test("dry-run import commits nothing", { skip }, async () => {
 
 /* 10. file import preserves IDs and dates */
 test("import preserves ids, versions, dates, status and text", { skip }, async () => {
-  await pool.query("TRUNCATE publishing_items");
+  await pool.query("DELETE FROM publishing_items");
   const rec = validRecord({
     id: "imp-preserve-1",
     version: 4,
@@ -102,7 +102,7 @@ test("import preserves ids, versions, dates, status and text", { skip }, async (
 
 /* 11. file import skips existing IDs */
 test("re-importing the same file skips existing ids", { skip }, async () => {
-  await pool.query("TRUNCATE publishing_items");
+  await pool.query("DELETE FROM publishing_items");
   const file = writeTempFile([validRecord({ id: "imp-skip-1" }), validRecord({ id: "imp-skip-2" })]);
   const first = await importFile({ pool, filePath: file });
   assert.equal(first.imported, 2);
@@ -114,7 +114,7 @@ test("re-importing the same file skips existing ids", { skip }, async () => {
 
 /* 12. transaction rollback on invalid import */
 test("an invalid record rolls back the entire import", { skip }, async () => {
-  await pool.query("TRUNCATE publishing_items");
+  await pool.query("DELETE FROM publishing_items");
   const good = validRecord({ id: "imp-good-1" });
   const bad = validRecord({ id: "imp-bad-1" });
   bad.stream = "not-a-real-stream"; // invalid
@@ -126,7 +126,7 @@ test("an invalid record rolls back the entire import", { skip }, async () => {
 
 /* source file is never modified */
 test("import does not modify the source file", { skip }, async () => {
-  await pool.query("TRUNCATE publishing_items");
+  await pool.query("DELETE FROM publishing_items");
   const file = writeTempFile([validRecord({ id: "imp-src-1" })]);
   const before = fs.readFileSync(file, "utf8");
   await importFile({ pool, filePath: file });

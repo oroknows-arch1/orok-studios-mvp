@@ -24,7 +24,7 @@ test.after(async () => {
 });
 
 async function freshPgService() {
-  await pool.query("TRUNCATE publishing_items");
+  await pool.query("DELETE FROM publishing_items");
   const svc = new PublishingService(new PostgresPublishingRepository(pool));
   await svc.init();
   return svc;
