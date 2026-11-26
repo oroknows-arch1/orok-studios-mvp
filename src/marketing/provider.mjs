@@ -12,16 +12,22 @@ export function campaignAsk({adapter,workspace,openai,campaignId,budget=spending
     const old=current?.research_calls?.[requestKey];
     if(old?.status==='COMPLETE') return old.result;
     if(old) throw Error('RESEARCH_REQUEST_ALREADY_RESERVED');
-    const limits={formation:8,pitch:30,editorial:1,'owner-revision':8,outlets:1,'source-search':8};
+    const limits={formation:8,pitch:30,editorial:1,'owner-revision':8,outlets:8,'source-search':8};
     if(!Object.hasOwn(limits,kind)) throw Error('UNKNOWN_RESEARCH_OPERATION');
     const search=['outlets','source-search'].includes(kind);
-    const reservation=await budget.reserve(campaignId,requestKey,instructions+JSON.stringify(data),search?3:0);
     await workspace.mutate(campaignId,s=>{
       const calls=s.research_calls??={};
       if(Object.hasOwn(calls,requestKey)) throw Error('RESEARCH_REQUEST_ALREADY_RESERVED');
       if(Object.values(calls).filter(c=>c.kind===kind).length>=limits[kind]) throw Error('RESEARCH_BUDGET_USED');
       calls[requestKey]={kind,status:'RESERVED',at:new Date().toISOString()};
     });
+    let reservation;
+    try {
+      reservation=await budget.reserve(campaignId,requestKey,instructions+JSON.stringify(data),search?3:0,kind);
+    } catch(error){
+      await workspace.mutate(campaignId,s=>{delete s.research_calls[requestKey];});
+      throw error;
+    }
     try {
       const response=await openai.responses.create({model:'gpt-4.1-mini',instructions,input:JSON.stringify(data),
         ...(search?{tools:[{type:'web_search',search_context_size:'low'}],max_tool_calls:3}:{}),

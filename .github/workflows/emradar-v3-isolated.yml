@@ -1,4 +1,4 @@
-name: EMRADAR V3 isolated paid API tests
+name: EMRADAR Marketing integration
 on:
   push:
     branches: [main, rebuild/clean-marketing-20261126]
@@ -42,6 +42,23 @@ jobs:
       - run: node test/setup-v3-postgres.cjs
       - run: node --test test/emradar-v3-*.test.cjs
         shell: bash
+      - name: Service regression suite
+        run: TEST_DATABASE_URL="$V3_TEST_DATABASE_URL" node --test --test-concurrency=1 test/*.test.* tests/*.test.*
+      - name: Restore the tagged production baseline in a separate checkout
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/pre-clean-rebuild-20261126
+          path: rollback-drill
+          submodules: true
+          token: ${{ secrets.EMRADAR_V3_READ_TOKEN }}
+      - name: Verify archived entry point, pinned engine and reservation safeguards
+        working-directory: rollback-drill
+        run: |
+          test "$(git rev-parse HEAD)" = "5e8fa86268dc9dc8e48e484a6133699401be453c"
+          test "$(git -C vendor/emradar-v3-authoritative rev-parse HEAD)" = "097a2993bb1a8246dac61e46b056a99406585769"
+          npm ci
+          npm run harness:verify
+          node --test test/emradar-v3-reservations.test.cjs test/emradar-v3-ambiguous-postgres.integration.test.cjs
       - run: npm install --prefix "$RUNNER_TEMP/mobile-driver" --no-save playwright-core@1.56.1
       - run: MARKETING_PLAYWRIGHT="$RUNNER_TEMP/mobile-driver/node_modules/playwright-core" node test/marketing-mobile.cjs
       - name: Read signed historical and current public handoffs

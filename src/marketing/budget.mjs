@@ -4,7 +4,7 @@ export function modelCostUsd(inputTokens,outputTokens,searchCalls){
   return (inputTokens+8000*searchCalls)*0.4/1e6 +outputTokens*1.6/1e6 +0.01*searchCalls;
 }
 let currency;
-async function usdPerAud(){
+export async function usdPerAud(){
   if(currency && Date.now()-currency.checked<6*3600000)return currency.rate;
   const response=await fetch('https://www.rba.gov.au/statistics/frequency/exchange-rates.html',{redirect:'error',signal:AbortSignal.timeout(12000)});
   if(!response.ok)throw Error('AUD_CONVERSION_UNAVAILABLE');
@@ -25,18 +25,28 @@ export function spending(adapter,{exchange=usdPerAud,now=()=>new Date()}={}){
     throw Error('BUDGET_CONCURRENT_UPDATE');
   }
   return {
-    async reserve(campaignId,requestKey,input,searchCalls){
+    async reserve(campaignId,requestKey,input,searchCalls,kind){
       const date=now(),month=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Sydney',year:'numeric',month:'2-digit'}).format(date);
       const rate=await exchange();
       const bound=modelCostUsd(Buffer.byteLength(input,'utf8')+4096,4000,searchCalls)/rate;
-      const key='clean-marketing-spend:'+month, id=campaignId+':'+requestKey;
+      const key='clean-marketing-spend', id=campaignId+':'+requestKey;
       await change(key,ledger=>{
         if(ledger.reservations[id])throw Error('COST_ALREADY_RESERVED');
         const records=Object.values(ledger.reservations);
-        const total=records.reduce((sum,r)=>sum+r.amount_aud,0);
-        const campaign=records.filter(r=>r.campaign_id===campaignId).reduce((sum,r)=>sum+r.amount_aud,0);
-        if(total+bound>50||campaign+bound>5)throw Error('RESEARCH_BUDGET_USED');
-        ledger.reservations[id]={campaign_id:campaignId,status:'RESERVED',amount_aud:bound,usd_per_aud:rate,at:date.toISOString()};
+        const total=records.filter(r=>r.month===month&&!r.build_verification).reduce((sum,r)=>sum+r.amount_aud,0);
+        const campaign=records.filter(r=>r.campaign_id===campaignId&&!r.build_verification).reduce((sum,r)=>sum+r.amount_aud,0);
+        // The preceding production system had already incurred November charges. A reconciled
+        // remaining allowance can be set once in the durable ledger without changing later months.
+        const remaining=month==='2026-11'?ledger.november_remaining_aud:50;
+        // The owner separately authorised the first cutover verification on this exact sealed scan.
+        // Later campaigns and owner-initiated revisions use the ordinary allowance.
+        const build=month==='2026-11'&&campaignId==='v3-8f3ca7840b5c0f7394896419f3f8ab27'
+          &&['source-search','formation','pitch','outlets','editorial'].includes(kind);
+        if(!build){
+          if(!Number.isFinite(remaining)||remaining<0||remaining>50)throw Error('NOVEMBER_BALANCE_UNRECONCILED');
+          if(total+bound>remaining||campaign+bound>5)throw Error('RESEARCH_BUDGET_USED');
+        }
+        ledger.reservations[id]={month,build_verification:build,campaign_id:campaignId,status:'RESERVED',amount_aud:bound,usd_per_aud:rate,at:date.toISOString()};
       });
       return {key,id,rate};
     },

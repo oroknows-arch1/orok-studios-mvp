@@ -65,6 +65,7 @@ export async function mountMarketing({app,openai,setReviewHandler,env=process.en
             return Array.isArray(answer.urls)?answer.urls.filter(u=>typeof u==='string'&&u.startsWith('https://')):[];
           },
           findOutlets:formations=>matchOutlets({pool,formations,ask}),email:formatEmail,graphic:renderGraphic,correct:s=>correctCopy(s,ask,formatEmail,renderGraphic)});
+        if(!Object.keys(state.assets).length)return {campaignId:state.id,phase:state.phase,items:0};
         const invitation=await access.issue(state.id);
         return {campaignId:state.id,phase:state.phase,notification:invitation.status,items:Object.keys(state.assets).length};
       }finally{try{await client.query('SELECT pg_advisory_unlock(hashtext($1))',[publication.id]);}finally{client.release();}}
@@ -80,6 +81,17 @@ export async function mountMarketing({app,openai,setReviewHandler,env=process.en
     });
     app.post('/emradar/v3/prepare',internal);
     app.post('/emradar/v3/discover',internal);
-    return {runCampaign,close:()=>pool.end()};
+    const scheduledIntake=async()=>{
+      const today=scheduledDate();
+      try{return await runCampaign(today);}
+      finally{
+        const {rows}=await pool.query(`SELECT payload->'scan'->>'snapshot_date' AS date
+          FROM v3_campaign_state WHERE payload->>'marketing_generation'='clean-20261126'
+          AND (payload->>'phase' IN ('SCAN_VERIFIED','PREPARATION_PENDING') OR payload->>'preparation_pending'='true')
+          AND payload->'scan'->>'snapshot_date'<$1 ORDER BY updated_at LIMIT 1`,[today]);
+        if(rows.length)try{await runCampaign(rows[0].date);}catch(error){console.error('MARKETING_RECOVERY',code(error));}
+      }
+    };
+    return {runCampaign:scheduledIntake,close:()=>pool.end()};
   }catch(e){if(!provided)await pool.end();throw e;}
 }

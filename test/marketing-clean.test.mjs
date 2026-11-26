@@ -56,3 +56,18 @@ test('public entry loads the replacement and the review document contains valid 
  const page=readFileSync(new URL('../vendor/emradar-v3-authoritative/clean/review.html',import.meta.url),'utf8');
  new vm.Script(page.match(/<script>([\s\S]*?)<\/script>/)[1]);
 });
+test('build authority is scoped to one sealed campaign and ordinary campaign budgets span Sydney months',async()=>{
+ const {spending}=await import('../src/marketing/budget.mjs');
+ const records=new Map(),adapter={read:async k=>structuredClone(records.get(k)),compareAndSwap:async(k,v,value)=>{
+   if((records.get(k)?.version??null)!==v)return false;records.set(k,{version:(v??0)+1,value:structuredClone(value)});return true;}};
+ let date=new Date('2026-11-26T09:00:00Z');
+ const budget=spending(adapter,{exchange:async()=>0.66,now:()=>date});
+ const build='v3-8f3ca7840b5c0f7394896419f3f8ab27';
+ await budget.reserve(build,'one','source',0,'formation');
+ await assert.rejects(budget.reserve(build,'two','draft',0,'owner-revision'),/NOVEMBER_BALANCE/);
+ await assert.rejects(budget.reserve('normal','three','draft',0,'formation'),/NOVEMBER_BALANCE/);
+ date=new Date('2026-12-01T01:00:00Z');
+ await budget.reserve('normal','four','a'.repeat(5000000),0,'formation');
+ date=new Date('2027-01-01T01:00:00Z');
+ await assert.rejects(budget.reserve('normal','five','a'.repeat(5000000),0,'formation'),/RESEARCH_BUDGET_USED/);
+});
