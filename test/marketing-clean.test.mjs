@@ -19,20 +19,24 @@ test('real PNG bytes and brand envelope match the saved rendered versions',async
  assert.equal(brand.envelope(asset).text,asset.body);
  assert.equal(brand.envelope(formatEmail({...asset,body:'Edited text'})).html.includes('Edited text'),true);
 });
-test('search reuses a completed request and reserves a concurrent attempt only once',async()=>{
+test('editorial requests reuse a completed response and reserve a concurrent attempt only once',async()=>{
  let campaign={research_calls:{}},calls=0;
  const adapter={read:async()=>({value:structuredClone(campaign)})};
  const workspace={mutate:async(id,fn)=>{fn(campaign);return campaign}};
  const openai={responses:{create:async()=>{calls++;return {id:'test',output_text:'{"facts":[]}',usage:{total_tokens:10},output:[]}}}};
  const ask=campaignAsk({adapter,workspace,openai,campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{}}});
- await Promise.allSettled([ask('formation','test',{}),ask('formation','test',{})]);await ask('formation','test',{});
+ await Promise.allSettled([ask('pitch','test',{}),ask('pitch','test',{})]);await ask('pitch','test',{});
  assert.equal(calls,1);assert.equal(Object.values(campaign.research_calls)[0].usage.total_tokens,10);
 });
 test('outlet discovery uses actual contact text, honours opt-outs, and keeps saved directory identity',async()=>{
  const pool={query:async sql=>({rows:sql.startsWith('SELECT 1')?[]:[{outlet_id:'saved',record:{name:'Existing publication',contact:{email:'editor@example.org'}}}]})};
  const match={record_id:'f',fit:'Trade readership',readership:'Industrial operators'};
- const result=await matchOutlets({pool,formations:[{record_id:'f',facts:[{statement:'a fact'}]}],
- ask:async()=>({matches:[{...match,directory_id:'saved'},{...match,name:'Unknown',email:'invented@example.org',website:'https://example.org',contact_url:'https://example.org/contact'}]}),read:async()=>'No address here'});
+ const record={id:'f',status:'INVESTIGATE',causal_chain:{pressure:'An unresolved supply constraint'}};
+ const result=await matchOutlets({pool,formations:[{record_id:'f',facts:[],scanner_record:record}],
+ ask:async(kind,brief,input)=>{
+   assert.equal(kind,'outlets');assert.deepEqual(input.discoveries,[record]);
+   return {matches:[{...match,directory_id:'saved'},{...match,name:'Unknown',email:'invented@example.org',website:'https://example.org',contact_url:'https://example.org/contact'}]};
+ },read:async()=>'No address here'});
  assert.deepEqual(result.map(d=>d.id),['saved']);
 });
 test('real release claim and stored receipt survive per-recipient transport failures',async()=>{
@@ -73,27 +77,13 @@ test('build authority is scoped to one sealed campaign and ordinary campaign bud
  await assert.rejects(budget.reserve('normal','five','a'.repeat(5000000),0,'formation'),/RESEARCH_BUDGET_USED/);
 });
 
-test('web search accepts fenced JSON and reuses the response after replacing the invalid format',async()=>{
- const input={record:'one'},key=fingerprint(['source-search','JSON',input]);
- const state={research_calls:{[key]:{status:'UNCONFIRMED',kind:'source-search'}}};let released=0,requests=0;
- const ask=campaignAsk({adapter:{read:async()=>({value:structuredClone(state)})},workspace:{mutate:async(_,fn)=>fn(state)},
-   campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{},rejected:async()=>released++},
-   openai:{responses:{create:async options=>{requests++;assert.equal(options.text,undefined);assert.ok(options.tools);
-     return {id:'mock',output_text:['```json','{"urls":[]}','```'].join('\n')};}}}});
- assert.deepEqual(await ask('source-search','JSON',input),{urls:[]});
- await ask('source-search','JSON',input);
- assert.equal(requests,1);assert.equal(released,1);assert.equal(state.research_calls[key].status,'REJECTED');
-});
-test('search citations survive a prose response and an empty SDK text shortcut',async()=>{
- const state={research_calls:{}},url='https://example.org/disclosure';
- const ask=campaignAsk({adapter:{read:async()=>({value:structuredClone(state)})},workspace:{mutate:async(_,fn)=>fn(state)},
-  openai:{responses:{create:async()=>({output_text:'',output:[{type:'web_search_call',action:{sources:[{url}]}},
-    {type:'message',content:[{text:'The authority published its disclosure.',annotations:[{url}]}]}]})}},
-  campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{}}});
- assert.deepEqual(await ask('source-search','JSON',{test:1}),{urls:[url]});
+test('retired source search and formation verification cannot reserve a provider call',async()=>{
+ const ask=campaignAsk({adapter:{read:async()=>assert.fail('retired operation read state')},
+   campaignId:'c',budget:{reserve:async()=>assert.fail('retired operation reserved spend')}});
+ for(const kind of ['source-search','formation'])await assert.rejects(ask(kind,'JSON',{}),/UNKNOWN_RESEARCH_OPERATION/);
 });
 test('a definitively rejected JSON-mode call can recover once using an explicit user-input instruction',async()=>{
- const data={record:1},kind='formation',instructions='Return JSON';
+ const data={record:1},kind='pitch',instructions='Return JSON';
  const key=fingerprint([kind,instructions,data]),state={research_calls:{[key]:{kind,status:'REJECTED',reason:'RESEARCH_PROVIDER_HTTP_400',at:'2026-11-26T00:00:00Z'}}};
  const ask=campaignAsk({adapter:{read:async()=>({value:structuredClone(state)})},workspace:{mutate:async(_,fn)=>fn(state)},
   campaignId:'c',budget:{reserve:async()=>({}),settle:async()=>{}},openai:{responses:{create:async args=>{

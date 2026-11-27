@@ -866,5 +866,14 @@
     "external_distribution": 0,
     "owner_decisions_changed": 0,
     "campaign_history_changed": 0
+  },
+  "november_28_scanner_authority_repair": {
+    "source_commit": "8f1364052ff3d5069ed4a6d77852e05d67667e4a",
+    "baseline_production_commit": "847daef5e5e0906ac3cecc7d410ef76b861cb8c7",
+    "fixture_scan": "2026-11-27",
+    "fixture_sha256": "051d61b92fb096238789dd8eccae0caafbc52ea4203bfea078269d6267c30850",
+    "offline_result": "Eight signed discoveries preserved intact through editorial matching and X render, compared with two in the saved campaign. Two simulated publisher matches and pitches. Zero paid calls or distribution.",
+    "change": "Remove duplicate scanner source retrieval, passage checks and evidence-count filtering from automated preparation. Match audience to an angle grounded in the signed scanner record. Keep the existing owner-directed audit for external factual corrections.",
+    "campaign_history_policy": "Existing completed review assets, decisions and delivery receipts are reused as saved."
   }
 }
