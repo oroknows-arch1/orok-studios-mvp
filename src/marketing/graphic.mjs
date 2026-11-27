@@ -20,7 +20,8 @@ export async function renderGraphic(formations,scan){
   for(const f of formations){
     y+=22;
     for(const t of lines(f.location,44))line(t,26,'#62e2cb','bold');
-    for(const t of lines(f.facts[0].statement,65))line(t,23,'#ffffff');
+    const lead=[f.scanner_record?.status,f.facts[0]?.statement??f.scanner_record?.theme].filter(Boolean).join(' · ');
+    for(const t of lines(lead,65))line(t,23,'#ffffff');
     for(const t of lines(f.actors.join(' · '),74))line(t,20,'#bdd4df');
     y+=18;parts.push('<path d="M48 '+y+' H1130" stroke="#47677b"/>');
   }
