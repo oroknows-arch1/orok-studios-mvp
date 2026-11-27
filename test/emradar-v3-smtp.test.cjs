@@ -10,6 +10,7 @@ test('V3 SMTP adapter preserves canonical identity and returns simulated receipt
  const owner=await adapter.sendOwnerReview({to:'sean@emradar.net',private_review_url:'https://example.org/review/access#token=example'});
  assert.equal(owner.provider_id,'mock-1');
  const receipt=await adapter.sendApprovedEmail({asset:{kind:'EMAIL',from:'sean@emradar.net',to:'editor@example.org',subject:'Research',body:'Evidence'},idempotency_key:'a'.repeat(64)});
+ assert.equal(receipt.delivery_status,'UNCONFIRMED');assert.ok(Date.parse(receipt.accepted_at));
  assert.equal(receipt.receipt_id,'mock-2');
  assert.equal(mails[1].envelope.from,'sean@emradar.net');
  assert.match(mails[1].raw.toString().replace(/\r\n[ \t]+/g,' '),new RegExp('X-EMRADAR-Idempotency-Key: '+ 'a'.repeat(64),'i'));

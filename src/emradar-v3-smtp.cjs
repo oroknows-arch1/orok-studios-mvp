@@ -139,10 +139,12 @@ function createV3Smtp({env=process.env,createTransport=nodemailer.createTranspor
    const envelope=asset.brand_version?brand.envelope(asset):{from:{name:brand.identity.name,address:brand.identity.address},to:asset.to,replyTo:brand.identity.reply_to,subject:asset.subject,text:asset.body};
    const raw=await new MailComposer({...envelope,messageId:'<emradar-'+payload.idempotency_key+'@emradar.net>',headers:{'X-EMRADAR-Idempotency-Key':payload.idempotency_key}}).compile().build();
    const info=await send({envelope:{from:brand.identity.address,to:asset.to},raw},asset.to);
+   const accepted_at=new Date().toISOString();
    // SMTP acceptance remains final even if mailbox filing fails. Never resend
    // an accepted message to repair a Sent-folder problem.
    const sent_folder=await archiveSent(raw);
-   return {accepted:true,receipt_id:info.messageId,smtp_response:info.response??null,sent_folder};
+   if(sent_folder.status==='APPENDED')sent_folder.appended_at=new Date().toISOString();
+   return {accepted:true,receipt_id:info.messageId,smtp_response:info.response??null,accepted_at,delivery_status:'UNCONFIRMED',sent_folder};
   }
  };
 }
