@@ -875,5 +875,17 @@
     "offline_result": "Eight signed discoveries preserved intact through editorial matching and X render, compared with two in the saved campaign. Two simulated publisher matches and pitches. Zero paid calls or distribution.",
     "change": "Remove duplicate scanner source retrieval, passage checks and evidence-count filtering from automated preparation. Match audience to an angle grounded in the signed scanner record. Keep the existing owner-directed audit for external factual corrections.",
     "campaign_history_policy": "Existing completed review assets, decisions and delivery receipts are reused as saved."
+  },
+  "november_28_owner_review_recovery": {
+    "status": "PATCH_VERIFIED_DEPLOYMENT_PENDING",
+    "snapshot_date": "2026-11-28",
+    "campaign_id": "v3-1e80fd79288baa3c597e2b15e0a50799",
+    "snapshot_sha256": "24810ee5cde36160b849ad58d3cff8a46c08a88ba400a4a694746ee1a8e16697",
+    "root_cause": "The signed version-one publication sidecar used the canonical Render reader URL with a trailing slash; marketing required the byte-equivalent URL without it and rejected the handoff as SIGNED_PUBLICATION_MISMATCH.",
+    "smallest_repair": "Accept only the two exact canonical Render reader spellings, preserving archive SHA-256, Git blob SHA-1, five publication gates and downstream-release attestation checks.",
+    "source_commit": "76e4850131eddcbcff200c23de9c6929fd3705d8",
+    "external_distribution": 0,
+    "owner_decisions_changed": 0,
+    "campaign_history_changed": 0
   }
 }
